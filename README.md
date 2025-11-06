@@ -6,48 +6,53 @@
 
 A powerful command-line interface for processing Arista AVD (Arista Validated Designs) inventories and generating configurations, documentation, and ANTA tests using py-avd.
 
-## 🌟 Features
+## 🌟 Key Features
 
-- **Configuration Generation**: Generate device configurations from AVD inventory
-- **Documentation**: Automatically generate network documentation
-- **ANTA Tests**: Generate ANTA test files for network validation
+### 🎯 Core Capabilities
+
+- **Configuration Generation**: Generate device configurations from AVD inventory using py-avd
+- **Documentation Generation**: Automatically generate comprehensive network documentation
+- **Multi-Fabric Support**: Process multiple network fabrics in a single inventory
+
+### 🚀 Advanced Features
+
+- **Jinja2 Template Support**: Full support for Jinja2 variables and expressions in inventory files
+  - Use `{{ ansible_hostname }}` and other Jinja2 expressions
+  - Template variables are resolved before AVD processing
+  - Support for complex expressions and filters
+
+- **Variable Inheritance**: Sophisticated variable inheritance across inventory hierarchy
+  - Variables from `group_vars/all.yml` are inherited by all devices
+  - Group-specific variables override global variables
+  - Host-specific variables take highest precedence
+  - Nested group inheritance fully supported
+
+- **Flexible Variable Organization**: Support for both files and directories in group_vars/host_vars
+  - Use single YAML files: `group_vars/SPINES.yml`
+  - Or organize in directories: `group_vars/SPINES/main.yml`, `group_vars/SPINES/interfaces.yml`
+  - All YAML files in a directory are automatically merged
+  - Ideal for managing large, complex inventories
+
+- **Custom Node Types**: Support for custom node types beyond standard AVD topology
+  - Define custom hardware platforms
+  - Support for specialized device roles
+  - Flexible device type mapping
+
+- **Group Filtering**: Process specific device groups only for faster iterations
+  - Filter by spine, leaf, or custom groups
+  - Multiple group selection with `-l` flag
+  - Useful for testing and incremental deployments
+
+- **Rich Terminal Output**: Beautiful and informative CLI experience
+  - Color-coded status messages
+  - Progress indicators for long operations
+  - Formatted tables for inventory information
+  - JSON and YAML output formats available
+
+### Roadmap
+
+- **ANTA Test Generation**: Create ANTA test files for network validation
 - **Flexible Workflows**: Support for both full (eos_design + eos_cli_config_gen) and config-only workflows
-- **Group Filtering**: Process specific device groups only
-- **Beautiful Output**: Rich terminal formatting with progress indicators
-- **Comprehensive Testing**: >80% test coverage with pytest
-
-## 📋 Requirements
-
-- Python 3.9 or higher
-- UV package manager (recommended) or pip
-- Valid Arista AVD inventory structure
-
-## 🚀 Installation
-
-### Using UV (Recommended)
-
-```bash
-# Install UV if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone the repository
-git clone https://github.com/aristanetworks/avd-cli.git
-cd avd-cli
-
-# Install the package
-uv sync
-```
-
-### Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/aristanetworks/avd-cli.git
-cd avd-cli
-
-# Install the package
-pip install -e .
-```
 
 ## 💻 Usage
 
@@ -111,79 +116,51 @@ Options:
   --help                          Show help message
 ```
 
-## 📁 Expected Inventory Structure
+## 📁 Inventory Structure
+
+AVD CLI supports standard Ansible inventory structure with AVD group_vars:
 
 ```
 inventory/
-├── group_vars/
-│   ├── all.yml
-│   ├── FABRIC.yml
-│   ├── SPINES.yml
-│   └── LEAFS.yml
-├── host_vars/
-│   ├── spine1.yml
-│   ├── spine2.yml
-│   ├── leaf1.yml
-│   └── leaf2.yml
-└── inventory.yml
+├── inventory.yml           # Main inventory file (hosts and groups)
+├── group_vars/            # Group-level variables
+│   ├── all.yml           # Global variables (inherited by all devices)
+│   ├── FABRIC.yml        # Fabric-level variables
+│   ├── SPINES.yml        # Spine-specific variables
+│   └── LEAFS.yml         # Leaf-specific variables
+└── host_vars/             # Host-level variables (optional)
+    ├── spine1.yml
+    └── leaf1.yml
 ```
 
-## 🧪 Development
+### Variable Inheritance
 
-### Setup Development Environment
+Variables are inherited in this order (last wins):
 
-```bash
-# Install with development dependencies
-uv sync --extra dev
+1. `group_vars/all.yml` - Global defaults
+2. Parent group variables (e.g., FABRIC)
+3. Child group variables (e.g., SPINES, LEAFS)
+4. Host-specific variables from `host_vars/` (if present)
 
-# Install pre-commit hooks
-make pre-commit-install
+### Jinja2 Template Support
+
+You can use Jinja2 expressions in any YAML file:
+
+```yaml
+# group_vars/SPINES.yml
+spine:
+  platform: "{{ custom_platform | default('vEOS-lab') }}"
+  nodes:
+    - name: "{{ site_code }}-spine1"
+      id: 1
+      mgmt_ip: "{{ mgmt_subnet }}.11/24"
 ```
 
-### Running Tests
-
-```bash
-# Run all tests
-make test
-
-# Run unit tests only
-make test-unit
-
-# Run with coverage report
-make coverage
-
-# Run linting
-make lint
-
-# Run type checking
-make type
-
-# Run all checks (format, lint, type, test)
-make check
-```
-
-### Available Make Targets
-
-```bash
-make help                  # Display all available commands
-make install              # Install the package
-make dev-install          # Install with dev dependencies
-make clean                # Clean build artifacts
-make test                 # Run all tests
-make test-unit            # Run unit tests only
-make test-integration     # Run integration tests only
-make test-e2e             # Run end-to-end tests only
-make lint                 # Run linting
-make type                 # Run type checking
-make format               # Format code with black and isort
-make check                # Run all checks
-make coverage             # Generate coverage report
-make pre-commit           # Run pre-commit hooks
-```
+Variables are resolved before being processed by AVD.
 
 ## 🏗️ Architecture
 
-AVD CLI follows a layered architecture:
+AVD CLI follows a clean, layered architecture:
 
 ```
 avd_cli/
@@ -193,90 +170,69 @@ avd_cli/
 └── utils/            # Utility functions
 ```
 
-For detailed architecture information, see [spec/tool-avd-cli-architecture.md](spec/tool-avd-cli-architecture.md).
-
-## 📚 Documentation
-
+For detailed information, see:
 - [Architecture Specification](spec/tool-avd-cli-architecture.md)
 - [Workflow Processing](spec/process-avd-workflow.md)
 - [Data Schema](spec/data-avd-inventory-schema.md)
 - [Testing Strategy](spec/infrastructure-testing-strategy.md)
 
+## 📋 Requirements
+
+- Python 3.9 or higher
+- UV package manager (recommended) or pip
+- Valid Arista AVD inventory structure
+
+## 🚀 Installation
+
+### Using UV (Recommended)
+
+```bash
+# Install UV if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone the repository
+git clone https://github.com/aristanetworks/avd-cli.git
+cd avd-cli
+
+# Install the package
+uv sync
+```
+
+### Using pip
+
+```bash
+# Clone the repository
+git clone https://github.com/aristanetworks/avd-cli.git
+cd avd-cli
+
+# Install the package
+pip install -e .
+```
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these guidelines:
+Contributions are welcome! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for:
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Write tests** for your changes
-4. **Ensure all tests pass**: `make check`
-5. **Commit your changes**: `git commit -m 'feat: add amazing feature'`
-6. **Push to the branch**: `git push origin feature/amazing-feature`
-7. **Open a Pull Request**
+- Development environment setup
+- Running tests and quality checks
+- Code style guidelines
+- Git workflow and commit conventions
+- Pull request process
 
-### Commit Message Convention
-
-This project follows [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-type(scope): description
-
-[optional body]
-
-[optional footer]
-```
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-### Development Tools
-
-#### Using Make (Recommended)
+Quick start for contributors:
 
 ```bash
-# Run all checks
+# Setup development environment
+uv sync --extra dev
+make pre-commit-install
+
+# Run all checks before committing
 make check
-
-# Individual checks
-make lint        # Linting
-make type        # Type checking
-make test        # Run tests
-make coverage    # Coverage report
-make format      # Format code
 ```
 
-#### Using Tox (Alternative)
-
-The project supports tox for backward compatibility and testing across multiple Python versions:
-
-```bash
-# List all available environments
-make tox-list
-# or: uv run tox list
-
-# Run specific environment
-uv run tox -e lint      # Linting
-uv run tox -e type      # Type checking
-uv run tox -e test      # Run tests
-uv run tox -e py39      # Test on Python 3.9
-uv run tox -e py313     # Test on Python 3.13
-
-# Run all default environments
-uv run tox
-
-# Using Makefile shortcuts
-make tox-lint
-make tox-type
-make tox-test
-make tox-all
-```
-
-### Code Quality Standards
-
-- All code must pass linting (flake8, pylint)
-- Type hints required for all public functions
-- Test coverage must exceed 80%
-- Follow NumPy-style docstrings
-- Code must be formatted with black
+See also:
+- [Development Tools Guide](docs/DEVELOPMENT_TOOLS.md) - Detailed guide on Make and Tox
+- [Contributing Guide](docs/CONTRIBUTING.md) - Full contribution guidelines
 
 ## 📄 License
 

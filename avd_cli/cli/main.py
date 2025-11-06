@@ -184,7 +184,7 @@ def generate_all(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Path,
-    limit_to_groups: tuple,
+    limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
 ) -> None:
@@ -279,7 +279,7 @@ def generate_configs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Path,
-    limit_to_groups: tuple,
+    limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
 ) -> None:
@@ -341,7 +341,7 @@ def generate_docs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Path,
-    limit_to_groups: tuple,
+    limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
 ) -> None:
     """Generate documentation only.
@@ -404,7 +404,7 @@ def generate_tests(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Path,
-    limit_to_groups: tuple,
+    limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     test_type: str,
 ) -> None:

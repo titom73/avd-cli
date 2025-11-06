@@ -162,6 +162,60 @@ from eos_downloader.logics.download import SoftManager
 from eos_downloader.models.version import EosVersion
 ```
 
+### Lazy Imports for CLI Performance
+
+For CLI applications, use **lazy imports** (imports inside functions) for heavy dependencies to improve startup time and user experience:
+
+```python
+# ✅ Good: Lazy imports in CLI commands
+@click.command()
+def generate_configs(inventory_path: Path, output_path: Path) -> None:
+    """Generate configurations from inventory.
+
+    Heavy imports are loaded only when the command is actually executed,
+    not when the user runs --help or other commands.
+    """
+    # Import heavy dependencies only when needed
+    from avd_cli.logics.generator import ConfigurationGenerator
+    from avd_cli.logics.loader import InventoryLoader
+
+    # Import pyavd-dependent modules only when command runs
+    import pyavd
+
+    # Command implementation...
+    loader = InventoryLoader()
+    inventory = loader.load(inventory_path)
+
+# ❌ Bad: Top-level imports slow down ALL CLI operations
+from avd_cli.logics.generator import ConfigurationGenerator
+from avd_cli.logics.loader import InventoryLoader
+import pyavd  # Loads heavy dependency even for --help
+
+@click.command()
+def generate_configs(inventory_path: Path, output_path: Path) -> None:
+    """Generate configurations from inventory."""
+    # Now --help is slow because pyavd is already loaded
+    pass
+```
+
+**When to use lazy imports:**
+- ✅ CLI commands that load heavy libraries (pyavd, pandas, etc.)
+- ✅ Optional dependencies that might not be installed
+- ✅ Modules with expensive initialization
+- ✅ Commands that aren't always used (avoids loading for `--help`, `--version`)
+
+**When NOT to use lazy imports:**
+- ❌ Core library modules (use top-level imports)
+- ❌ Type checking imports (use `TYPE_CHECKING` guard instead)
+- ❌ Constants, exceptions, and lightweight utilities
+- ❌ Standard library imports (already fast)
+
+**Rationale:**
+- **UX**: `avd-cli --help` should be instant (<100ms)
+- **Performance**: Don't load pyavd/heavy libs unless actually needed
+- **Dependency isolation**: Allows showing help even if optional deps missing
+- **Convention**: Approved by pylint configuration (C0415 disabled)
+
 ## Type Hints
 
 ### Mandatory Type Hints

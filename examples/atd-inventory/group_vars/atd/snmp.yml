@@ -1,0 +1,49 @@
+snmp_server:
+  contact: avd@arista.com
+  location: "AVD Campus Fabric, Paris, France"
+
+  communities:
+    - name: public
+      access: ro
+    - name: private
+      access: rw
+  vrfs:
+    - name: '{{default_poc_management_vrf}}'
+      enable: true
+  local_interfaces:
+    - name: '{{default_poc_management_interface}}'
+      vrf: '{{default_poc_management_vrf}}'
+    - name: Vlan228
+      vrf: 'default'
+  traps:
+    # Enable or disable all snmp-traps.
+    enable: true
+  views:
+    - name: all-items
+      mib_family_name: ".1"
+      included: true
+  groups:
+    - name: GRP-READ-ONLY
+      version: v3
+      authentication: priv
+      read: all-items
+    - name: GRP-READ-WRITE
+      version: v3
+      authentication: auth
+      read: all-items
+      write: all-items
+  users:
+    - name: rfi-ro
+      version: v3
+      auth: sha
+      auth_passphrase: AaBbCcDdEe1234
+      priv: aes
+      priv_passphrase: 123456789AaBbCc
+      group: GRP-READ-ONLY
+    - name: rfi-rw
+      version: v3
+      auth: sha
+      auth_passphrase: 9876QqRrSsTt
+      priv: aes
+      priv_passphrase: TtUuVv3456
+      group: GRP-READ-WRITE

@@ -1,0 +1,99 @@
+radius_server:
+  deadtime: 1
+  hosts:
+    - host: "{{ default_poc_radius_server }}"
+      vrf: "{{ default_poc_radius_vrf }}"
+      timeout: 100
+      retransmit: 3
+      key: "{{ default_poc_radius_key }}"
+
+aaa_server_groups:
+  - name: NAC
+    type: "radius"
+    servers:
+      - server: "{{ default_poc_radius_server }}"
+        vrf: "{{ default_poc_radius_vrf }}"
+
+aaa_authentication:
+  policies:
+    on_failure_log: true
+    on_success_log: true
+    local:
+      # Allow admin with no password
+      allow_nopassword: True
+    lockout:
+      failure: 3
+      duration: 30
+      window: 3
+  # login:
+  #   default: "group tacacs+ local"
+  # enable:
+  #   default: "group tacacs+ local"
+  dot1x:
+    default: "group NAC"
+
+aaa_accounting:
+  dot1x:
+    default:
+      type: "start-stop"
+      methods:
+        - multicast: false
+          method: group
+          group: NAC
+        # - multicast: false
+        #   method: logging
+
+
+dot1x:
+  system_auth_control: true
+  protocol_lldp_bypass: true
+  dynamic_authorization: true
+  # statistics_packets_dropped: true
+  radius_av_pair:
+    service_type: true
+  aaa:
+    unresponsive:
+      recovery_action_reauthenticate: true
+      action:
+        apply_cached_results: true
+        cached_results_timeout:
+          time_duration: 15
+          time_duration_unit: "days"
+        apply_alternate: true
+        traffic_allow: true
+        traffic_allow_vlan: 666
+      phone_action:
+        apply_cached_results: true
+        cached_results_timeout:
+          time_duration: 15
+          time_duration_unit: "days"
+        apply_alternate: true
+        traffic_allow: true
+        # traffic_allow_vlan: 667
+
+
+# eos_cli: |
+#    dot1x
+#       mac based authentication delay 2 seconds
+#       aaa unresponsive recovery action reauthenticate
+#       session move allow eapol
+#       supplicant logging
+#       aaa accounting update interval 10 seconds
+#    !
+
+# eos_cli: |
+#    ! RFE816551 - Framed-IP-Address for RADIUS
+#    !
+#    dot1x
+#      radius av-pair framed-ip source l3-neighbor group CUAGS
+#    management client api gnmi
+#      server CUAG1
+#         address 10.147.78.2
+#         username arista password Arista123
+#      server CUAG2
+#         address 10.147.78.3
+#         username arista password Arista123
+#       group CUAGS
+#          member CUAG1
+#          member CUAG2
+#    !

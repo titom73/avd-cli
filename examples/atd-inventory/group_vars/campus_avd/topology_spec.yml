@@ -1,0 +1,5 @@
+fabric_name: campus_avd
+
+# # Set Design Type to L2ls
+# design:
+#   type: l2ls

@@ -1,0 +1,70 @@
+custom_structured_platform_settings:
+
+- feature_support:
+    queue_monitor_length_notify: false
+  platforms:
+  - 7050X3
+  management_interface: Management1
+  reload_delay:
+    mlag: 300
+    non_mlag: 330
+  trident_forwarding_table_partition: flexible exact-match 16384 l2-shared 98304 l3-shared 131072
+  default_interface_mtu: "{{ poc_platform_mtu }}"
+
+- feature_support:
+    poe: "{{ has_poe| bool }}"
+    interface_storm_control: "{{ has_storm_control | bool }}"
+    per_interface_mtu: "{{ has_per_interface_mtu | bool }}"
+    queue_monitor_length_notify: false
+  platforms:
+  - 720XP
+  - 720DF
+  reload_delay:
+    mlag: 300
+    non_mlag: 330
+  trident_forwarding_table_partition: flexible exact-match 16000 l2-shared 18000 l3-shared 22000
+  default_interface_mtu: "{{ poc_platform_mtu }}"
+
+- feature_support:
+    poe: "{{ has_poe| bool }}"
+    interface_storm_control: "{{ has_storm_control | bool }}"
+    per_interface_mtu: "{{ has_per_interface_mtu | bool }}"
+    queue_monitor_length_notify: false
+  platforms:
+  - 720DP
+  - 722XP
+  reload_delay:
+    mlag: 300
+    non_mlag: 330
+  management_interface: "{{ default_poc_management_interface }}"
+  default_interface_mtu: "{{ poc_platform_mtu }}"
+
+- feature_support:
+    poe: "{{ has_poe| bool }}"
+    interface_storm_control: "{{ has_storm_control | bool }}"
+    per_interface_mtu: "{{ has_per_interface_mtu | bool }}"
+    queue_monitor_length_notify: false
+  platforms:
+  - 710P
+  reload_delay:
+    mlag: 300
+    non_mlag: 330
+  management_interface: "{{ default_poc_management_interface }}"
+  default_interface_mtu: "{{ poc_platform_mtu }}"
+
+- feature_support:
+    bgp_update_wait_for_convergence: false
+    bgp_update_wait_install: false
+    evpn_gateway_all_active_multihoming: true
+    interface_storm_control: false
+    queue_monitor_length_notify: false
+  management_interface: Management0
+  platforms:
+  - CEOS
+  - cEOS
+  - ceos
+  - cEOSLab
+  reload_delay:
+    mlag: 300
+    non_mlag: 330
+  default_interface_mtu: "{{ poc_platform_mtu }}"

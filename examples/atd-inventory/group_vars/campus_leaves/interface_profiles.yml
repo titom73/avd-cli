@@ -1,0 +1,67 @@
+# used by RFE 900074
+interface_profiles:
+  - name: profile_test
+    commands:
+      # - command description Access Points with a profile # description command not supported as of now
+      - description "Pushed by profile "
+      - switchport mode access
+      - switchport access vlan 100
+
+#   - name: NEAT
+#     commands:
+#       - switchport mode trunk
+#       - switchport trunk allowed vlan 228,100
+#       - switchport trunk native vlan 666
+
+#   - name: aruba_ap # interface profile to push when an Aruba AP is connected and authenticated
+#     commands:
+#       - switchport mode trunk
+#       - switchport trunk allowed vlan 100,120,200,2500-2599,2700-3199
+#       - switchport trunk native vlan 200
+#       - no switchport port-security
+#       - spanning-tree portfast
+#       - dot1x host-mode multi-host
+#       - dot1x aaa unresponsive action apply cached-results timeout 15 days else traffic allow vlan 200
+#       - dot1x timeout idle-host 500 seconds # as not supported as of now to be pushed by the radius server
+#       - no dot1x unauthorized native vlan membership egress  # as not supported when using an interface profile
+
+port_profiles:
+
+  - profile: PP-TRUNK
+    mode: "trunk"
+    vlans: "100,300,228"
+
+  - profile: PP-DOT1X
+    mode: "trunk phone"
+    spanning_tree_portfast: edge
+    spanning_tree_bpduguard: enabled
+    # storm_control:
+    #   all:
+    #     level: 10
+    #     unit: percent
+    # poe:
+    #   priority: critical
+    #   reboot:
+    #     action: maintain
+    #   link_down:
+    #     action: maintain
+    #   shutdown:
+    #     action: power-off
+    #   limit:
+    #     class: 4
+    dot1x:
+      port_control: auto
+      reauthentication: true
+      pae:
+        mode: authenticator
+      host_mode:
+        mode: multi-host
+        multi_host_authenticated: true
+      mac_based_authentication:
+        enabled: true
+      timeout:
+        reauth_period: server
+        tx_period: 3
+      reauthorization_request_limit: 3
+      unauthorized:
+        native_vlan_membership_egress: true

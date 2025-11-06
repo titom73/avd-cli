@@ -1,0 +1,56 @@
+# ========================================
+# Feature Flags
+# ========================================
+# Define if we are running in ACT or POC/Containerlab mode
+# it can be set to "act" or "other"
+# Today, only act is supported:
+lab_type: "act"
+
+# ========================================
+# Feature Flags
+# ========================================
+has_poe: False
+has_storm_control: False
+has_per_interface_mtu: False
+
+# ========================================
+# default HW for POC
+# ========================================
+# poc_platform: cEOSLab
+poc_platform_mtu: 1500
+default_interface_mtu: "{% if lab_type == 'act' %}1500{% else %}{{poc_platform_mtu}}{% endif %}"
+mlag_peer_link_mtu: "{% if lab_type == 'act' %}1500{% else %}9214{% endif %}"
+
+# ========================================
+# Management Variables
+# ========================================
+default_poc_management_vrf: MGMT
+default_poc_management_interface: Management1
+mgmt_interface_vrf: "{{default_poc_management_vrf}}"
+
+# ========================================
+# Default Configuration Variables
+# ========================================
+
+default_poc_syslog_vrf: "{{ default_poc_management_vrf }}"
+default_poc_syslog_server: "192.168.0.201"
+
+default_poc_sflow_vrf: "{{ default_poc_management_vrf }}"
+default_poc_sflow_server: "192.168.0.201"
+
+default_poc_radius_vrf: "{{ default_poc_management_vrf }}"
+default_poc_radius_server: "192.168.0.200"
+default_poc_radius_key: "071B245F5A001702464058"
+# radius_key: "0605020F585A11372030071B47537206173A261901"
+
+# ========================================
+# Fabric topology hierarchy
+# =======================================
+default_cv_tags_campus: CAMPUS_AVD
+
+# ========================================
+# Custom Structured Configuration
+# ========================================
+custom_structured_configuration_prefix:
+- "custom_inband_"
+- "custom_structured_"

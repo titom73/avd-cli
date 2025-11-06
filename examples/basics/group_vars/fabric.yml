@@ -1,0 +1,5 @@
+---
+# Fabric-wide variables
+fabric_name: FABRIC1
+design:
+  type: l3ls-evpn

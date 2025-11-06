@@ -1,0 +1,108 @@
+###############################################
+# Topology Definitions
+###############################################
+
+type: l2leaf
+
+# IDF - Leaf Switches
+l2leaf:
+  defaults:
+    platform: "{{ hostvars['leaf-1a']['poc_platform'] }}"
+    mlag_peer_ipv4_pool: 10.255.255.0/24
+    spanning_tree_mode: mstp
+    spanning_tree_priority: 16384
+    campus: "{{default_cv_tags_campus}}"
+    campus_pod: "Building 01"
+    cv_tags_topology_type: leaf
+  node_groups:
+  - group: IDF1
+    campus_access_pod: IDF1
+    mlag: true
+    uplink_interfaces: [ Ethernet55 ]
+    mlag_interfaces: [ Ethernet49, Ethernet50 ]
+    mlag_peer_vlan_structured_config:
+      mtu: "{{ mlag_peer_link_mtu | default(9214) }}"
+    # filter:
+    #   tags: [ "110", "120", "130" ]
+    nodes:
+    - name: leaf-1a
+      id: 3
+      mgmt_ip: '{{ hostvars["leaf-1a"].ansible_host }}/24'
+      uplink_switches: [ spine01 ]
+      uplink_switch_interfaces: [ Ethernet1 ]
+    - name: leaf-1b
+      id: 4
+      mgmt_ip: '{{ hostvars["leaf-1b"].ansible_host }}/24'
+      uplink_switches: [ spine02 ]
+      uplink_switch_interfaces: [ Ethernet1 ]
+
+  - group: IDF2
+    platform: "{{ hostvars['leaf-2a']['poc_platform'] }}"
+    campus_access_pod: IDF2
+    mlag: false
+    # filter:
+    #   tags: [ "210", "220", "230" ]
+    nodes:
+    - name: leaf-2a
+      id: 5
+      mgmt_ip: '{{ hostvars["leaf-2a"].ansible_host }}/24'
+      uplink_interfaces: [ Ethernet55, Ethernet56 ]
+      uplink_switches: [ spine01, spine02 ]
+      uplink_switch_interfaces: [ Ethernet2, Ethernet2 ]
+
+  - group: IDF3_AGG
+    campus_access_pod: IDF3
+    mlag: true
+    mlag_interfaces: [ Ethernet49, Ethernet50 ]
+    mlag_peer_vlan_structured_config:
+      mtu: "{{ mlag_peer_link_mtu | default(9214) }}"
+    uplink_switches: [ spine01, spine02 ]
+    uplink_interfaces: [ Ethernet55, Ethernet56 ]
+    platform: '{{poc_platform}}'
+    # filter:
+    #   tags: [ "310", "320", "330" ]
+    nodes:
+    - name: leaf-3a
+      id: 6
+      mgmt_ip: 192.168.0.17/24
+      uplink_switch_interfaces: [ Ethernet3, Ethernet3 ]
+    - name: leaf-3b
+      id: 7
+      mgmt_ip: 192.168.0.18/24
+      uplink_switch_interfaces: [ Ethernet4, Ethernet4 ]
+  - group: IDF3_3C
+    cv_tags_topology_type: member-leaf
+    campus_access_pod: IDF3
+    mlag: false
+    uplink_switches: [ leaf-3a, leaf-3b ]
+    uplink_interfaces: [ Ethernet25, Ethernet26 ]
+    platform: '{{poc_platform}}'
+    nodes:
+    - name: member-leaf-3c
+      id: 8
+      mgmt_ip: 192.168.0.19/24
+      uplink_switch_interfaces: [ Ethernet1, Ethernet1 ]
+  - group: IDF3_3D
+    cv_tags_topology_type: member-leaf
+    campus_access_pod: IDF3
+    mlag: false
+    uplink_switches: [ leaf-3a, leaf-3b ]
+    uplink_interfaces: [ Ethernet25, Ethernet26 ]
+    platform: '{{poc_platform}}'
+    nodes:
+    - name: member-leaf-3d
+      id: 9
+      mgmt_ip: 192.168.0.20/24
+      uplink_switch_interfaces: [ Ethernet2, Ethernet2 ]
+  - group: IDF3_3E
+    cv_tags_topology_type: member-leaf
+    campus_access_pod: IDF3
+    mlag: false
+    uplink_switches: [ leaf-3a, leaf-3b ]
+    uplink_interfaces: [ Ethernet25, Ethernet26 ]
+    platform: '{{poc_platform}}'
+    nodes:
+    - name: member-leaf-3e
+      id: 10
+      mgmt_ip: 192.168.0.21/24
+      uplink_switch_interfaces: [ Ethernet3, Ethernet3 ]

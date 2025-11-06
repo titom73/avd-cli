@@ -1,0 +1,238 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "avd-cli"
+version = "0.1.0"
+description = "CLI tool for processing Arista AVD inventories and generating configurations"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "AVD CLI Development Team", email = "avd-cli@example.com" }
+]
+keywords = [
+    "arista",
+    "avd",
+    "ansible",
+    "network-automation",
+    "eos",
+    "cli"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.0.0",
+    "pyavd>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "black>=23.0.0",
+    "mypy>=1.5.0",
+    "flake8>=6.1.0",
+    "pylint>=2.17.0",
+    "pre-commit>=3.4.0",
+    "types-PyYAML>=6.0.0",
+    "tox>=4.0.0",
+    "isort>=5.12.0",
+]
+
+[project.scripts]
+avd-cli = "avd_cli.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/aristanetworks/avd-cli"
+Documentation = "https://avd-cli.readthedocs.io"
+Repository = "https://github.com/aristanetworks/avd-cli"
+"Bug Tracker" = "https://github.com/aristanetworks/avd-cli/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "black>=23.0.0",
+    "mypy>=1.5.0",
+    "flake8>=6.1.0",
+    "pylint>=2.17.0",
+    "pre-commit>=3.4.0",
+    "types-PyYAML>=6.0.0",
+    "tox>=4.0.0",
+    "isort>=5.12.0",
+]
+
+[tool.uv]
+link-mode = "copy"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["avd_cli"]
+
+# Black configuration
+[tool.black]
+line-length = 120
+target-version = ['py39', 'py310', 'py311', 'py313']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.tox
+  | \.venv
+  | _build
+  | build
+  | dist
+)/
+'''
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+extra_checks = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyavd.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=avd_cli",
+    "--cov-report=term-missing",
+    "--cov-report=json",
+    "--cov-branch",
+    "--cov-fail-under=80",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, multiple components)",
+    "e2e: End-to-end tests (slowest, full workflows)",
+    "slow: Tests that take >1 second",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["avd_cli"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+branch = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstract",
+]
+
+[tool.coverage.json]
+output = "coverage.json"
+
+# Pylint configuration
+[tool.pylint.main]
+py-version = "3.9"
+jobs = 0
+load-plugins = []
+
+[tool.pylint.messages_control]
+max-line-length = 120
+disable = [
+    "C0114",  # missing-module-docstring (we use file-level docstrings)
+    "C0116",  # missing-function-docstring (covered by type hints)
+    "R0903",  # too-few-public-methods (dataclasses are fine)
+    "W0107",  # unnecessary-pass (acceptable in exception classes)
+    "C0415",  # import-outside-toplevel (lazy imports for performance)
+    "W0611",  # unused-import (false positives with conditional imports)
+    "R0902",  # too-many-instance-attributes (data models need them)
+    "W0613",  # unused-argument (required by interface/signature)
+    "R0917",  # too-many-positional-arguments (CLI commands need them)
+    "R0914",  # too-many-locals (complex logic needs local vars)
+    "W0718",  # broad-exception-caught (CLI error handling)
+    "W0622",  # redefined-builtin (format parameter in Click)
+    "R0915",  # too-many-statements (main logic functions)
+    "E1120",  # no-value-for-parameter (false positive with Click decorators)
+    "W0511",  # fixme (TODOs are tracked)
+    "R0912",  # too-many-branches (complex business logic)
+    "E1131",  # unsupported-binary-operation (Python 3.10+ syntax)
+    "R1705",  # no-else-return (sometimes clearer with elif)
+    "R1702",  # too-many-nested-blocks (complex validation logic)
+    "W0621",  # redefined-outer-name (pytest fixtures)
+    "W0406",  # import-self (required for type checking)
+    "W0212",  # protected-access (testing private methods)
+    "C0302",  # too-many-lines (comprehensive test files)
+    "R0904",  # too-many-public-methods (test classes)
+    "C1803",  # use-implicit-booleaness-not-comparison (explicit is better)
+    "C0411",  # wrong-import-order (auto-formatted)
+    "R0801",  # duplicate-code (test fixtures are similar)
+    "R1714",  # consider-using-in (readability preference)
+    "C0207",  # use-maxsplit-arg (micro-optimization)
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 7
+max-attributes = 10
+max-bool-expr = 5
+max-branches = 12
+max-locals = 15
+max-returns = 6
+max-statements = 50
+
+# Flake8 configuration (via setup.cfg or .flake8 file)
+# Note: flake8 doesn't support pyproject.toml natively
+# Create .flake8 file separately

@@ -1,0 +1,39 @@
+network_ports:
+# ---------------- EAPoL with Multi Host ----------------
+  - platforms:
+      - '720XP'
+    switch_ports:
+      - Ethernet1-10
+    description: 802.1x Standard Port - EAPoL with Multi Host
+    profile: PP-DOT1X
+    native_vlan: 666
+    structured_config:
+      switchport:
+        phone:
+          trunk: untagged
+          vlan: 667
+    dot1x:
+      authentication_failure:
+        action: allow
+        allow_vlan: 666
+
+
+
+  - switches:
+      - "leaf-1a"
+      - "leaf-1b"
+      - "leaf-2a"
+    switch_ports:
+      - Ethernet10-15
+    description: 802.1x Standard Port - EAPoL with Multi Host
+    profile: PP-DOT1X
+    native_vlan: 666
+    structured_config:
+      switchport:
+        phone:
+          trunk: untagged
+          vlan: 667
+    dot1x:
+      authentication_failure:
+        action: allow
+        allow_vlan: 666

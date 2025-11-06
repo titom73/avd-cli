@@ -1,0 +1,37 @@
+###############################################
+# Topology Definitions
+###############################################
+
+type: l3spine
+
+# Spine Switches
+l3spine:
+  defaults:
+    platform: "{{ hostvars['spine01']['poc_platform'] }}"
+    bgp_as: 65001
+    spanning_tree_mode: mstp
+    spanning_tree_priority: 4096
+    loopback_ipv4_pool: 172.16.1.0/24
+    mlag_peer_ipv4_pool: 10.255.255.0/24
+    mlag_peer_l3_ipv4_pool: 10.255.254.0/24
+    virtual_router_mac_address: 00:1c:73:00:dc:01
+    mlag_interfaces: [ Ethernet47, Ethernet48 ]
+    mlag_peer_vlan_structured_config:
+      mtu: "{{ mlag_peer_link_mtu | default(9214) }}"
+    campus: "{{default_cv_tags_campus}}"
+    campus_pod: "Building 01"
+    cv_tags_topology_type: spine
+    bgp_defaults:
+    - no bgp default ipv4-unicast
+    - distance bgp 20 200 200
+    - graceful-restart restart-time 300
+    - graceful-restart
+  node_groups:
+  - group: CAMPUS_SPINES
+    nodes:
+    - name: spine01
+      id: 1
+      mgmt_ip: 192.168.0.12/24
+    - name: spine02
+      id: 2
+      mgmt_ip: 192.168.0.13/24

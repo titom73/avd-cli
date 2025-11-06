@@ -1,0 +1,27 @@
+cv_settings:
+  onprem_clusters:
+  - name: act
+    servers:
+    - name: 192.168.0.5
+    vrf: "{{ default_poc_management_vrf }}"
+    token_file: "/tmp/token"
+    source_interface: "{{default_poc_management_interface}}"
+
+generate_cv_tags:
+  # Active la génération des hints de topologie CloudVision [2, 3].
+  topology_hints: true
+
+  # PREVIEW: This option is marked as "preview", meaning the data models or generated configuration can change at any time.
+  # Generate CloudVision device and interface Topology Tags for Campus fabric devices.
+  # Device is treated as a Campus fabric device if:
+  #   - The `campus` variable is assigned, either as native Ansible variable or as part of the `<node_type_keys.key>` AVD data construct.
+  #   - The `generate_cv_tags.campus_fabric` variable is set to `True`.
+  # When campus-related tags are generated for a device, generation of the DC-related tags is automatically disabled for that device.
+  # AVD generates the following device tags for the Campus fabric devices based on the provided Campus-related input variables:
+  #   - `Campus`
+  #   - `Campus-Pod`
+  #   - `Access-Pod`
+  #   - `topology_hint_type`
+  #   - `Role`
+  # These tags are later used by CloudVision to render the correct network layout in the Topology view (`campusV2` network hierarchy) and Campus dashboards.
+  campus_fabric: true

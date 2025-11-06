@@ -1,0 +1,88 @@
+---
+# inventory.yml
+lab:
+  # ========================================
+  # Ansible connectivity definitions
+  # ========================================
+  vars:
+    ansible_user: demo
+    # ansible_password: "{{ lookup('env', 'LABPASSPHRASE') }}"
+    ansible_password: arista123!
+    ansible_network_os: arista.eos.eos
+    # Configure privilege escalation
+    ansible_become: true
+    ansible_become_method: enable
+    # HTTPAPI configuration
+    ansible_connection: httpapi
+    ansible_httpapi_port: 443
+    ansible_httpapi_use_ssl: true
+    ansible_httpapi_validate_certs: false
+    ansible_python_interpreter: $(which python3)
+    avd_data_validation_mode: error
+
+  children:
+    atd:
+      children:
+        campus_avd:
+          vars:
+            fabric_name: CAMPUS_AVD
+          children:
+            campus_spines:
+              vars:
+                poc_platform: 7050X3
+              hosts:
+                spine01:
+                  ansible_host: 192.168.0.12
+                spine02:
+                  ansible_host: 192.168.0.13
+            campus_leaves:
+              vars:
+                poc_platform: 722XP
+                has_poe: false
+                has_storm_control: false
+                has_per_interface_mtu: true
+              children:
+                IDF1:
+                  hosts:
+                    leaf-1a:
+                      ansible_host: 192.168.0.14
+                    leaf-1b:
+                      ansible_host: 192.168.0.15
+                IDF2:
+                  hosts:
+                    leaf-2a:
+                      ansible_host: 192.168.0.16
+                IDF3_AGG:
+                  hosts:
+                    leaf-3a:
+                      ansible_host: 192.168.0.17
+                    leaf-3b:
+                      ansible_host: 192.168.0.18
+                IDF3_3C:
+                  vars:
+                    poc_platform: 720XP
+                  hosts:
+                    member-leaf-3c:
+                      ansible_host: 192.168.0.19
+                IDF3_3D:
+                  vars:
+                    poc_platform: 720XP
+                  hosts:
+                    member-leaf-3d:
+                      ansible_host: 192.168.0.20
+                IDF3_3E:
+                  vars:
+                    poc_platform: 720XP
+                  hosts:
+                    member-leaf-3e:
+                      ansible_host: 192.168.0.21
+
+        campus_services:
+          children:
+            campus_leaves:
+            campus_spines:
+        campus_ports:
+          children:
+            campus_leaves:
+
+

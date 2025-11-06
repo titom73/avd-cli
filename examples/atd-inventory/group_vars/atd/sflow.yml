@@ -1,0 +1,11 @@
+# TODO: Implement a collector
+
+# sflow:
+#   sample: 1024
+#   vrfs:
+#   - name: "{{ default_poc_sflow_vrf }}"
+#     destinations:
+#     # Sflow Destination IP Address.
+#     - destination: "{{ default_poc_sflow_server }}"
+#       port: 6343
+#     source_interface: vlan228

@@ -1,0 +1,70 @@
+hostname: '{{ inventory_hostname }}'
+
+transceiver_qsfp_default_mode_4x10: true
+
+spanning_tree:
+  mode: mstp
+  mst_instances:
+  - id: '0'
+    priority: 16384
+  no_spanning_tree_vlan: 4093-4094
+
+mac_address_table:
+  aging_time: 300
+
+ip_igmp_snooping:
+  globally_enabled: true
+
+router_bfd:
+  multihop:
+    interval: 1200
+    min_rx: 1200
+    multiplier: 3
+
+service_routing_protocols_model: multi-agent
+
+ip_routing: true
+
+vlan_internal_order:
+  allocation: ascending
+  range:
+    beginning: 1006
+    ending: 1199
+
+timezone: Europe/Paris
+
+ntp:
+  local_interface:
+    name: "{{default_poc_management_interface}}"
+    vrf: "{{default_poc_management_vrf}}"
+  servers:
+  - name: 45.90.162.253
+    preferred: True
+    local_interface: "{{default_poc_management_interface}}"
+    vrf: "{{default_poc_management_vrf}}"
+    burst: True
+    iburst: True
+  - name: 54.38.114.34
+    local_interface: "{{default_poc_management_interface}}"
+    vrf: "{{default_poc_management_vrf}}"
+    burst: True
+    iburst: True
+
+# dns domain
+dns_domain: arista.atd
+
+# dns servers.
+dns_settings:
+  servers:
+  - ip_address: 8.8.8.8
+  - ip_address: 1.1.1.1
+
+logging:
+  console: critical
+  repeat_messages: True
+  source_interface: "{{default_poc_management_interface}}"
+  vrfs:
+  - name: "{{ default_poc_syslog_vrf }}"
+    hosts:
+    - name: "{{ default_poc_syslog_server}}"
+      protocol: udp

@@ -1,0 +1,703 @@
+#!/usr/bin/env python
+# coding: utf-8 -*-
+
+"""Additional unit tests for CLI main commands.
+
+Tests for generate subcommands (all, configs, docs, tests) and validate command.
+Uses mocks for loader and generator to test CLI logic in isolation.
+"""
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
+
+from avd_cli.cli.main import cli
+from avd_cli.models.inventory import (DeviceDefinition, FabricDefinition,
+                                      InventoryData)
+
+
+class TestGenerateAllCommand:
+    """Test generate all subcommand."""
+
+    def test_generate_all_success(self, tmp_path: Path) -> None:
+        """Test successful generation of all outputs.
+
+        Given: Valid inventory and output paths
+        When: Running generate all command
+        Then: Generates configs, docs, and tests successfully
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        # Create mock inventory
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        # Mock loader and generator
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.generate_all") as mock_gen_all:
+                mock_gen_all.return_value = (
+                    [output_path / "configs" / "spine01.cfg"],
+                    [output_path / "documentation" / "spine01.md"],
+                    [output_path / "tests" / "tests.yaml"],
+                )
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "generate",
+                        "all",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Generation complete" in result.output
+        assert "Configurations" in result.output
+
+    def test_generate_all_with_verbose(self, tmp_path: Path) -> None:
+        """Test generate all with verbose flag.
+
+        Given: Verbose flag enabled
+        When: Running generate all command
+        Then: Shows detailed output
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.generate_all") as mock_gen_all:
+                mock_gen_all.return_value = ([], [], [])
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "-v",
+                        "generate",
+                        "all",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Verbose mode enabled" in result.output
+        assert "Inventory path:" in result.output
+        assert "Workflow:" in result.output
+
+    def test_generate_all_with_limit_to_groups(self, tmp_path: Path) -> None:
+        """Test generate all with limit-to-groups option.
+
+        Given: limit-to-groups specified
+        When: Running generate all command
+        Then: Passes groups to generator
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.generate_all") as mock_gen_all:
+                mock_gen_all.return_value = ([], [], [])
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "-v",
+                        "generate",
+                        "all",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                        "-l",
+                        "spine",
+                        "-l",
+                        "leaf",
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Limited to groups: spine, leaf" in result.output
+
+    def test_generate_all_with_workflow(self, tmp_path: Path) -> None:
+        """Test generate all with workflow option.
+
+        Given: Workflow parameter specified
+        When: Running generate all command
+        Then: Passes workflow to generator
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.generate_all") as mock_gen_all:
+                mock_gen_all.return_value = ([], [], [])
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "-v",
+                        "generate",
+                        "all",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                        "--workflow",
+                        "config-only",
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Workflow: config-only" in result.output
+
+    def test_generate_all_validation_failure(self, tmp_path: Path) -> None:
+        """Test generate all with validation errors.
+
+        Given: Inventory with validation errors
+        When: Running generate all command
+        Then: Exits with error code
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        # Create inventory with no spine devices (validation error)
+        device = DeviceDefinition(
+            hostname="leaf01",
+            platform="722XP",
+            mgmt_ip="192.168.1.20",
+            device_type="leaf",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            leaf_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            result = runner.invoke(
+                cli,
+                [
+                    "generate",
+                    "all",
+                    "-i",
+                    str(inventory_path),
+                    "-o",
+                    str(output_path),
+                ],
+            )
+
+        assert result.exit_code == 1
+        assert "validation failed" in result.output
+        assert "no spine devices" in result.output
+
+    def test_generate_all_exception_handling(self, tmp_path: Path) -> None:
+        """Test generate all with exception during generation.
+
+        Given: Exception during generation
+        When: Running generate all command
+        Then: Exits with error message
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.side_effect = Exception("Failed to load inventory")
+            mock_loader_class.return_value = mock_loader
+
+            result = runner.invoke(
+                cli,
+                [
+                    "generate",
+                    "all",
+                    "-i",
+                    str(inventory_path),
+                    "-o",
+                    str(output_path),
+                ],
+            )
+
+        assert result.exit_code == 1
+        assert "Error:" in result.output
+        assert "Failed to load inventory" in result.output
+
+
+class TestGenerateConfigsCommand:
+    """Test generate configs subcommand."""
+
+    def test_generate_configs_success(self, tmp_path: Path) -> None:
+        """Test successful generation of configurations only.
+
+        Given: Valid inventory and output paths
+        When: Running generate configs command
+        Then: Generates configurations successfully
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.ConfigurationGenerator") as mock_gen_class:
+                mock_gen = MagicMock()
+                mock_gen.generate.return_value = [output_path / "configs" / "spine01.cfg"]
+                mock_gen_class.return_value = mock_gen
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "generate",
+                        "configs",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Generated 1 configuration" in result.output
+
+    def test_generate_configs_with_verbose(self, tmp_path: Path) -> None:
+        """Test generate configs with verbose flag.
+
+        Given: Verbose flag enabled
+        When: Running generate configs command
+        Then: Shows detailed output
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.ConfigurationGenerator") as mock_gen_class:
+                mock_gen = MagicMock()
+                mock_gen.generate.return_value = []
+                mock_gen_class.return_value = mock_gen
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "-v",
+                        "generate",
+                        "configs",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Generating configurations only" in result.output
+
+
+class TestGenerateDocsCommand:
+    """Test generate docs subcommand."""
+
+    def test_generate_docs_success(self, tmp_path: Path) -> None:
+        """Test successful generation of documentation only.
+
+        Given: Valid inventory and output paths
+        When: Running generate docs command
+        Then: Generates documentation successfully
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.DocumentationGenerator") as mock_gen_class:
+                mock_gen = MagicMock()
+                mock_gen.generate.return_value = [output_path / "documentation" / "spine01.md"]
+                mock_gen_class.return_value = mock_gen
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "generate",
+                        "docs",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Generated 1 documentation file" in result.output
+
+
+class TestGenerateTestsCommand:
+    """Test generate tests subcommand."""
+
+    def test_generate_tests_success(self, tmp_path: Path) -> None:
+        """Test successful generation of test files only.
+
+        Given: Valid inventory and output paths
+        When: Running generate tests command
+        Then: Generates test files successfully
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.TestGenerator") as mock_gen_class:
+                mock_gen = MagicMock()
+                mock_gen.generate.return_value = [output_path / "tests" / "tests.yaml"]
+                mock_gen_class.return_value = mock_gen
+
+                result = runner.invoke(
+                    cli,
+                    [
+                        "generate",
+                        "tests",
+                        "-i",
+                        str(inventory_path),
+                        "-o",
+                        str(output_path),
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Generated 1 test file" in result.output
+
+
+class TestValidateCommand:
+    """Test validate command."""
+
+    def test_validate_success(self, tmp_path: Path) -> None:
+        """Test successful validation.
+
+        Given: Valid inventory
+        When: Running validate command
+        Then: Shows success message
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            result = runner.invoke(
+                cli,
+                ["validate", "-i", str(inventory_path)],
+            )
+
+        assert result.exit_code == 0
+        assert "Validation successful" in result.output
+
+    def test_validate_with_errors(self, tmp_path: Path) -> None:
+        """Test validation with errors.
+
+        Given: Inventory with validation errors
+        When: Running validate command
+        Then: Shows errors and exits with error code
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+
+        # Create inventory with no spine devices (validation error)
+        device = DeviceDefinition(
+            hostname="leaf01",
+            platform="722XP",
+            mgmt_ip="192.168.1.20",
+            device_type="leaf",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            leaf_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            result = runner.invoke(
+                cli,
+                ["validate", "-i", str(inventory_path)],
+            )
+
+        assert result.exit_code == 1
+        assert "Validation failed" in result.output
+        assert "no spine devices" in result.output
+
+
+class TestInfoCommand:
+    """Test info command."""
+
+    def test_info_success(self, tmp_path: Path) -> None:
+        """Test successful info display.
+
+        Given: Valid inventory
+        When: Running info command
+        Then: Shows inventory information
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+
+        spine = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        leaf = DeviceDefinition(
+            hostname="leaf01",
+            platform="722XP",
+            mgmt_ip="192.168.1.20",
+            device_type="leaf",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[spine],
+            leaf_devices=[leaf],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            result = runner.invoke(
+                cli,
+                ["info", "-i", str(inventory_path)],
+            )
+
+        assert result.exit_code == 0
+        assert "Inventory Summary" in result.output
+        assert "DC1" in result.output
+        assert "2" in result.output  # Device count

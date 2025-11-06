@@ -1,0 +1,54 @@
+avd_data_validation_mode: error
+
+aaa_root:
+  disabled: true
+
+enable_password:
+  disabled: true
+
+# aaa_authorization:
+#   exec:
+#     default: "group tacacs+ local"
+
+aaa_authentication:
+  # login:
+  #   default: "group tacacs+ local"
+  policies:
+    local:
+      # Allow admin with no password
+      allow_nopassword: True
+
+# tacacs_servers:
+#   # TODO: Deploy TACACS in containerlab
+#   timeout: 10
+#   hosts:
+#       # Host IP address or name.
+#     - host: 40.0.14.10
+#       vrf: default
+#       key: 03075625121B39626B2E0C155C45532137383E080B
+#       key_type: "7"
+#       single_connection: False
+#       # Timeout in seconds.
+#       timeout: 10
+
+aaa_settings:
+  local_users:
+  - name: admin
+    privilege: 15
+    role: network-admin
+    no_password: true
+    ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCc9Fn0YN2MCogG2+cpWfZN8EMbL201WyMHI9v4uha0w6njm6OZmRQ/QJSz+hnNTkyj9pVTmFi7m039tCo4lezS/y6mQ5QZcylKiydQ2oGB6pzK6EpKEFj+1n+RvcKMkPUiVkgx/LgllaRG8+qFx96tXVkZOj/w17eVZzs6FvM9xwEENERCFEdh4fqVOb/mr7zVWjzDS8OWucSF6RuNWSW27OUzPp6QV0gGxytu4REfQbfitdy9HNaBtwU3dsf/LbcCtl1PAfVLM42ECMTq5La1nkW2P7NrVc5txDb+9uO1c2F9vfDOyMNnpLEBeStSb361yhbI4nOEcFs+amXMdM27"
+
+  - name: cvpadmin
+    # password: arista123!
+    privilege: 15
+    role: network-admin
+    sha512_password: $6$ooEp/G.yX9vdztxG$wUMEwkP4fRixKm0nFmy5HQ7ktuYJ3gazABnRHqsq9Z6teGFl7h22r4sXxT0L5hfvil2zNQZCfkXooYPJPXwqK.
+    ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCc9Fn0YN2MCogG2+cpWfZN8EMbL201WyMHI9v4uha0w6njm6OZmRQ/QJSz+hnNTkyj9pVTmFi7m039tCo4lezS/y6mQ5QZcylKiydQ2oGB6pzK6EpKEFj+1n+RvcKMkPUiVkgx/LgllaRG8+qFx96tXVkZOj/w17eVZzs6FvM9xwEENERCFEdh4fqVOb/mr7zVWjzDS8OWucSF6RuNWSW27OUzPp6QV0gGxytu4REfQbfitdy9HNaBtwU3dsf/LbcCtl1PAfVLM42ECMTq5La1nkW2P7NrVc5txDb+9uO1c2F9vfDOyMNnpLEBeStSb361yhbI4nOEcFs+amXMdM27"
+
+  - name: demo
+    # password: arista123!
+    privilege: 15
+    role: network-admin
+    sha512_password: $6$ooEp/G.yX9vdztxG$wUMEwkP4fRixKm0nFmy5HQ7ktuYJ3gazABnRHqsq9Z6teGFl7h22r4sXxT0L5hfvil2zNQZCfkXooYPJPXwqK.
+    ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCc9Fn0YN2MCogG2+cpWfZN8EMbL201WyMHI9v4uha0w6njm6OZmRQ/QJSz+hnNTkyj9pVTmFi7m039tCo4lezS/y6mQ5QZcylKiydQ2oGB6pzK6EpKEFj+1n+RvcKMkPUiVkgx/LgllaRG8+qFx96tXVkZOj/w17eVZzs6FvM9xwEENERCFEdh4fqVOb/mr7zVWjzDS8OWucSF6RuNWSW27OUzPp6QV0gGxytu4REfQbfitdy9HNaBtwU3dsf/LbcCtl1PAfVLM42ECMTq5La1nkW2P7NrVc5txDb+9uO1c2F9vfDOyMNnpLEBeStSb361yhbI4nOEcFs+amXMdM27"

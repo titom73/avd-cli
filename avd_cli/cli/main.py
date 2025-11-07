@@ -116,12 +116,19 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 
 # Common options decorator for generate subcommands
 def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Apply common options to all generate subcommands."""
+    """Apply common options to all generate subcommands.
+    
+    All options support environment variables with the prefix AVD_CLI_.
+    Environment variables are automatically shown in --help output.
+    Command-line arguments take precedence over environment variables.
+    """
     func = click.option(
         "--inventory-path",
         "-i",
         type=click.Path(exists=True, file_okay=False, path_type=Path),
         required=True,
+        envvar="AVD_CLI_INVENTORY_PATH",
+        show_envvar=True,
         help="Path to AVD inventory directory",
     )(func)
     func = click.option(
@@ -129,18 +136,25 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
         "-o",
         type=click.Path(path_type=Path),
         required=True,
+        envvar="AVD_CLI_OUTPUT_PATH",
+        show_envvar=True,
         help="Output directory for generated files",
     )(func)
     func = click.option(
         "--limit-to-groups",
         "-l",
         multiple=True,
-        help="Limit processing to specific groups (can be used multiple times)",
+        envvar="AVD_CLI_LIMIT_TO_GROUPS",
+        show_envvar=True,
+        help="Limit processing to specific groups (can be used multiple times). "
+             "Use comma-separated values in environment variable",
     )(func)
     func = click.option(
         "--show-deprecation-warnings",
         is_flag=True,
         default=False,
+        envvar="AVD_CLI_SHOW_DEPRECATION_WARNINGS",
+        show_envvar=True,
         help="Show pyavd deprecation warnings (hidden by default)",
     )(func)
     func = click.pass_context(func)
@@ -178,6 +192,8 @@ def generate(ctx: click.Context) -> None:
     "--workflow",
     type=click.Choice(["full", "config-only"], case_sensitive=False),
     default="full",
+    envvar="AVD_CLI_WORKFLOW",
+    show_envvar=True,
     help="Workflow type: full (eos_design + eos_cli_config_gen) or config-only",
 )
 def generate_all(
@@ -194,6 +210,9 @@ def generate_all(
     - Device configurations
     - Documentation
     - ANTA test files
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
@@ -204,6 +223,12 @@ def generate_all(
     Generate with specific workflow:
 
         $ avd-cli generate all -i ./inventory -o ./output --workflow full
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ export AVD_CLI_OUTPUT_PATH=./output
+        $ avd-cli generate all
 
     Limit to specific groups:
 
@@ -273,6 +298,8 @@ def generate_all(
     "--workflow",
     type=click.Choice(["full", "config-only"], case_sensitive=False),
     default="full",
+    envvar="AVD_CLI_WORKFLOW",
+    show_envvar=True,
     help="Workflow type: full (eos_design + eos_cli_config_gen) or config-only",
 )
 def generate_configs(
@@ -287,6 +314,9 @@ def generate_configs(
 
     This command generates only device configurations from the AVD inventory,
     skipping documentation and test generation.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
@@ -297,6 +327,13 @@ def generate_configs(
     Generate with config-only workflow:
 
         $ avd-cli generate configs -i ./inventory -o ./output --workflow config-only
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ export AVD_CLI_OUTPUT_PATH=./output
+        $ export AVD_CLI_WORKFLOW=config-only
+        $ avd-cli generate configs
     """
     verbose = ctx.obj.get("verbose", False)
 
@@ -348,12 +385,21 @@ def generate_docs(
 
     This command generates only documentation from the AVD inventory,
     skipping configuration and test generation.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
     Generate documentation:
 
         $ avd-cli generate docs -i ./inventory -o ./output
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ export AVD_CLI_OUTPUT_PATH=./output
+        $ avd-cli generate docs
     """
     verbose = ctx.obj.get("verbose", False)
 
@@ -398,6 +444,8 @@ def generate_docs(
     "--test-type",
     type=click.Choice(["anta", "robot"], case_sensitive=False),
     default="anta",
+    envvar="AVD_CLI_TEST_TYPE",
+    show_envvar=True,
     help="Type of tests to generate (default: anta)",
 )
 def generate_tests(
@@ -412,6 +460,9 @@ def generate_tests(
 
     This command generates only test files (ANTA or Robot Framework) from
     the AVD inventory, skipping configuration and documentation generation.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
@@ -422,6 +473,13 @@ def generate_tests(
     Generate Robot Framework tests:
 
         $ avd-cli generate tests -i ./inventory -o ./output --test-type robot
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ export AVD_CLI_OUTPUT_PATH=./output
+        $ export AVD_CLI_TEST_TYPE=anta
+        $ avd-cli generate tests
     """
     verbose = ctx.obj.get("verbose", False)
 
@@ -466,6 +524,8 @@ def generate_tests(
     "-i",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     required=True,
+    envvar="AVD_CLI_INVENTORY_PATH",
+    show_envvar=True,
     help="Path to AVD inventory directory",
 )
 @click.pass_context
@@ -474,12 +534,20 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
 
     This command validates the inventory structure, YAML syntax, and data integrity
     without generating any output files.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
     Validate inventory structure:
 
         $ avd-cli validate -i ./inventory
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ avd-cli validate
     """
     verbose = ctx.obj.get("verbose", False)
 
@@ -529,6 +597,8 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
     "-i",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     required=True,
+    envvar="AVD_CLI_INVENTORY_PATH",
+    show_envvar=True,
     help="Path to AVD inventory directory",
 )
 @click.option(
@@ -536,6 +606,8 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
     "-f",
     type=click.Choice(["table", "json", "yaml"], case_sensitive=False),
     default="table",
+    envvar="AVD_CLI_FORMAT",
+    show_envvar=True,
     help="Output format for inventory information",
 )
 @click.pass_context
@@ -544,6 +616,9 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
 
     This command analyzes the inventory and displays information about
     devices, groups, and fabric structure.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
 
     Examples
     --------
@@ -554,6 +629,12 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
     Display inventory info as JSON:
 
         $ avd-cli info -i ./inventory --format json
+    
+    Using environment variables:
+    
+        $ export AVD_CLI_INVENTORY_PATH=./inventory
+        $ export AVD_CLI_FORMAT=json
+        $ avd-cli info
     """
     verbose = ctx.obj.get("verbose", False)
 

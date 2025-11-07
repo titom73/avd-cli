@@ -132,17 +132,20 @@ avd-cli info -i examples/atd-inventory/
 # Display help
 avd-cli --help
 
-# Generate configurations and documentation
-avd-cli generate -i ./inventory -o ./output
+# Generate all outputs (configs, docs, tests)
+avd-cli generate all -i ./inventory -o ./output
 
-# Generate configurations only (skip documentation)
-avd-cli generate -i ./inventory -o ./output --config-only
+# Generate configurations only
+avd-cli generate configs -i ./inventory -o ./output
 
-# Generate with ANTA tests
-avd-cli generate -i ./inventory -o ./output --generate-tests
+# Generate documentation only
+avd-cli generate docs -i ./inventory -o ./output
+
+# Generate ANTA tests only
+avd-cli generate tests -i ./inventory -o ./output
 
 # Limit to specific groups
-avd-cli generate -i ./inventory -o ./output -l spine -l leaf
+avd-cli generate all -i ./inventory -o ./output -l spine -l leaf
 
 # Validate inventory structure
 avd-cli validate -i ./inventory
@@ -151,19 +154,92 @@ avd-cli validate -i ./inventory
 avd-cli info -i ./inventory
 ```
 
+### Environment Variables
+
+All CLI options support environment variables with the `AVD_CLI_` prefix. This is useful for CI/CD pipelines and containerized environments.
+
+```bash
+# Set environment variables
+export AVD_CLI_INVENTORY_PATH=./inventory
+export AVD_CLI_OUTPUT_PATH=./output
+export AVD_CLI_WORKFLOW=full
+
+# Run command without explicit arguments
+avd-cli generate configs
+
+# Override environment variable with CLI argument
+avd-cli generate configs -o ./custom-output
+
+# Multiple groups via environment variable (comma-separated)
+export AVD_CLI_LIMIT_TO_GROUPS=spine,leaf,border
+avd-cli generate all
+
+# Boolean flags via environment variable
+export AVD_CLI_SHOW_DEPRECATION_WARNINGS=true
+avd-cli generate configs
+
+# Format selection for info command
+export AVD_CLI_FORMAT=json
+avd-cli info
+```
+
+**Environment Variable Reference:**
+
+| CLI Option | Environment Variable | Type | Example |
+|-----------|---------------------|------|---------|
+| `-i, --inventory-path` | `AVD_CLI_INVENTORY_PATH` | Path | `./inventory` |
+| `-o, --output-path` | `AVD_CLI_OUTPUT_PATH` | Path | `./output` |
+| `-l, --limit-to-groups` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `spine,leaf` |
+| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `full` or `config-only` |
+| `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `true`, `false`, `1`, `0` |
+| `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` or `robot` |
+| `-f, --format` | `AVD_CLI_FORMAT` | Choice | `table`, `json`, `yaml` |
+
+**Priority Order:** CLI arguments > Environment variables > Default values
+
 ### Command Options
 
-#### `generate` - Generate configurations and documentation
+#### `generate all` - Generate all outputs
 
 ```bash
 Options:
-  -i, --inventory-path PATH       Path to AVD inventory directory [required]
-  -o, --output-path PATH          Output directory for generated files [required]
-  -l, --limit-to-groups TEXT      Limit processing to specific groups (multiple)
-  --config-only                   Generate configuration only (skip docs)
-  --workflow [full|config-only]   Workflow type [default: full]
-  --generate-tests                Generate ANTA tests
-  -v, --verbose                   Enable verbose output
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH          Output directory for generated files  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT      Limit processing to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --workflow [full|config-only]   Workflow type  [env var: AVD_CLI_WORKFLOW; default: full]
+  --show-deprecation-warnings     Show pyavd warnings  [env var: AVD_CLI_SHOW_DEPRECATION_WARNINGS]
+  --help                          Show help message
+```
+
+#### `generate configs` - Generate configurations only
+
+```bash
+Options:
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH          Output directory  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT      Limit to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --workflow [full|config-only]   Workflow type  [env var: AVD_CLI_WORKFLOW; default: full]
+  --help                          Show help message
+```
+
+#### `generate docs` - Generate documentation only
+
+```bash
+Options:
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH          Output directory  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT      Limit to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --help                          Show help message
+```
+
+#### `generate tests` - Generate test files
+
+```bash
+Options:
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH          Output directory  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT      Limit to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --test-type [anta|robot]        Test type  [env var: AVD_CLI_TEST_TYPE; default: anta]
   --help                          Show help message
 ```
 
@@ -171,7 +247,7 @@ Options:
 
 ```bash
 Options:
-  -i, --inventory-path PATH       Path to AVD inventory directory [required]
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
   -v, --verbose                   Enable verbose output
   --help                          Show help message
 ```
@@ -180,8 +256,8 @@ Options:
 
 ```bash
 Options:
-  -i, --inventory-path PATH       Path to AVD inventory directory [required]
-  -f, --format [table|json|yaml]  Output format [default: table]
+  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -f, --format [table|json|yaml]  Output format  [env var: AVD_CLI_FORMAT; default: table]
   -v, --verbose                   Enable verbose output
   --help                          Show help message
 ```

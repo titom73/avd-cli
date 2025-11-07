@@ -1,10 +1,10 @@
 ---
 title: AVD CLI Tool Architecture Specification
-version: 1.2
+version: 1.3
 date_created: 2025-11-06
-last_updated: 2025-11-06
+last_updated: 2025-11-07
 owner: AVD CLI Development Team
-tags: [tool, architecture, cli, python, avd, command-groups]
+tags: [tool, architecture, cli, python, avd, command-groups, environment-variables]
 ---
 
 # Introduction
@@ -97,6 +97,17 @@ Define the architectural components, design patterns, and technical constraints 
 - **SEC-004**: Application shall implement proper error handling without exposing internal details
 - **SEC-005**: Application shall log operations without exposing sensitive data
 
+### Environment Variables Requirements
+
+- **ENV-001**: CLI shall support loading all command options from environment variables
+- **ENV-002**: Environment variables shall follow the naming convention `AVD_CLI_<OPTION_NAME>`
+- **ENV-003**: Environment variables shall be displayed in command `--help` output
+- **ENV-004**: Command-line arguments shall take precedence over environment variables
+- **ENV-005**: Environment variable values shall be validated using the same rules as CLI arguments
+- **ENV-006**: Boolean flags shall support both `true`/`false` and `1`/`0` values in environment variables
+- **ENV-007**: Path-type environment variables shall support both absolute and relative paths
+- **ENV-008**: Multiple-value options shall support comma-separated values in environment variables
+
 ### Performance Requirements
 
 - **PER-001**: CLI response time for info/debug commands shall be <500ms
@@ -165,6 +176,55 @@ The CLI uses Click's group functionality to organize related commands under logi
 
 ### Command Options Schema
 
+#### Environment Variable Support
+
+All CLI options support corresponding environment variables following the naming convention `AVD_CLI_<OPTION_NAME>` (uppercase, underscores for word separation).
+
+**Priority Order:**
+1. Command-line arguments (highest priority)
+2. Environment variables
+3. Default values (lowest priority)
+
+**Environment Variable Mapping:**
+
+| CLI Option | Environment Variable | Type | Example |
+|-----------|---------------------|------|---------|
+| `--inventory-path`, `-i` | `AVD_CLI_INVENTORY_PATH` | Path | `/path/to/inventory` |
+| `--output-path`, `-o` | `AVD_CLI_OUTPUT_PATH` | Path | `/path/to/output` |
+| `--limit-to-groups`, `-l` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `spine,leaf` |
+| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `full` or `config-only` |
+| `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `true`, `false`, `1`, `0` |
+| `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` or `robot` |
+
+**Help Text Display:**
+
+Environment variables must be shown in the `--help` output for each option:
+
+```bash
+$ avd-cli generate configs --help
+Usage: avd-cli generate configs [OPTIONS]
+
+  Generate device configurations only.
+
+Options:
+  -i, --inventory-path PATH  Path to AVD inventory directory  [env var:
+                             AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH     Output directory for generated files  [env var:
+                             AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT Limit processing to specific groups (can be
+                             used multiple times)  [env var:
+                             AVD_CLI_LIMIT_TO_GROUPS]
+  --workflow [full|config-only]
+                             Workflow type: full (eos_design +
+                             eos_cli_config_gen) or config-only  [env var:
+                             AVD_CLI_WORKFLOW; default: full]
+  --show-deprecation-warnings
+                             Show pyavd deprecation warnings (hidden by
+                             default)  [env var:
+                             AVD_CLI_SHOW_DEPRECATION_WARNINGS]
+  --help                     Show this message and exit.
+```
+
 #### Generate Command Group
 ```python
 @click.group()
@@ -194,28 +254,42 @@ def generate(ctx: click.Context) -> None:
 
 # Common options decorator for reuse across subcommands
 def common_generate_options(func):
-    """Common options for all generate subcommands."""
+    """Common options for all generate subcommands.
+    
+    All options support environment variables with the prefix AVD_CLI_.
+    Environment variables are automatically shown in --help output.
+    Command-line arguments take precedence over environment variables.
+    """
     func = click.option(
         '--inventory-path', '-i',
         type=click.Path(exists=True, file_okay=False, path_type=Path),
         required=True,
+        envvar='AVD_CLI_INVENTORY_PATH',
+        show_envvar=True,
         help='Path to AVD inventory directory'
     )(func)
     func = click.option(
         '--output-path', '-o',
         type=click.Path(path_type=Path),
         required=True,
+        envvar='AVD_CLI_OUTPUT_PATH',
+        show_envvar=True,
         help='Output directory for generated files'
     )(func)
     func = click.option(
         '--limit-to-groups', '-l',
         multiple=True,
-        help='Limit processing to specific groups (can be used multiple times)'
+        envvar='AVD_CLI_LIMIT_TO_GROUPS',
+        show_envvar=True,
+        help='Limit processing to specific groups (can be used multiple times). '
+             'Use comma-separated values in environment variable: AVD_CLI_LIMIT_TO_GROUPS=spine,leaf'
     )(func)
     func = click.option(
         '--show-deprecation-warnings',
         is_flag=True,
         default=False,
+        envvar='AVD_CLI_SHOW_DEPRECATION_WARNINGS',
+        show_envvar=True,
         help='Show pyavd deprecation warnings (hidden by default)'
     )(func)
     func = click.pass_context(func)
@@ -253,6 +327,8 @@ def display_generation_summary(
     '--workflow',
     type=click.Choice(['full', 'config-only'], case_sensitive=False),
     default='full',
+    envvar='AVD_CLI_WORKFLOW',
+    show_envvar=True,
     help='Workflow type: full (eos_design + eos_cli_config_gen) or config-only'
 )
 def generate_all(
@@ -262,7 +338,11 @@ def generate_all(
     limit_to_groups: tuple,
     workflow: str
 ) -> None:
-    """Generate all outputs: configurations, documentation, and tests."""
+    """Generate all outputs: configurations, documentation, and tests.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
+    """
 
 #### Generate Configs Subcommand
 ```python
@@ -272,6 +352,8 @@ def generate_all(
     '--workflow',
     type=click.Choice(['full', 'config-only'], case_sensitive=False),
     default='full',
+    envvar='AVD_CLI_WORKFLOW',
+    show_envvar=True,
     help='Workflow type: full (eos_design + eos_cli_config_gen) or config-only'
 )
 def generate_configs(
@@ -281,7 +363,11 @@ def generate_configs(
     limit_to_groups: tuple,
     workflow: str
 ) -> None:
-    """Generate device configurations only."""
+    """Generate device configurations only.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
+    """
 
 #### Generate Docs Subcommand
 ```python
@@ -293,7 +379,11 @@ def generate_docs(
     output_path: Path,
     limit_to_groups: tuple
 ) -> None:
-    """Generate documentation only."""
+    """Generate documentation only.
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
+    """
 
 #### Generate Tests Subcommand
 ```python
@@ -303,6 +393,8 @@ def generate_docs(
     '--test-type',
     type=click.Choice(['anta', 'robot'], case_sensitive=False),
     default='anta',
+    envvar='AVD_CLI_TEST_TYPE',
+    show_envvar=True,
     help='Type of tests to generate'
 )
 def generate_tests(
@@ -312,7 +404,11 @@ def generate_tests(
     limit_to_groups: tuple,
     test_type: str
 ) -> None:
-    """Generate test files (ANTA or Robot Framework)."""
+    """Generate test files (ANTA or Robot Framework).
+    
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
+    """
 ```
 
 ### Internal API Contracts
@@ -430,6 +526,16 @@ limits:
 - **AC-015**: Given any generate subcommand, When operation completes, Then output is displayed in consistent table format with category, count, and path
 - **AC-016**: Given pyavd deprecation warnings, When user runs generate commands without flag, Then deprecation warnings are hidden
 - **AC-017**: Given the `--show-deprecation-warnings` flag, When user runs generate commands, Then deprecation warnings from pyavd are displayed
+
+### Environment Variables
+
+- **AC-018**: Given any CLI option with environment variable support, When user runs command with `--help`, Then environment variable name is displayed in help text
+- **AC-019**: Given an environment variable `AVD_CLI_INVENTORY_PATH=/path/to/inventory`, When user runs command without `-i` option, Then inventory path is loaded from environment variable
+- **AC-020**: Given both environment variable and CLI argument, When user runs command, Then CLI argument takes precedence over environment variable
+- **AC-021**: Given `AVD_CLI_LIMIT_TO_GROUPS=spine,leaf`, When user runs command, Then both groups are processed (comma-separated parsing)
+- **AC-022**: Given `AVD_CLI_SHOW_DEPRECATION_WARNINGS=true`, When user runs command, Then deprecation warnings are shown
+- **AC-023**: Given `AVD_CLI_SHOW_DEPRECATION_WARNINGS=1`, When user runs command, Then deprecation warnings are shown (numeric boolean support)
+- **AC-024**: Given invalid environment variable value, When user runs command, Then clear validation error message is displayed
 
 ### Command Group Structure
 
@@ -732,6 +838,67 @@ avd-cli generate configs -i ./inventory -o ./output --show-deprecation-warnings
 # - Deprecation warnings hidden by default, shown only with flag
 ```
 
+### Environment Variable Usage
+
+```bash
+# Set environment variables
+export AVD_CLI_INVENTORY_PATH=./inventory
+export AVD_CLI_OUTPUT_PATH=./output
+export AVD_CLI_WORKFLOW=full
+
+# Run command without explicit arguments
+avd-cli generate configs
+
+# Expected output:
+# → Loading inventory...
+# ✓ Loaded 10 devices from ./inventory
+# → Generating configurations with workflow: full
+# ✓ Generated 10 configuration files
+#
+# Environment variables used:
+#   AVD_CLI_INVENTORY_PATH: ./inventory
+#   AVD_CLI_OUTPUT_PATH: ./output
+#   AVD_CLI_WORKFLOW: full
+
+# Override environment variable with CLI argument
+avd-cli generate configs -i ./other-inventory
+
+# Expected output:
+# → Loading inventory...
+# ✓ Loaded 5 devices from ./other-inventory  (CLI argument overrides env var)
+
+# Multiple groups via environment variable
+export AVD_CLI_LIMIT_TO_GROUPS=spine,leaf,border
+avd-cli generate configs
+
+# Expected: Processes only spine, leaf, and border groups
+
+# Boolean flags via environment variable
+export AVD_CLI_SHOW_DEPRECATION_WARNINGS=true
+avd-cli generate configs
+
+# Expected: Shows deprecation warnings
+
+# Numeric boolean
+export AVD_CLI_SHOW_DEPRECATION_WARNINGS=1
+avd-cli generate configs
+
+# Expected: Shows deprecation warnings (1 == true)
+
+# View help with environment variable info
+avd-cli generate configs --help
+
+# Expected output includes:
+# Options:
+#   -i, --inventory-path PATH  Path to AVD inventory directory  [env var:
+#                              AVD_CLI_INVENTORY_PATH; required]
+#   -o, --output-path PATH     Output directory for generated files  [env var:
+#                              AVD_CLI_OUTPUT_PATH; required]
+#   --workflow [full|config-only]
+#                              Workflow type  [env var: AVD_CLI_WORKFLOW;
+#                              default: full]
+```
+
 ### Edge Cases
 
 #### Empty Inventory
@@ -877,12 +1044,21 @@ except Exception as e:
 - **VAL-017**: Successfully handles invalid inventory with clear errors
 - **VAL-018**: Successfully processes large inventories (>100 devices)
 
+### Environment Variable Validation
+
+- **VAL-019**: All CLI options display corresponding environment variable in `--help` output
+- **VAL-020**: Environment variables are correctly parsed and applied
+- **VAL-021**: CLI arguments correctly override environment variables
+- **VAL-022**: Comma-separated values in `AVD_CLI_LIMIT_TO_GROUPS` are correctly parsed
+- **VAL-023**: Boolean environment variables accept `true`, `false`, `1`, `0` values
+- **VAL-024**: Invalid environment variable values produce clear error messages
+
 ### Security Validation
 
-- **VAL-019**: No hardcoded credentials or tokens in codebase
-- **VAL-020**: All file paths sanitized before use
-- **VAL-021**: Error messages don't expose internal implementation details
-- **VAL-022**: Logging doesn't include sensitive information
+- **VAL-025**: No hardcoded credentials or tokens in codebase
+- **VAL-026**: All file paths sanitized before use
+- **VAL-027**: Error messages don't expose internal implementation details
+- **VAL-028**: Logging doesn't include sensitive information
 
 ## 11. Related Specifications / Further Reading
 

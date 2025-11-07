@@ -701,3 +701,227 @@ class TestInfoCommand:
         assert "Inventory Summary" in result.output
         assert "DC1" in result.output
         assert "2" in result.output  # Device count
+
+
+class TestEnvironmentVariables:
+    """Test environment variable support for CLI options."""
+
+    def test_generate_configs_with_env_vars(self, tmp_path: Path) -> None:
+        """Test generate configs using environment variables.
+
+        Given: Environment variables for inventory and output paths
+        When: Running generate configs without CLI arguments
+        Then: Uses environment variable values
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        # Create mock inventory
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        # Mock loader and generator
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.ConfigurationGenerator"):
+                # Set environment variables
+                env = {
+                    "AVD_CLI_INVENTORY_PATH": str(inventory_path),
+                    "AVD_CLI_OUTPUT_PATH": str(output_path),
+                    "AVD_CLI_WORKFLOW": "full",
+                }
+
+                result = runner.invoke(
+                    cli,
+                    ["generate", "configs"],
+                    env=env,
+                )
+
+        assert result.exit_code == 0
+        assert "Loading inventory" in result.output
+
+    def test_cli_args_override_env_vars(self, tmp_path: Path) -> None:
+        """Test that CLI arguments override environment variables.
+
+        Given: Both environment variables and CLI arguments
+        When: Running command with both
+        Then: CLI arguments take precedence
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+        alt_output_path = tmp_path / "alt_output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.ConfigurationGenerator"):
+                # Set environment variables
+                env = {
+                    "AVD_CLI_INVENTORY_PATH": str(inventory_path),
+                    "AVD_CLI_OUTPUT_PATH": str(output_path),
+                }
+
+                # CLI argument overrides env var
+                result = runner.invoke(
+                    cli,
+                    ["generate", "configs", "-i", str(inventory_path), "-o", str(alt_output_path)],
+                    env=env,
+                )
+
+        assert result.exit_code == 0
+
+    def test_info_with_format_env_var(self, tmp_path: Path) -> None:
+        """Test info command with format from environment variable.
+
+        Given: AVD_CLI_FORMAT environment variable
+        When: Running info command
+        Then: Uses format from environment variable
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            env = {
+                "AVD_CLI_INVENTORY_PATH": str(inventory_path),
+                "AVD_CLI_FORMAT": "json",
+            }
+
+            result = runner.invoke(
+                cli,
+                ["info"],
+                env=env,
+            )
+
+        assert result.exit_code == 0
+
+    def test_show_deprecation_warnings_env_var(self, tmp_path: Path) -> None:
+        """Test show-deprecation-warnings from environment variable.
+
+        Given: AVD_CLI_SHOW_DEPRECATION_WARNINGS=true
+        When: Running generate command
+        Then: Deprecation warnings are shown
+        """
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        output_path = tmp_path / "output"
+
+        device = DeviceDefinition(
+            hostname="spine01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="spine",
+            fabric="DC1",
+        )
+        fabric = FabricDefinition(
+            name="DC1",
+            design_type="l3ls-evpn",
+            spine_devices=[device],
+        )
+        mock_inventory = InventoryData(
+            root_path=inventory_path,
+            fabrics=[fabric],
+        )
+
+        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+            mock_loader = MagicMock()
+            mock_loader.load.return_value = mock_inventory
+            mock_loader_class.return_value = mock_loader
+
+            with patch("avd_cli.logics.generator.ConfigurationGenerator"):
+                env = {
+                    "AVD_CLI_INVENTORY_PATH": str(inventory_path),
+                    "AVD_CLI_OUTPUT_PATH": str(output_path),
+                    "AVD_CLI_SHOW_DEPRECATION_WARNINGS": "true",
+                }
+
+                result = runner.invoke(
+                    cli,
+                    ["generate", "configs"],
+                    env=env,
+                )
+
+        assert result.exit_code == 0
+
+    def test_help_shows_env_vars(self) -> None:
+        """Test that --help displays environment variable names.
+
+        Given: generate configs command
+        When: Running with --help flag
+        Then: Environment variable names are shown
+        """
+        runner = CliRunner()
+
+        result = runner.invoke(
+            cli,
+            ["generate", "configs", "--help"],
+        )
+
+        assert result.exit_code == 0
+        assert "AVD_CLI_INVENTORY_PATH" in result.output
+        assert "AVD_CLI_OUTPUT_PATH" in result.output
+        assert "AVD_CLI_WORKFLOW" in result.output
+        assert "AVD_CLI_SHOW_DEPRECATION_WARNINGS" in result.output
+        assert "[env var:" in result.output

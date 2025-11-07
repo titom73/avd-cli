@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A powerful command-line interface for processing Arista AVD (Arista Validated Designs) inventories and generating configurations, documentation, and ANTA tests using py-avd.
+A powerful command-line interface for processing [Arista AVD (Architect, Validate, Deploy)](https://avd.arista.com/) inventories and generating configurations, documentation, and ANTA tests using py-avd.
 
 ## 🌟 Key Features
 
@@ -14,7 +14,77 @@ A powerful command-line interface for processing Arista AVD (Arista Validated De
 - **Documentation Generation**: Automatically generate comprehensive network documentation
 - **Multi-Fabric Support**: Process multiple network fabrics in a single inventory
 
-### 🚀 Advanced Features
+## 🚀 Getting Started
+
+### Installation
+
+Install AVD CLI using pipx for isolated environment:
+
+```bash
+# Install pipx if not already installed
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+
+# Install avd-cli
+pipx install git+https://github.com/titom73/avd-cli.git
+```
+
+### Example Usage
+
+```bash
+# Generate configurations from your AVD inventory
+avd-cli generate all -i examples/atd-inventory/ -o examples/outputs
+→ Loading inventory...
+✓ Loaded 10 devices
+→ Generating configurations, documentation, and tests...
+
+✓ Generation complete!
+                      Generated Files
+┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Category       ┃ Count ┃ Output Path                    ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Configurations │    10 │ examples/outputs/configs       │
+│ Documentation  │    10 │ examples/outputs/documentation │
+│ Tests          │     1 │ examples/outputs/tests         │
+└────────────────┴───────┴────────────────────────────────┘
+
+# View inventory information
+avd-cli info -i examples/atd-inventory/
+→ Loading inventory...
+✓ Loaded 10 devices
+
+           Inventory Summary
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Metric                  ┃ Value     ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ Total Devices           │ 10        │
+│ Total Fabrics           │ 1         │
+│ Fabric: campus_avd      │           │
+│   - Design Type         │ l3ls-evpn │
+│   - Spine Devices       │ 2         │
+│   - Leaf Devices        │ 8         │
+│   - Border Leaf Devices │ 0         │
+└─────────────────────────┴───────────┘
+
+
+                             Devices
+┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Hostname       ┃ Type  ┃ Platform ┃ Management IP ┃ Fabric     ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ leaf-1a        │ leaf  │ 722XP    │ 192.168.0.14  │ campus_avd │
+│ leaf-1b        │ leaf  │ 722XP    │ 192.168.0.15  │ campus_avd │
+│ leaf-2a        │ leaf  │ 722XP    │ 192.168.0.16  │ campus_avd │
+│ leaf-3a        │ leaf  │ 720XP    │ 192.168.0.17  │ campus_avd │
+│ leaf-3b        │ leaf  │ 720XP    │ 192.168.0.18  │ campus_avd │
+│ member-leaf-3c │ leaf  │ 720XP    │ 192.168.0.19  │ campus_avd │
+│ member-leaf-3d │ leaf  │ 720XP    │ 192.168.0.20  │ campus_avd │
+│ member-leaf-3e │ leaf  │ 720XP    │ 192.168.0.21  │ campus_avd │
+│ spine01        │ spine │ 7050X3   │ 192.168.0.12  │ campus_avd │
+│ spine02        │ spine │ 7050X3   │ 192.168.0.13  │ campus_avd │
+└────────────────┴───────┴──────────┴───────────────┴────────────┘
+```
+
+## 🚀 Advanced Features
 
 - **Jinja2 Template Support**: Full support for Jinja2 variables and expressions in inventory files
   - Use `{{ ansible_hostname }}` and other Jinja2 expressions

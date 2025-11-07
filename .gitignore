@@ -80,3 +80,6 @@ output/
 *.tmp
 *.bak
 .backup/
+
+examples/**
+examples/*

@@ -38,15 +38,18 @@ class ConfigurationGenerator:
     >>> print(f"Generated {len(configs)} configurations")
     """
 
-    def __init__(self, workflow: str = "full") -> None:
+    def __init__(self, workflow: str = "eos-design") -> None:
         """Initialize the configuration generator.
 
         Parameters
         ----------
         workflow : str, optional
-            Workflow type ('full' or 'config-only'), by default "full"
+            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
+            Legacy values 'full' and 'config-only' are also supported for backward compatibility.
         """
-        self.workflow = workflow
+        from avd_cli.constants import normalize_workflow
+
+        self.workflow = normalize_workflow(workflow)
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def generate(  # noqa: C901
@@ -107,7 +110,7 @@ class ConfigurationGenerator:
                 return generated_files
 
             # Step 1: Validate inputs (eos_designs schema)
-            if self.workflow == "full":
+            if self.workflow == "eos-design":
                 self.logger.info("Validating inputs against eos_designs schema")
                 for hostname, inputs in all_inputs.items():
                     validation_result = pyavd.validate_inputs(inputs)
@@ -133,12 +136,12 @@ class ConfigurationGenerator:
                     )
                     structured_configs[hostname] = structured_config
 
-            else:  # workflow == "config-only"
+            else:  # workflow == "cli-config"
                 # Skip eos_design, only use eos_cli_config_gen
-                self.logger.info("Using config-only workflow (eos_cli_config_gen only)")
+                self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
                 structured_configs = {}
                 for hostname, inputs in all_inputs.items():
-                    # For config-only, inputs should already be structured_config
+                    # For cli-config, inputs should already be structured_config
                     structured_configs[hostname] = inputs
 
             # Step 4: Validate structured configs
@@ -248,13 +251,19 @@ class ConfigurationGenerator:
             # Set hostname (required by pyavd)
             device_input["hostname"] = device.hostname
 
-            # Determine device type by finding which topology structure contains this device
-            device_type = self._determine_device_type(base_structure, device.hostname)
-            if device_type:
-                device_input["type"] = device_type
-                self.logger.debug("Determined type '%s' for device %s", device_type, device.hostname)
+            # For cli-config workflow, use device.device_type directly (already in device definition)
+            # For eos-design workflow, determine type from topology structure
+            if self.workflow == "cli-config":
+                device_input["type"] = device.device_type
+                self.logger.debug("Using device type '%s' for %s (from device definition)", device.device_type, device.hostname)
             else:
-                self.logger.warning("Could not determine type for device %s", device.hostname)
+                # Determine device type by finding which topology structure contains this device
+                device_type = self._determine_device_type(base_structure, device.hostname)
+                if device_type:
+                    device_input["type"] = device_type
+                    self.logger.debug("Determined type '%s' for device %s", device_type, device.hostname)
+                else:
+                    self.logger.warning("Could not determine type for device %s", device.hostname)
 
             # Merge host-specific variables last (they override everything)
             if device.hostname in inventory.host_vars:
@@ -472,8 +481,17 @@ class DocumentationGenerator:
     data using py-avd library.
     """
 
-    def __init__(self) -> None:
-        """Initialize the documentation generator."""
+    def __init__(self, workflow: str = "eos-design") -> None:
+        """Initialize the documentation generator.
+
+        Parameters
+        ----------
+        workflow : str, optional
+            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
+        """
+        from avd_cli.constants import normalize_workflow
+
+        self.workflow = normalize_workflow(workflow)
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def generate(
@@ -500,7 +518,7 @@ class DocumentationGenerator:
         DocumentationGenerationError
             If generation fails
         """
-        self.logger.info("Generating documentation")
+        self.logger.info("Generating documentation with workflow: %s", self.workflow)
 
         # Create output directory
         docs_dir = output_path / DEFAULT_DOCS_DIR
@@ -523,26 +541,35 @@ class DocumentationGenerator:
             if limit_to_groups:
                 devices = [d for d in devices if d.fabric in limit_to_groups]
 
-            # Reuse the conversion logic from ConfigurationGenerator
+            # Build structured configs based on workflow
             from avd_cli.logics.generator import ConfigurationGenerator
 
-            config_gen = ConfigurationGenerator(workflow="full")
+            config_gen = ConfigurationGenerator(workflow=self.workflow)
             all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
                 return generated_files
 
-            # Generate AVD facts and structured configs
-            self.logger.info("Generating AVD facts for documentation")
-            avd_facts = pyavd.get_avd_facts(all_inputs)
-
             structured_configs: Dict[str, Dict[str, Any]] = {}
-            for hostname, inputs in all_inputs.items():
-                structured_config = pyavd.get_device_structured_config(
-                    hostname=hostname, inputs=inputs, avd_facts=avd_facts
-                )
-                structured_configs[hostname] = structured_config
+
+            if self.workflow == "eos-design":
+                # Generate AVD facts and structured configs (eos_design workflow)
+                self.logger.info("Generating AVD facts for documentation")
+                avd_facts = pyavd.get_avd_facts(all_inputs)
+
+                for hostname, inputs in all_inputs.items():
+                    structured_config = pyavd.get_device_structured_config(
+                        hostname=hostname, inputs=inputs, avd_facts=avd_facts
+                    )
+                    structured_configs[hostname] = structured_config
+
+            else:  # workflow == "cli-config"
+                # Use existing structured configs directly
+                self.logger.info("Using existing structured configs for documentation")
+                for hostname, inputs in all_inputs.items():
+                    # For cli-config, inputs ARE the structured configs
+                    structured_configs[hostname] = inputs
 
             # Generate device documentation
             self.logger.info("Generating device documentation")
@@ -645,7 +672,7 @@ class TestGenerator:
 def generate_all(
     inventory: InventoryData,
     output_path: Path,
-    workflow: str = "full",
+    workflow: str = "eos-design",
     limit_to_groups: Optional[List[str]] = None,
 ) -> Tuple[List[Path], List[Path], List[Path]]:
     """Generate all outputs: configurations, documentation, and tests.
@@ -657,7 +684,8 @@ def generate_all(
     output_path : Path
         Output directory for all generated files
     workflow : str, optional
-        Workflow type, by default "full"
+        Workflow type, by default "eos-design"
+        Legacy values 'full' and 'config-only' are also supported for backward compatibility.
     limit_to_groups : Optional[List[str]], optional
         Groups to limit generation to, by default None
 
@@ -666,8 +694,12 @@ def generate_all(
     Tuple[List[Path], List[Path], List[Path]]
         Tuple of (config_files, doc_files, test_files)
     """
+    from avd_cli.constants import normalize_workflow
+
+    workflow = normalize_workflow(workflow)
+
     config_gen = ConfigurationGenerator(workflow=workflow)
-    doc_gen = DocumentationGenerator()
+    doc_gen = DocumentationGenerator(workflow=workflow)
     test_gen = TestGenerator()
 
     configs = config_gen.generate(inventory, output_path, limit_to_groups)

@@ -39,8 +39,12 @@ INVENTORY_HOST_VARS_DIR = "host_vars"
 INVENTORY_FILE = "inventory.yml"
 
 # Workflow modes
-WORKFLOW_MODE_FULL = "full"
-WORKFLOW_MODE_CONFIG_ONLY = "config-only"
+WORKFLOW_MODE_EOS_DESIGN = "eos-design"
+WORKFLOW_MODE_CLI_CONFIG = "cli-config"
+
+# Deprecated workflow modes (for backward compatibility)
+WORKFLOW_MODE_FULL = "full"  # Deprecated: use WORKFLOW_MODE_EOS_DESIGN
+WORKFLOW_MODE_CONFIG_ONLY = "config-only"  # Deprecated: use WORKFLOW_MODE_CLI_CONFIG
 
 # NOTE: Supported platforms and device types are now loaded dynamically
 # from py-avd via avd_cli.utils.schema module.
@@ -78,3 +82,36 @@ EXIT_GENERATION_ERROR = 2
 EXIT_FILE_SYSTEM_ERROR = 3
 EXIT_WORKFLOW_ERROR = 4
 EXIT_UNKNOWN_ERROR = 99
+
+
+def normalize_workflow(workflow: str) -> str:
+    """Normalize workflow value for backward compatibility.
+
+    Maps deprecated workflow values to their current equivalents:
+    - 'full' -> 'eos-design'
+    - 'config-only' -> 'cli-config'
+
+    Parameters
+    ----------
+    workflow : str
+        Workflow value to normalize
+
+    Returns
+    -------
+    str
+        Normalized workflow value
+
+    Examples
+    --------
+    >>> normalize_workflow("full")
+    'eos-design'
+    >>> normalize_workflow("eos-design")
+    'eos-design'
+    >>> normalize_workflow("config-only")
+    'cli-config'
+    """
+    workflow_mapping = {
+        WORKFLOW_MODE_FULL: WORKFLOW_MODE_EOS_DESIGN,
+        WORKFLOW_MODE_CONFIG_ONLY: WORKFLOW_MODE_CLI_CONFIG,
+    }
+    return workflow_mapping.get(workflow, workflow)

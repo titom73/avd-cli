@@ -1,10 +1,10 @@
 ---
 title: AVD CLI Tool Architecture Specification
-version: 1.3
+version: 1.4
 date_created: 2025-11-06
 last_updated: 2025-11-07
 owner: AVD CLI Development Team
-tags: [tool, architecture, cli, python, avd, command-groups, environment-variables]
+tags: [tool, architecture, cli, python, avd, command-groups, environment-variables, workflow]
 ---
 
 # Introduction
@@ -40,11 +40,14 @@ Define the architectural components, design patterns, and technical constraints 
 - **py-avd**: Python library providing AVD functionality
 - **ANTA**: Arista Network Test Automation framework
 - **CLI**: Command-Line Interface
-- **eos_design**: AVD role for generating EOS configuration from design abstractions
-- **eos_cli_config_gen**: AVD role for generating structured EOS configurations
+- **eos_design**: AVD role for generating EOS configuration from design abstractions (fabric topology to structured configs)
+- **eos_cli_config_gen**: AVD role for generating EOS CLI configurations from structured configs
+- **eos-design workflow**: Complete pipeline executing eos_design followed by eos_cli_config_gen to generate configs from fabric definitions
+- **cli-config workflow**: Direct configuration generation using eos_cli_config_gen only, consuming existing structured configurations from Ansible inventory
 - **UV**: Modern Python package manager and tool runner
 - **Click**: Python package for creating CLI applications
 - **Rich**: Python library for rich text and beautiful formatting in the terminal
+- **Structured Configuration**: YAML-based device configuration data consumed by eos_cli_config_gen
 
 ## 3. Requirements, Constraints & Guidelines
 
@@ -53,8 +56,8 @@ Define the architectural components, design patterns, and technical constraints 
 - **REQ-001**: CLI shall support generating both configuration and documentation from AVD inventory
 - **REQ-002**: CLI shall support generating configuration only (without documentation)
 - **REQ-003**: CLI shall support limiting builds to specific host groups defined in AVD inventory
-- **REQ-004**: CLI shall support eos_design + eos_cli_config_gen workflow approach
-- **REQ-005**: CLI shall support eos_cli_config_gen only workflow approach
+- **REQ-004**: CLI shall support eos-design workflow (eos_design + eos_cli_config_gen pipeline)
+- **REQ-005**: CLI shall support cli-config workflow (eos_cli_config_gen only with existing Ansible inventory)
 - **REQ-006**: CLI shall provide option to generate ANTA tests for anta_runner execution
 - **REQ-007**: CLI shall support configurable paths for inputs and outputs
 - **REQ-008**: CLI shall provide meaningful error messages for invalid operations
@@ -65,6 +68,7 @@ Define the architectural components, design patterns, and technical constraints 
 - **REQ-013**: CLI shall allow future extension with additional command groups and subcommands
 - **REQ-014**: CLI shall provide consistent output formatting across all generate subcommands
 - **REQ-015**: CLI shall support hiding pyavd deprecation warnings by default with option to show them
+- **REQ-016**: CLI shall accept eos-design and cli-config as workflow values for backward compatibility and clarity
 
 ### Technical Requirements
 
@@ -192,7 +196,7 @@ All CLI options support corresponding environment variables following the naming
 | `--inventory-path`, `-i` | `AVD_CLI_INVENTORY_PATH` | Path | `/path/to/inventory` |
 | `--output-path`, `-o` | `AVD_CLI_OUTPUT_PATH` | Path | `/path/to/output` |
 | `--limit-to-groups`, `-l` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `spine,leaf` |
-| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `full` or `config-only` |
+| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `eos-design` or `cli-config` |
 | `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `true`, `false`, `1`, `0` |
 | `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` or `robot` |
 
@@ -214,10 +218,10 @@ Options:
   -l, --limit-to-groups TEXT Limit processing to specific groups (can be
                              used multiple times)  [env var:
                              AVD_CLI_LIMIT_TO_GROUPS]
-  --workflow [full|config-only]
-                             Workflow type: full (eos_design +
-                             eos_cli_config_gen) or config-only  [env var:
-                             AVD_CLI_WORKFLOW; default: full]
+  --workflow [eos-design|cli-config]
+                             Workflow type: eos-design (eos_design +
+                             eos_cli_config_gen) or cli-config (eos_cli_config_gen only)  [env var:
+                             AVD_CLI_WORKFLOW; default: eos-design]
   --show-deprecation-warnings
                              Show pyavd deprecation warnings (hidden by
                              default)  [env var:
@@ -255,7 +259,7 @@ def generate(ctx: click.Context) -> None:
 # Common options decorator for reuse across subcommands
 def common_generate_options(func):
     """Common options for all generate subcommands.
-    
+
     All options support environment variables with the prefix AVD_CLI_.
     Environment variables are automatically shown in --help output.
     Command-line arguments take precedence over environment variables.
@@ -325,11 +329,11 @@ def display_generation_summary(
 @common_generate_options
 @click.option(
     '--workflow',
-    type=click.Choice(['full', 'config-only'], case_sensitive=False),
-    default='full',
+    type=click.Choice(['eos-design', 'cli-config'], case_sensitive=False),
+    default='eos-design',
     envvar='AVD_CLI_WORKFLOW',
     show_envvar=True,
-    help='Workflow type: full (eos_design + eos_cli_config_gen) or config-only'
+    help='Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only)'
 )
 def generate_all(
     ctx: click.Context,
@@ -339,9 +343,13 @@ def generate_all(
     workflow: str
 ) -> None:
     """Generate all outputs: configurations, documentation, and tests.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
+
+    Workflow Modes:
+    - eos-design: Complete pipeline (fabric definitions -> structured configs -> CLI configs)
+    - cli-config: Direct generation (existing structured configs -> CLI configs)
     """
 
 #### Generate Configs Subcommand
@@ -350,11 +358,11 @@ def generate_all(
 @common_generate_options
 @click.option(
     '--workflow',
-    type=click.Choice(['full', 'config-only'], case_sensitive=False),
-    default='full',
+    type=click.Choice(['eos-design', 'cli-config'], case_sensitive=False),
+    default='eos-design',
     envvar='AVD_CLI_WORKFLOW',
     show_envvar=True,
-    help='Workflow type: full (eos_design + eos_cli_config_gen) or config-only'
+    help='Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only)'
 )
 def generate_configs(
     ctx: click.Context,
@@ -364,9 +372,13 @@ def generate_configs(
     workflow: str
 ) -> None:
     """Generate device configurations only.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
+
+    Workflow Modes:
+    - eos-design: Complete pipeline (fabric definitions -> structured configs -> CLI configs)
+    - cli-config: Direct generation (existing structured configs -> CLI configs)
     """
 
 #### Generate Docs Subcommand
@@ -380,7 +392,7 @@ def generate_docs(
     limit_to_groups: tuple
 ) -> None:
     """Generate documentation only.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
     """
@@ -405,7 +417,7 @@ def generate_tests(
     test_type: str
 ) -> None:
     """Generate test files (ANTA or Robot Framework).
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
     """
@@ -677,6 +689,43 @@ Using Click's command groups provides significant architectural benefits:
 - **Flexibility**: Each subcommand can have unique options while sharing common ones
 - **Maintenance**: Changes to one subcommand don't affect others
 
+### Why Two Workflow Modes?
+
+The CLI supports two distinct workflow modes to accommodate different use cases:
+
+**eos-design workflow** (default):
+- **Purpose**: Complete automation from high-level design to CLI configurations
+- **Rationale**:
+  - Most AVD users start with fabric topology definitions
+  - Abstracts complex EOS configurations into simple YAML structures
+  - Automatically handles BGP, EVPN, MLAG, and underlay/overlay configurations
+  - Reduces human error through standardized templates
+- **Use Case**: Greenfield deployments, consistent fabric designs, infrastructure as code
+- **Benefits**:
+  - Single source of truth (fabric topology)
+  - Automatic structured config generation
+  - Consistent configurations across entire fabric
+
+**cli-config workflow**:
+- **Purpose**: Direct CLI generation when structured configs already exist
+- **Rationale**:
+  - Some users manually create structured configurations
+  - Existing deployments may have pre-generated structured configs
+  - Allows custom structured configs not generated by eos_design
+  - Faster execution by skipping design phase
+- **Use Case**: Brownfield deployments, custom configurations, partial AVD adoption, CI/CD optimization
+- **Benefits**:
+  - Faster execution (skips eos_design role)
+  - Flexibility for custom structured configs
+  - Lower memory footprint for large inventories
+  - Suitable for iterative config updates
+
+**Naming Convention Rationale**:
+- `eos-design`: Clearly indicates the eos_design role is involved
+- `cli-config`: Focuses on the final output (CLI configs) and the role used (eos_cli_config_gen)
+- Avoids ambiguous terms like "full" or "config-only"
+- Aligns with AVD role names for clarity
+
 ## 8. Dependencies & External Integrations
 
 ### External Systems
@@ -822,19 +871,41 @@ avd-cli generate configs -i ./inventory -o ./output -l spine
 
 ### Workflow Modes
 
-```bash
-# Full workflow (eos_design + eos_cli_config_gen)
-avd-cli generate configs -i ./inventory -o ./output --workflow full
+The `--workflow` option controls how AVD processes the inventory:
 
-# Config-only workflow (eos_cli_config_gen only)
-avd-cli generate configs -i ./inventory -o ./output --workflow config-only
+**eos-design workflow (default)**:
+- **Purpose**: Complete AVD pipeline from fabric definitions to EOS CLI configurations
+- **Process**:
+  1. Reads fabric topology from group_vars (spine, l3leaf, l2leaf sections)
+  2. Executes eos_design role to generate structured configurations
+  3. Executes eos_cli_config_gen role to convert structured configs to CLI syntax
+- **Use case**: Starting from high-level fabric design abstractions
+- **Input**: AVD fabric definitions (topology, underlay, overlay settings)
+- **Output**: Structured configs + CLI configs + documentation
+
+**cli-config workflow**:
+- **Purpose**: Direct CLI configuration generation from existing structured configurations
+- **Process**:
+  1. Reads existing structured configurations from Ansible inventory
+  2. Executes eos_cli_config_gen role only
+  3. Skips eos_design role entirely
+- **Use case**: When structured configurations already exist (pre-generated or manually created)
+- **Input**: Existing structured configurations in host_vars/group_vars
+- **Output**: CLI configs + documentation
+
+```bash
+# eos-design workflow (complete pipeline)
+avd-cli generate configs -i ./inventory -o ./output --workflow eos-design
+
+# cli-config workflow (eos_cli_config_gen only)
+avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
 
 # Show deprecation warnings
 avd-cli generate configs -i ./inventory -o ./output --show-deprecation-warnings
 
 # Expected behavior:
-# - Full workflow: Complete design and config generation
-# - Config-only: Direct config generation from structured config
+# - eos-design: Processes fabric topology -> structured configs -> CLI configs
+# - cli-config: Processes existing structured configs -> CLI configs only
 # - Deprecation warnings hidden by default, shown only with flag
 ```
 
@@ -844,7 +915,7 @@ avd-cli generate configs -i ./inventory -o ./output --show-deprecation-warnings
 # Set environment variables
 export AVD_CLI_INVENTORY_PATH=./inventory
 export AVD_CLI_OUTPUT_PATH=./output
-export AVD_CLI_WORKFLOW=full
+export AVD_CLI_WORKFLOW=eos-design
 
 # Run command without explicit arguments
 avd-cli generate configs
@@ -852,13 +923,13 @@ avd-cli generate configs
 # Expected output:
 # → Loading inventory...
 # ✓ Loaded 10 devices from ./inventory
-# → Generating configurations with workflow: full
+# → Generating configurations with workflow: eos-design
 # ✓ Generated 10 configuration files
 #
 # Environment variables used:
 #   AVD_CLI_INVENTORY_PATH: ./inventory
 #   AVD_CLI_OUTPUT_PATH: ./output
-#   AVD_CLI_WORKFLOW: full
+#   AVD_CLI_WORKFLOW: eos-design
 
 # Override environment variable with CLI argument
 avd-cli generate configs -i ./other-inventory

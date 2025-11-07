@@ -261,10 +261,17 @@ class InventoryData:
                 return device
         return None
 
-    def validate(self) -> List[str]:
+    def validate(self, skip_topology_validation: bool = False) -> List[str]:
         """Validate complete inventory structure.
 
         Checks for common issues like duplicate hostnames, duplicate IPs, etc.
+
+        Parameters
+        ----------
+        skip_topology_validation : bool, optional
+            Skip topology-specific validations (e.g., spine presence).
+            Useful for cli-config workflow where structured configs are used directly,
+            by default False
 
         Returns
         -------
@@ -285,9 +292,10 @@ class InventoryData:
         if duplicate_ips:
             errors.append(f"Duplicate management IPs: {set(duplicate_ips)}")
 
-        # Validate each fabric
-        for fabric in self.fabrics:
-            if not fabric.spine_devices:
-                errors.append(f"Fabric {fabric.name} has no spine devices")
+        # Validate topology only for eos-design workflow
+        if not skip_topology_validation:
+            for fabric in self.fabrics:
+                if not fabric.spine_devices:
+                    errors.append(f"Fabric {fabric.name} has no spine devices")
 
         return errors

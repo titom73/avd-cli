@@ -117,7 +117,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 # Common options decorator for generate subcommands
 def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
     """Apply common options to all generate subcommands.
-    
+
     All options support environment variables with the prefix AVD_CLI_.
     Environment variables are automatically shown in --help output.
     Command-line arguments take precedence over environment variables.
@@ -190,11 +190,11 @@ def generate(ctx: click.Context) -> None:
 @common_generate_options
 @click.option(
     "--workflow",
-    type=click.Choice(["full", "config-only"], case_sensitive=False),
-    default="full",
+    type=click.Choice(["eos-design", "cli-config", "full", "config-only"], case_sensitive=False),
+    default="eos-design",
     envvar="AVD_CLI_WORKFLOW",
     show_envvar=True,
-    help="Workflow type: full (eos_design + eos_cli_config_gen) or config-only",
+    help="Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). Legacy values 'full' and 'config-only' are deprecated.",
 )
 def generate_all(
     ctx: click.Context,
@@ -210,7 +210,7 @@ def generate_all(
     - Device configurations
     - Documentation
     - ANTA test files
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -222,10 +222,10 @@ def generate_all(
 
     Generate with specific workflow:
 
-        $ avd-cli generate all -i ./inventory -o ./output --workflow full
-    
+        $ avd-cli generate all -i ./inventory -o ./output --workflow eos-design
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ export AVD_CLI_OUTPUT_PATH=./output
         $ avd-cli generate all
@@ -235,6 +235,11 @@ def generate_all(
         $ avd-cli generate all -i ./inventory -o ./output -l spine -l leaf
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Normalize workflow for backward compatibility
+    from avd_cli.constants import normalize_workflow
+
+    workflow = normalize_workflow(workflow)
 
     if verbose:
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
@@ -255,8 +260,9 @@ def generate_all(
         loader = InventoryLoader()
         inventory = loader.load(inventory_path)
 
-        # Validate inventory
-        errors = inventory.validate()
+        # Validate inventory (skip topology validation for cli-config workflow)
+        skip_topology = workflow == "cli-config"
+        errors = inventory.validate(skip_topology_validation=skip_topology)
         if errors:
             console.print("[red]✗[/red] Inventory validation failed:")
             for error in errors:
@@ -296,11 +302,11 @@ def generate_all(
 @common_generate_options
 @click.option(
     "--workflow",
-    type=click.Choice(["full", "config-only"], case_sensitive=False),
-    default="full",
+    type=click.Choice(["eos-design", "cli-config", "full", "config-only"], case_sensitive=False),
+    default="eos-design",
     envvar="AVD_CLI_WORKFLOW",
     show_envvar=True,
-    help="Workflow type: full (eos_design + eos_cli_config_gen) or config-only",
+    help="Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). Legacy values 'full' and 'config-only' are deprecated.",
 )
 def generate_configs(
     ctx: click.Context,
@@ -314,7 +320,7 @@ def generate_configs(
 
     This command generates only device configurations from the AVD inventory,
     skipping documentation and test generation.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -324,18 +330,23 @@ def generate_configs(
 
         $ avd-cli generate configs -i ./inventory -o ./output
 
-    Generate with config-only workflow:
+    Generate with cli-config workflow:
 
-        $ avd-cli generate configs -i ./inventory -o ./output --workflow config-only
-    
+        $ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ export AVD_CLI_OUTPUT_PATH=./output
-        $ export AVD_CLI_WORKFLOW=config-only
+        $ export AVD_CLI_WORKFLOW=cli-config
         $ avd-cli generate configs
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Normalize workflow for backward compatibility
+    from avd_cli.constants import normalize_workflow
+
+    workflow = normalize_workflow(workflow)
 
     if verbose:
         console.print("[blue]ℹ[/blue] Generating configurations only")
@@ -353,6 +364,15 @@ def generate_configs(
         console.print("[cyan]→[/cyan] Loading inventory...")
         loader = InventoryLoader()
         inventory = loader.load(inventory_path)
+
+        # Validate inventory (skip topology validation for cli-config workflow)
+        skip_topology = workflow == "cli-config"
+        errors = inventory.validate(skip_topology_validation=skip_topology)
+        if errors:
+            console.print("[red]✗[/red] Inventory validation failed:")
+            for error in errors:
+                console.print(f"  [red]•[/red] {error}")
+            sys.exit(1)
 
         console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
 
@@ -385,7 +405,7 @@ def generate_docs(
 
     This command generates only documentation from the AVD inventory,
     skipping configuration and test generation.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -394,9 +414,9 @@ def generate_docs(
     Generate documentation:
 
         $ avd-cli generate docs -i ./inventory -o ./output
-    
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ export AVD_CLI_OUTPUT_PATH=./output
         $ avd-cli generate docs
@@ -460,7 +480,7 @@ def generate_tests(
 
     This command generates only test files (ANTA or Robot Framework) from
     the AVD inventory, skipping configuration and documentation generation.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -473,9 +493,9 @@ def generate_tests(
     Generate Robot Framework tests:
 
         $ avd-cli generate tests -i ./inventory -o ./output --test-type robot
-    
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ export AVD_CLI_OUTPUT_PATH=./output
         $ export AVD_CLI_TEST_TYPE=anta
@@ -534,7 +554,7 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
 
     This command validates the inventory structure, YAML syntax, and data integrity
     without generating any output files.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -543,9 +563,9 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
     Validate inventory structure:
 
         $ avd-cli validate -i ./inventory
-    
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ avd-cli validate
     """
@@ -616,7 +636,7 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
 
     This command analyzes the inventory and displays information about
     devices, groups, and fabric structure.
-    
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
@@ -629,9 +649,9 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
     Display inventory info as JSON:
 
         $ avd-cli info -i ./inventory --format json
-    
+
     Using environment variables:
-    
+
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ export AVD_CLI_FORMAT=json
         $ avd-cli info

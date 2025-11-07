@@ -239,12 +239,12 @@ class TestGenerateAllCommand:
                         "-o",
                         str(output_path),
                         "--workflow",
-                        "config-only",
+                        "cli-config",
                     ],
                 )
 
         assert result.exit_code == 0
-        assert "Workflow: config-only" in result.output
+        assert "Workflow: cli-config" in result.output
 
     def test_generate_all_validation_failure(self, tmp_path: Path) -> None:
         """Test generate all with validation errors.
@@ -747,7 +747,7 @@ class TestEnvironmentVariables:
                 env = {
                     "AVD_CLI_INVENTORY_PATH": str(inventory_path),
                     "AVD_CLI_OUTPUT_PATH": str(output_path),
-                    "AVD_CLI_WORKFLOW": "full",
+                    "AVD_CLI_WORKFLOW": "eos-design",
                 }
 
                 result = runner.invoke(

@@ -743,6 +743,64 @@ class InventoryLoader:
 
                 devices_by_fabric[fabric_name].extend(devices)
 
+        # Also parse devices directly from host_vars for Ansible-style inventories
+        # (hosts defined in inventory.yml with ansible_host, and structured configs in host_vars/)
+        for hostname, hvars in host_vars.items():
+            # Skip if this host was already parsed from AVD topology
+            already_parsed = any(
+                hostname in [d.hostname for d in fabric_devices]
+                for fabric_devices in devices_by_fabric.values()
+            )
+            if already_parsed:
+                continue
+
+            # Check if this is a network device (has typical EOS structured config keys)
+            # Exclude CloudVision servers and other management hosts
+            network_config_keys = {
+                "router_bgp", "static_routes", "vlans", "interfaces",
+                "ethernet_interfaces", "port_channel_interfaces",
+                "vlan_interfaces", "loopback_interfaces"
+            }
+            has_network_config = any(key in hvars for key in network_config_keys)
+
+            # Exclude hosts that are clearly not network devices
+            is_cv_server = hvars.get("cv_collection") is not None or "cv_" in hostname
+
+            is_network_device = (
+                has_network_config
+                and not is_cv_server
+                and ("ansible_host" in hvars or "mgmt_ip" in hvars)
+            )
+
+            if is_network_device:
+                # Determine fabric
+                fabric_name = hvars.get("fabric_name")
+                if not fabric_name:
+                    # Try to find from group_vars
+                    for group_data in group_vars.values():
+                        if "fabric_name" in group_data:
+                            fabric_name = group_data["fabric_name"]
+                            break
+                if not fabric_name:
+                    fabric_name = global_vars.get("fabric_name", "DEFAULT")
+
+                if fabric_name not in devices_by_fabric:
+                    devices_by_fabric[fabric_name] = []
+
+                # Create device from host_vars
+                device = self._parse_device_from_host_vars(
+                    hostname, hvars, global_vars, fabric_name
+                )
+                if device:
+                    # Apply custom configurations
+                    device = self._apply_custom_platform_settings(device, group_vars)
+                    device = self._apply_custom_structured_configuration(device, group_vars)
+                    devices_by_fabric[fabric_name].append(device)
+                    self.logger.debug(
+                        "Parsed device %s from host_vars (Ansible-style inventory)",
+                        hostname
+                    )
+
         # Create fabric definitions
         for fabric_name, devices in devices_by_fabric.items():
             fabric = self._create_fabric_definition(fabric_name, devices, group_vars)
@@ -1019,6 +1077,94 @@ class InventoryLoader:
                 system_mac_address=node_data.get("system_mac_address"),
                 structured_config=node_data.get("structured_config", {}),
                 custom_variables=node_data,
+            )
+            return device
+        except (ValueError, TypeError) as e:
+            self.logger.warning("Failed to create device %s: %s", hostname, e)
+            return None
+
+    def _parse_device_from_host_vars(
+        self,
+        hostname: str,
+        host_vars: Dict[str, Any],
+        global_vars: Dict[str, Any],
+        fabric_name: str,
+    ) -> Union[DeviceDefinition, None]:
+        """Parse a device from host_vars (Ansible-style inventory).
+
+        This is used for inventories where devices are defined as Ansible hosts
+        with structured configs in host_vars files, rather than AVD topology structures.
+
+        Parameters
+        ----------
+        hostname : str
+            Device hostname
+        host_vars : Dict[str, Any]
+            Host variables (from host_vars/hostname.yml)
+        global_vars : Dict[str, Any]
+            Global variables
+        fabric_name : str
+            Fabric name
+
+        Returns
+        -------
+        Union[DeviceDefinition, None]
+            Parsed device or None if invalid
+        """
+        # Extract management IP from ansible_host or mgmt_ip
+        mgmt_ip_str = host_vars.get("ansible_host") or host_vars.get("mgmt_ip")
+        if not mgmt_ip_str:
+            self.logger.warning("Device %s missing ansible_host/mgmt_ip, skipping", hostname)
+            return None
+
+        # Parse IP address (remove /24 subnet if present)
+        mgmt_ip_str = str(mgmt_ip_str).split("/")[0]
+
+        try:
+            mgmt_ip = ip_address(mgmt_ip_str)
+        except ValueError as e:
+            self.logger.warning("Invalid mgmt_ip for %s: %s", hostname, e)
+            return None
+
+        # Extract device type from 'type' field, or default to 'switch'
+        device_type = self._normalize_device_type(
+            host_vars.get("type", "switch")
+        )
+
+        # Extract platform
+        platform = host_vars.get("platform", "vEOS-lab")
+
+        # For cli-config workflow, the entire host_vars IS the structured_config
+        # (except for Ansible-specific fields like ansible_host, ansible_user, etc.)
+        structured_config = {}
+        ansible_keys = {
+            "ansible_host", "ansible_user", "ansible_password", "ansible_ssh_pass",
+            "ansible_connection", "ansible_network_os", "ansible_become",
+            "type", "mgmt_ip", "platform", "fabric_name"
+        }
+
+        for key, value in host_vars.items():
+            if key not in ansible_keys:
+                structured_config[key] = value
+
+        # Ensure hostname is in structured_config for pyavd
+        if "hostname" not in structured_config:
+            structured_config["hostname"] = hostname
+
+        try:
+            device = DeviceDefinition(
+                hostname=hostname,
+                platform=platform,
+                mgmt_ip=mgmt_ip,
+                device_type=device_type,
+                fabric=fabric_name,
+                pod=host_vars.get("pod"),
+                rack=host_vars.get("rack"),
+                mgmt_gateway=None,
+                serial_number=host_vars.get("serial_number"),
+                system_mac_address=host_vars.get("system_mac_address"),
+                structured_config=structured_config,
+                custom_variables=host_vars,
             )
             return device
         except (ValueError, TypeError) as e:

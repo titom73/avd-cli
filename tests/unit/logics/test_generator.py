@@ -117,20 +117,40 @@ class TestConfigurationGenerator:
 
         Given: No workflow specified
         When: Creating ConfigurationGenerator
-        Then: Workflow is set to 'full'
+        Then: Workflow is set to 'eos-design'
         """
         generator = ConfigurationGenerator()
-        assert generator.workflow == "full"
+        assert generator.workflow == "eos-design"
 
     def test_init_custom_workflow(self) -> None:
         """Test generator initialization with custom workflow.
 
-        Given: Custom workflow 'config-only'
+        Given: Custom workflow 'cli-config'
         When: Creating ConfigurationGenerator
         Then: Workflow is set correctly
         """
+        generator = ConfigurationGenerator(workflow="cli-config")
+        assert generator.workflow == "cli-config"
+
+    def test_init_legacy_workflow_full(self) -> None:
+        """Test generator initialization with legacy 'full' workflow.
+
+        Given: Legacy workflow 'full'
+        When: Creating ConfigurationGenerator
+        Then: Workflow is normalized to 'eos-design'
+        """
+        generator = ConfigurationGenerator(workflow="full")
+        assert generator.workflow == "eos-design"
+
+    def test_init_legacy_workflow_config_only(self) -> None:
+        """Test generator initialization with legacy 'config-only' workflow.
+
+        Given: Legacy workflow 'config-only'
+        When: Creating ConfigurationGenerator
+        Then: Workflow is normalized to 'cli-config'
+        """
         generator = ConfigurationGenerator(workflow="config-only")
-        assert generator.workflow == "config-only"
+        assert generator.workflow == "cli-config"
 
     def test_generate_creates_output_directory(
         self, sample_inventory: InventoryData, tmp_path: Path
@@ -211,16 +231,16 @@ class TestConfigurationGenerator:
             ):
                 generator.generate(sample_inventory, output_path)
 
-    def test_generate_config_only_workflow(
+    def test_generate_cli_config_workflow(
         self, sample_inventory: InventoryData, tmp_path: Path
     ) -> None:
-        """Test configuration generation with config-only workflow.
+        """Test configuration generation with cli-config workflow.
 
-        Given: Config-only workflow
+        Given: cli-config workflow
         When: Generating configurations
         Then: Skips eos_design validation
         """
-        generator = ConfigurationGenerator(workflow="config-only")
+        generator = ConfigurationGenerator(workflow="cli-config")
         output_path = tmp_path / "output"
 
         result = generator.generate(sample_inventory, output_path)
@@ -234,7 +254,7 @@ class TestConfigurationGenerator:
         """Test handling of input validation failure.
 
         Given: pyavd validation fails
-        When: Generating configurations with full workflow
+        When: Generating configurations with eos-design workflow
         Then: Raises ConfigurationGenerationError
         """
         from unittest.mock import MagicMock
@@ -245,7 +265,7 @@ class TestConfigurationGenerator:
         mock_validation.validation_errors = ["Error 1: Invalid input", "Error 2: Missing field"]
         mock_pyavd.validate_inputs.return_value = mock_validation
 
-        generator = ConfigurationGenerator(workflow="full")
+        generator = ConfigurationGenerator(workflow="eos-design")
         output_path = tmp_path / "output"
 
         with pytest.raises(ConfigurationGenerationError, match="Input validation failed"):
@@ -274,7 +294,7 @@ class TestConfigurationGenerator:
         mock_structured_validation.validation_errors = ["Structured config error"]
         mock_pyavd.validate_structured_config.return_value = mock_structured_validation
 
-        generator = ConfigurationGenerator(workflow="full")
+        generator = ConfigurationGenerator(workflow="eos-design")
         output_path = tmp_path / "output"
 
         with pytest.raises(ConfigurationGenerationError, match="Structured config validation failed"):
@@ -286,7 +306,7 @@ class TestConfigurationGenerator:
         """Test handling of deprecation warnings.
 
         Given: pyavd returns deprecation warnings
-        When: Generating configurations with full workflow
+        When: Generating configurations with eos-design workflow
         Then: Logs warnings but continues generation
         """
         from unittest.mock import MagicMock
@@ -305,7 +325,7 @@ class TestConfigurationGenerator:
         mock_structured_validation.failed = False
         mock_pyavd.validate_structured_config.return_value = mock_structured_validation
 
-        generator = ConfigurationGenerator(workflow="full")
+        generator = ConfigurationGenerator(workflow="eos-design")
         output_path = tmp_path / "output"
 
         # Should complete successfully despite warnings

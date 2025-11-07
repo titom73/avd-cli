@@ -122,7 +122,7 @@ avd-cli info -i examples/atd-inventory/
 ### Roadmap
 
 - **ANTA Test Generation**: Create ANTA test files for network validation
-- **Flexible Workflows**: Support for both full (eos_design + eos_cli_config_gen) and config-only workflows
+- **Flexible Workflows**: Support for both eos-design (eos_design + eos_cli_config_gen) and cli-config (eos_cli_config_gen only) workflows
 
 ## 💻 Usage
 
@@ -162,7 +162,7 @@ All CLI options support environment variables with the `AVD_CLI_` prefix. This i
 # Set environment variables
 export AVD_CLI_INVENTORY_PATH=./inventory
 export AVD_CLI_OUTPUT_PATH=./output
-export AVD_CLI_WORKFLOW=full
+export AVD_CLI_WORKFLOW=eos-design
 
 # Run command without explicit arguments
 avd-cli generate configs
@@ -190,7 +190,7 @@ avd-cli info
 | `-i, --inventory-path` | `AVD_CLI_INVENTORY_PATH` | Path | `./inventory` |
 | `-o, --output-path` | `AVD_CLI_OUTPUT_PATH` | Path | `./output` |
 | `-l, --limit-to-groups` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `spine,leaf` |
-| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `full` or `config-only` |
+| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `eos-design` or `cli-config` (legacy: `full`, `config-only`) |
 | `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `true`, `false`, `1`, `0` |
 | `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` or `robot` |
 | `-f, --format` | `AVD_CLI_FORMAT` | Choice | `table`, `json`, `yaml` |
@@ -203,23 +203,23 @@ avd-cli info
 
 ```bash
 Options:
-  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
-  -o, --output-path PATH          Output directory for generated files  [env var: AVD_CLI_OUTPUT_PATH; required]
-  -l, --limit-to-groups TEXT      Limit processing to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
-  --workflow [full|config-only]   Workflow type  [env var: AVD_CLI_WORKFLOW; default: full]
-  --show-deprecation-warnings     Show pyavd warnings  [env var: AVD_CLI_SHOW_DEPRECATION_WARNINGS]
-  --help                          Show help message
+  -i, --inventory-path PATH             Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH                Output directory for generated files  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT            Limit processing to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --workflow [eos-design|cli-config]    Workflow type  [env var: AVD_CLI_WORKFLOW; default: eos-design]
+  --show-deprecation-warnings           Show pyavd warnings  [env var: AVD_CLI_SHOW_DEPRECATION_WARNINGS]
+  --help                                Show help message
 ```
 
 #### `generate configs` - Generate configurations only
 
 ```bash
 Options:
-  -i, --inventory-path PATH       Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
-  -o, --output-path PATH          Output directory  [env var: AVD_CLI_OUTPUT_PATH; required]
-  -l, --limit-to-groups TEXT      Limit to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
-  --workflow [full|config-only]   Workflow type  [env var: AVD_CLI_WORKFLOW; default: full]
-  --help                          Show help message
+  -i, --inventory-path PATH             Path to AVD inventory directory  [env var: AVD_CLI_INVENTORY_PATH; required]
+  -o, --output-path PATH                Output directory  [env var: AVD_CLI_OUTPUT_PATH; required]
+  -l, --limit-to-groups TEXT            Limit to specific groups  [env var: AVD_CLI_LIMIT_TO_GROUPS]
+  --workflow [eos-design|cli-config]    Workflow type  [env var: AVD_CLI_WORKFLOW; default: eos-design]
+  --help                                Show help message
 ```
 
 #### `generate docs` - Generate documentation only

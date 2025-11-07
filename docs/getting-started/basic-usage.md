@@ -105,6 +105,7 @@ avd-cli info -i ./my-network --format yaml
 === "Table (Default)"
     ```bash
     avd-cli info -i ./inventory
+
 ```
 
     Displays a formatted table with device information, fabric details, and summary statistics.
@@ -129,6 +130,7 @@ avd-cli info -i ./my-network --format yaml
 === "YAML"
     ```bash
     avd-cli info -i ./inventory --format yaml
+
 ```
 
     ```yaml

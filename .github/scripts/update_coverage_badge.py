@@ -13,12 +13,7 @@ def get_coverage_percentage():
     """Get the coverage percentage from coverage report."""
     try:
         # Run coverage report and capture output
-        result = subprocess.run(
-            ["coverage", "report", "--format=total"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(["coverage", "report", "--format=total"], capture_output=True, text=True, check=True)
 
         # Parse the percentage
         coverage_str = result.stdout.strip()
@@ -26,20 +21,15 @@ def get_coverage_percentage():
             return int(coverage_str)
         else:
             # Try to parse from regular coverage report
-            result = subprocess.run(
-                ["coverage", "report"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            result = subprocess.run(["coverage", "report"], capture_output=True, text=True, check=True)
 
             # Look for TOTAL line
-            lines = result.stdout.strip().split('\n')
+            lines = result.stdout.strip().split("\n")
             for line in lines:
-                if line.startswith('TOTAL'):
+                if line.startswith("TOTAL"):
                     # Extract percentage from line like "TOTAL    1046   1046     0%"
                     parts = line.split()
-                    if parts and parts[-1].endswith('%'):
+                    if parts and parts[-1].endswith("%"):
                         return int(parts[-1][:-1])
 
         return 0
@@ -83,35 +73,31 @@ def update_readme_badge(coverage_percentage, readme_path=None):
         return False
 
     # Read current README
-    content = readme_path.read_text(encoding='utf-8')
+    content = readme_path.read_text(encoding="utf-8")
 
     # Generate new badge URL
     badge_url = generate_coverage_badge_url(coverage_percentage)
 
     # Pattern to match existing coverage badge
-    pattern = r'!\[Coverage\]\(https://.*?coverage.*?\)'
+    pattern = r"!\[Coverage\]\(https://.*?coverage.*?\)"
 
     # Replacement
-    replacement = f'![Coverage]({badge_url})'
+    replacement = f"![Coverage]({badge_url})"
 
     # Replace or add badge
     if re.search(pattern, content):
         new_content = re.sub(pattern, replacement, content)
     else:
         # If no existing coverage badge, add it after the tests badge
-        tests_badge_pattern = r'(\[!\[tests\].*?\)\n)'
+        tests_badge_pattern = r"(\[!\[tests\].*?\)\n)"
         if re.search(tests_badge_pattern, content):
-            new_content = re.sub(
-                tests_badge_pattern,
-                f'\\1{replacement}\n',
-                content
-            )
+            new_content = re.sub(tests_badge_pattern, f"\\1{replacement}\n", content)
         else:
             print("Could not find place to insert coverage badge")
             return False
 
     # Write updated content
-    readme_path.write_text(new_content, encoding='utf-8')
+    readme_path.write_text(new_content, encoding="utf-8")
     print(f"Updated README.md with coverage: {coverage_percentage}%")
     return True
 

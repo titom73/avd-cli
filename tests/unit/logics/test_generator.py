@@ -65,35 +65,17 @@ def sample_inventory(tmp_path: Path) -> InventoryData:
 
     # Add minimal AVD variables structure required by pyavd
     # This simulates what InventoryLoader would provide
-    global_vars = {
-        "fabric_name": "TEST_FABRIC",
-        "design": {"type": "l3ls-evpn"}
-    }
+    global_vars = {"fabric_name": "TEST_FABRIC", "design": {"type": "l3ls-evpn"}}
 
     group_vars = {
         "DC1": {
-            "spine": {
-                "defaults": {"platform": "7050X3"},
-                "nodes": [{"name": "spine01", "id": 1}]
-            },
-            "leaf": {
-                "defaults": {"platform": "722XP"},
-                "node_groups": [{"nodes": [{"name": "leaf01", "id": 1}]}]
-            }
+            "spine": {"defaults": {"platform": "7050X3"}, "nodes": [{"name": "spine01", "id": 1}]},
+            "leaf": {"defaults": {"platform": "722XP"}, "node_groups": [{"nodes": [{"name": "leaf01", "id": 1}]}]},
         },
-        "DC2": {
-            "spine": {
-                "defaults": {"platform": "7050X3"},
-                "nodes": [{"name": "dc2-spine01", "id": 1}]
-            }
-        }
+        "DC2": {"spine": {"defaults": {"platform": "7050X3"}, "nodes": [{"name": "dc2-spine01", "id": 1}]}},
     }
 
-    host_vars = {
-        "spine01": {"type": "spine"},
-        "leaf01": {"type": "leaf"},
-        "dc2-spine01": {"type": "spine"}
-    }
+    host_vars = {"spine01": {"type": "spine"}, "leaf01": {"type": "leaf"}, "dc2-spine01": {"type": "spine"}}
 
     return InventoryData(
         root_path=tmp_path,
@@ -147,9 +129,7 @@ class TestConfigurationGenerator:
         generator = ConfigurationGenerator(workflow="config-only")
         assert generator.workflow == "cli-config"
 
-    def test_generate_creates_output_directory(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_creates_output_directory(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test configuration generation creates output directory.
 
         Given: Sample inventory and output path
@@ -165,9 +145,7 @@ class TestConfigurationGenerator:
         assert configs_dir.exists()
         assert configs_dir.is_dir()
 
-    def test_generate_with_limit_to_groups(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test configuration generation limited to specific groups.
 
         Given: Inventory with 2 fabrics (DC1, DC2)
@@ -177,9 +155,7 @@ class TestConfigurationGenerator:
         generator = ConfigurationGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(
-            sample_inventory, output_path, limit_to_groups=["DC1"]
-        )
+        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC1"])
 
         # Should generate 2 configs (DC1 devices only)
         assert len(result) == 2
@@ -207,9 +183,7 @@ class TestConfigurationGenerator:
 
         assert len(result) == 0
 
-    def test_generate_raises_on_write_error(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_raises_on_write_error(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test error handling when file write fails.
 
         Given: Sample inventory
@@ -221,14 +195,10 @@ class TestConfigurationGenerator:
 
         # Mock open() to raise permission error
         with patch("builtins.open", side_effect=PermissionError("Access denied")):
-            with pytest.raises(
-                ConfigurationGenerationError, match="Failed to generate configurations"
-            ):
+            with pytest.raises(ConfigurationGenerationError, match="Failed to generate configurations"):
                 generator.generate(sample_inventory, output_path)
 
-    def test_generate_cli_config_workflow(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_cli_config_workflow(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test configuration generation with cli-config workflow.
 
         Given: cli-config workflow
@@ -309,10 +279,7 @@ class TestConfigurationGenerator:
         # Configure mock to return warnings
         mock_validation = MagicMock()
         mock_validation.failed = False
-        mock_validation.deprecation_warnings = [
-            "Warning 1: Old syntax",
-            "Warning 2: Deprecated field"
-        ]
+        mock_validation.deprecation_warnings = ["Warning 1: Old syntax", "Warning 2: Deprecated field"]
         mock_pyavd.validate_inputs.return_value = mock_validation
 
         # Structured config validation succeeds
@@ -398,17 +365,10 @@ class TestConfigurationGenerator:
         generator = ConfigurationGenerator()
 
         data = {
-            "spine": {
-                "node_groups": [
-                    {"nodes": [{"name": "spine01", "id": 1}, {"name": "spine02", "id": 2}]}
-                ]
-            },
+            "spine": {"node_groups": [{"nodes": [{"name": "spine01", "id": 1}, {"name": "spine02", "id": 2}]}]},
             "leaf": {
-                "node_groups": [
-                    {"nodes": [{"name": "leaf01", "id": 1}]},
-                    {"nodes": [{"name": "leaf02", "id": 2}]}
-                ]
-            }
+                "node_groups": [{"nodes": [{"name": "leaf01", "id": 1}]}, {"nodes": [{"name": "leaf02", "id": 2}]}]
+            },
         }
 
         assert generator._determine_device_type(data, "spine01") == "spine"
@@ -451,13 +411,7 @@ class TestConfigurationGenerator:
         """
         generator = ConfigurationGenerator()
 
-        data = {
-            "spine": {
-                "node_groups": [
-                    {"nodes": [{"name": "spine01", "id": 10}, {"name": "spine02", "id": 20}]}
-                ]
-            }
-        }
+        data = {"spine": {"node_groups": [{"nodes": [{"name": "spine01", "id": 10}, {"name": "spine02", "id": 20}]}]}}
 
         assert generator._extract_node_id(data, "spine01") == 10
         assert generator._extract_node_id(data, "spine02") == 20
@@ -480,9 +434,7 @@ class TestConfigurationGenerator:
         data = {"spine": {"node_groups": [{"nodes": [{"name": "spine01", "id": "invalid"}]}]}}
         assert generator._extract_node_id(data, "spine01") is None
 
-    def test_build_pyavd_inputs_from_inventory(
-        self, sample_inventory: InventoryData
-    ) -> None:
+    def test_build_pyavd_inputs_from_inventory(self, sample_inventory: InventoryData) -> None:
         """Test _build_pyavd_inputs_from_inventory method.
 
         Given: Inventory with devices and variables
@@ -505,9 +457,7 @@ class TestConfigurationGenerator:
             assert inputs["hostname"] == hostname
             assert "type" in inputs
 
-    def test_build_pyavd_inputs_empty_devices(
-        self, sample_inventory: InventoryData
-    ) -> None:
+    def test_build_pyavd_inputs_empty_devices(self, sample_inventory: InventoryData) -> None:
         """Test _build_pyavd_inputs_from_inventory with empty device list.
 
         Given: Empty device list
@@ -544,13 +494,10 @@ class TestConfigurationGenerator:
             serial_number="ABC123",
             system_mac_address="00:11:22:33:44:55",
             custom_variables={"custom_key": "custom_value"},
-            structured_config={"router_bgp": {"as": "65000"}}
+            structured_config={"router_bgp": {"as": "65000"}},
         )
 
-        inventory = InventoryData(
-            root_path=Path("/tmp"),
-            fabrics=[]
-        )
+        inventory = InventoryData(root_path=Path("/tmp"), fabrics=[])
 
         result = generator._convert_inventory_to_pyavd_inputs(inventory, [device])
 
@@ -569,9 +516,7 @@ class TestConfigurationGenerator:
         assert device_vars["custom_key"] == "custom_value"
         assert "structured_config" in device_vars
 
-    def test_generate_all_devices(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_devices(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test configuration generation for all devices.
 
         Given: Inventory with 3 devices
@@ -593,9 +538,7 @@ class TestConfigurationGenerator:
         assert "leaf01" in hostnames
         assert "dc2-spine01" in hostnames
 
-    def test_generate_all_files_content(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_files_content(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test content of generated configuration files.
 
         Given: Sample inventory
@@ -628,9 +571,7 @@ class TestDocumentationGenerator:
         generator = DocumentationGenerator()
         assert generator.logger is not None
 
-    def test_generate_creates_output_directory(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_creates_output_directory(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test documentation generation creates output directory.
 
         Given: Sample inventory and output path
@@ -646,9 +587,7 @@ class TestDocumentationGenerator:
         assert docs_dir.exists()
         assert docs_dir.is_dir()
 
-    def test_generate_all_devices(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_devices(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test documentation generation for all devices.
 
         Given: Inventory with 3 devices
@@ -664,9 +603,7 @@ class TestDocumentationGenerator:
         assert all(f.suffix == ".md" for f in result)
         assert all(f.exists() for f in result)
 
-    def test_generate_with_limit_to_groups(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test documentation generation limited to groups.
 
         Given: Inventory with 2 fabrics
@@ -676,17 +613,13 @@ class TestDocumentationGenerator:
         generator = DocumentationGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(
-            sample_inventory, output_path, limit_to_groups=["DC2"]
-        )
+        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC2"])
 
         assert len(result) == 1
         hostnames = [f.stem for f in result]
         assert "dc2-spine01" in hostnames
 
-    def test_generate_file_content(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_file_content(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test content of generated documentation files.
 
         Given: Sample inventory
@@ -739,17 +672,13 @@ class TestDocumentationGenerator:
         # Mock the _import_pyavd method to raise DocumentationGenerationError
         with patch.object(
             generator,
-            '_import_pyavd',
-            side_effect=DocumentationGenerationError(
-                "pyavd library not installed. Install with: pip install pyavd"
-            )
+            "_import_pyavd",
+            side_effect=DocumentationGenerationError("pyavd library not installed. Install with: pip install pyavd"),
         ):
             with pytest.raises(DocumentationGenerationError, match="pyavd library not installed"):
                 generator.generate(empty_inventory, tmp_path / "output")
 
-    def test_generate_raises_on_write_error(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_raises_on_write_error(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test error handling when file write fails.
 
         Given: Sample inventory
@@ -761,9 +690,7 @@ class TestDocumentationGenerator:
 
         # Mock open() to raise permission error
         with patch("builtins.open", side_effect=PermissionError("Access denied")):
-            with pytest.raises(
-                DocumentationGenerationError, match="Failed to generate documentation"
-            ):
+            with pytest.raises(DocumentationGenerationError, match="Failed to generate documentation"):
                 generator.generate(sample_inventory, output_path)
 
 
@@ -790,9 +717,7 @@ class TestTestGenerator:
         generator = TestGenerator(test_type="robot")
         assert generator.test_type == "robot"
 
-    def test_generate_creates_output_directory(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_creates_output_directory(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test test generation creates output directory.
 
         Given: Sample inventory and output path
@@ -808,9 +733,7 @@ class TestTestGenerator:
         assert tests_dir.exists()
         assert tests_dir.is_dir()
 
-    def test_generate_creates_test_file(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_creates_test_file(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test test file generation.
 
         Given: Sample inventory
@@ -828,9 +751,7 @@ class TestTestGenerator:
         assert all("_tests.yaml" in f.name for f in result)
         assert all(f.exists() for f in result)
 
-    def test_generate_with_limit_to_groups(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test test generation limited to groups.
 
         Given: Inventory with 2 fabrics
@@ -840,9 +761,7 @@ class TestTestGenerator:
         generator = TestGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(
-            sample_inventory, output_path, limit_to_groups=["DC1"]
-        )
+        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC1"])
 
         # Read test files and check content
         # Now we have individual device files, check that DC1 devices are present
@@ -855,9 +774,7 @@ class TestTestGenerator:
         # Individual device tests use 8.8.8.8 for connectivity, not peer IPs
         assert "8.8.8.8" in content  # Internet connectivity test
 
-    def test_generate_file_content(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_file_content(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test content of generated test file.
 
         Given: Sample inventory
@@ -896,9 +813,7 @@ class TestTestGenerator:
         assert len(result) == 1
         assert result[0].exists()
 
-    def test_generate_raises_on_write_error(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_raises_on_write_error(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test error handling when file write fails.
 
         Given: Sample inventory
@@ -913,9 +828,7 @@ class TestTestGenerator:
             with pytest.raises(TestGenerationError, match="Failed to generate tests"):
                 generator.generate(sample_inventory, output_path)
 
-    def test_generate_with_custom_test_type(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_with_custom_test_type(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generation with custom test type.
 
         Given: Custom test type 'robot'
@@ -936,9 +849,7 @@ class TestTestGenerator:
 class TestGenerateAll:
     """Test generate_all convenience function."""
 
-    def test_generate_all_default_params(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_default_params(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generate_all with default parameters.
 
         Given: Sample inventory and output path
@@ -953,9 +864,7 @@ class TestGenerateAll:
         assert len(docs) == 3
         assert len(tests) == 3  # Now one test file per device
 
-    def test_generate_all_with_workflow(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_with_workflow(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generate_all with custom workflow.
 
         Given: Custom workflow parameter
@@ -964,18 +873,14 @@ class TestGenerateAll:
         """
         output_path = tmp_path / "output"
 
-        configs, docs, tests = generate_all(
-            sample_inventory, output_path, workflow="config-only"
-        )
+        configs, docs, tests = generate_all(sample_inventory, output_path, workflow="config-only")
 
         # All outputs should still be generated
         assert len(configs) == 3
         assert len(docs) == 3
         assert len(tests) == 3  # Now one test file per device
 
-    def test_generate_all_with_limit_to_groups(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generate_all with limit_to_groups.
 
         Given: limit_to_groups parameter
@@ -984,9 +889,7 @@ class TestGenerateAll:
         """
         output_path = tmp_path / "output"
 
-        configs, docs, tests = generate_all(
-            sample_inventory, output_path, limit_to_groups=["DC1"]
-        )
+        configs, docs, tests = generate_all(sample_inventory, output_path, limit_to_groups=["DC1"])
 
         # Only DC1 devices (2 devices)
         assert len(configs) == 2
@@ -994,9 +897,7 @@ class TestGenerateAll:
         # Now generates one test file per device, so 2 files for DC1
         assert len(tests) == 2
 
-    def test_generate_all_creates_all_directories(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_creates_all_directories(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generate_all creates all output directories.
 
         Given: Sample inventory
@@ -1011,9 +912,7 @@ class TestGenerateAll:
         assert (output_path / "documentation").exists()
         assert (output_path / "tests").exists()
 
-    def test_generate_all_returns_all_paths(
-        self, sample_inventory: InventoryData, tmp_path: Path
-    ) -> None:
+    def test_generate_all_returns_all_paths(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test generate_all returns all generated file paths.
 
         Given: Sample inventory

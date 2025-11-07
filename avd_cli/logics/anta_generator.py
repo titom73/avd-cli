@@ -156,14 +156,13 @@ class AntaCatalogGenerator:
 
         # Generate connectivity tests for this device (no peer connectivity for individual device tests)
         connectivity_tests: List[Dict[str, Any]] = []
-        connectivity_tests.append({
-            "VerifyReachability": {
-                "hosts": [{
-                    "destination": "8.8.8.8",  # Test internet connectivity
-                    "source": "Management1"
-                }]
+        connectivity_tests.append(
+            {
+                "VerifyReachability": {
+                    "hosts": [{"destination": "8.8.8.8", "source": "Management1"}]  # Test internet connectivity
+                }
             }
-        })
+        )
         if connectivity_tests:
             catalog["anta.tests.connectivity"] = connectivity_tests
 
@@ -349,48 +348,70 @@ class AntaCatalogGenerator:
         for device in devices:
             config = structured_configs.get(device.hostname, {})
 
-            # Check ethernet interfaces
-            if "ethernet_interfaces" in config:
-                interface_names: List[str] = []
-                for intf_name, intf_config in config["ethernet_interfaces"].items():
-                    if isinstance(intf_config, dict):
-                        # Skip shutdown interfaces
-                        if intf_config.get("shutdown", False):
-                            continue
-                        interface_names.append(intf_name)
+            # Add ethernet interface tests
+            ethernet_tests = self._generate_ethernet_interface_tests(config)
+            tests.extend(ethernet_tests)
 
-                if interface_names:
-                    tests.append(
-                        {
-                            "VerifyInterfacesStatus": {
-                                "interfaces": [
-                                    {"name": name, "status": "up"}
-                                    for name in interface_names[:20]  # Limit to 20 interfaces
-                                ]
-                            }
-                        }
-                    )
+            # Add loopback interface tests
+            loopback_tests = self._generate_loopback_interface_tests(config)
+            tests.extend(loopback_tests)
 
-            # Check loopback interfaces
-            if "loopback_interfaces" in config:
-                loopback_names: List[str] = []
-                for intf_name, intf_config in config["loopback_interfaces"].items():
-                    if isinstance(intf_config, dict) and not intf_config.get("shutdown", False):
-                        loopback_names.append(intf_name)
-
-                if loopback_names:
-                    tests.append(
-                        {
-                            "VerifyInterfacesStatus": {
-                                "interfaces": [{"name": name, "status": "up"} for name in loopback_names]
-                            }
-                        }
-                    )
-
-            # Management interface
-            tests.append({"VerifyInterfacesStatus": {"interfaces": [{"name": "Management1", "status": "up"}]}})
+            # Add management interface test
+            tests.extend(self._generate_management_interface_tests())
 
         return {"anta.tests.interfaces": tests} if tests else {}
+
+    def _generate_ethernet_interface_tests(self, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate ethernet interface tests."""
+        tests: List[Dict[str, Any]] = []
+
+        if "ethernet_interfaces" not in config:
+            return tests
+
+        interface_names: List[str] = []
+        for intf_name, intf_config in config["ethernet_interfaces"].items():
+            if isinstance(intf_config, dict):
+                shutdown = intf_config.get("shutdown", False)
+                if not shutdown:
+                    interface_names.append(intf_name)
+
+        if interface_names:
+            tests.append(
+                {
+                    "VerifyInterfacesStatus": {
+                        "interfaces": [
+                            {"name": name, "status": "up"} for name in interface_names[:20]  # Limit to 20 interfaces
+                        ]
+                    }
+                }
+            )
+
+        return tests
+
+    def _generate_loopback_interface_tests(self, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate loopback interface tests."""
+        tests: List[Dict[str, Any]] = []
+
+        if "loopback_interfaces" not in config:
+            return tests
+
+        loopback_names: List[str] = []
+        for intf_name, intf_config in config["loopback_interfaces"].items():
+            if isinstance(intf_config, dict):
+                shutdown = intf_config.get("shutdown", False)
+                if not shutdown:
+                    loopback_names.append(intf_name)
+
+        if loopback_names:
+            tests.append(
+                {"VerifyInterfacesStatus": {"interfaces": [{"name": name, "status": "up"} for name in loopback_names]}}
+            )
+
+        return tests
+
+    def _generate_management_interface_tests(self) -> List[Dict[str, Any]]:
+        """Generate management interface tests."""
+        return [{"VerifyInterfacesStatus": {"interfaces": [{"name": "Management1", "status": "up"}]}}]
 
     def _generate_hardware_tests(self, devices: List[DeviceDefinition]) -> Dict[str, Any]:
         """Generate hardware health tests.

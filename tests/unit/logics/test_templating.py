@@ -26,11 +26,7 @@ class TestTemplateResolver:
 
     def test_hostvars_dictionary_access(self):
         """AC-037: hostvars['hostname']['key'] should resolve from host_vars."""
-        context = {
-            "hostvars": {
-                "spine01": {"platform": "7050X3", "mgmt_ip": "192.168.0.10"}
-            }
-        }
+        context = {"hostvars": {"spine01": {"platform": "7050X3", "mgmt_ip": "192.168.0.10"}}}
         resolver = TemplateResolver(context)
 
         result = resolver.resolve("{{ hostvars['spine01']['platform'] }}")
@@ -38,18 +34,10 @@ class TestTemplateResolver:
 
     def test_hostvars_nested_access(self):
         """Test nested dictionary access in hostvars."""
-        context = {
-            "hostvars": {
-                "leaf01": {
-                    "interfaces": {"Ethernet1": {"description": "uplink"}}
-                }
-            }
-        }
+        context = {"hostvars": {"leaf01": {"interfaces": {"Ethernet1": {"description": "uplink"}}}}}
         resolver = TemplateResolver(context)
 
-        result = resolver.resolve(
-            "{{ hostvars['leaf01']['interfaces']['Ethernet1']['description'] }}"
-        )
+        result = resolver.resolve("{{ hostvars['leaf01']['interfaces']['Ethernet1']['description'] }}")
         assert result == "uplink"
 
     def test_default_filter_with_undefined_variable(self):
@@ -312,9 +300,7 @@ class TestTemplateIntegration:
         resolver = TemplateResolver(context)
 
         # Resolve group_vars templates
-        resolved_group_vars = {
-            name: resolver.resolve_recursive(data) for name, data in group_vars.items()
-        }
+        resolved_group_vars = {name: resolver.resolve_recursive(data) for name, data in group_vars.items()}
 
         # Platform template should resolve
         assert resolved_group_vars["SPINES"]["platform"] == "7050X3"

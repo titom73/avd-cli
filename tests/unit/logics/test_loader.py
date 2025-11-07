@@ -37,7 +37,8 @@ class TestInventoryLoader:
         # Create group_vars/FABRIC/fabric.yml
         fabric_dir = group_vars_dir / "FABRIC"
         fabric_dir.mkdir()
-        (fabric_dir / "fabric.yml").write_text("""---
+        (fabric_dir / "fabric.yml").write_text(
+            """---
 fabric_name: TEST_FABRIC
 type: l3spine
 l3spine:
@@ -50,7 +51,8 @@ l3spine:
     - name: spine1
       id: 1
       mgmt_ip: 192.168.0.10/24
-""")
+"""
+        )
 
         return inventory_dir
 
@@ -92,7 +94,8 @@ l3spine:
         fabric_dir.mkdir()
         (fabric_dir / "01-base.yml").write_text("---\nvar1: value1\n")
         (fabric_dir / "02-override.yml").write_text("---\nvar2: value2\n")
-        (fabric_dir / "fabric.yml").write_text("""---
+        (fabric_dir / "fabric.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -101,7 +104,8 @@ node_groups:
       - name: device1
         id: 1
         mgmt_ip: 192.168.0.1/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
 
@@ -118,7 +122,8 @@ node_groups:
         group_vars_dir.mkdir()
 
         # Create FABRIC as single file
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -127,7 +132,8 @@ node_groups:
       - name: device1
         id: 1
         mgmt_ip: 192.168.0.1/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         assert len(inventory.fabrics) == 1
@@ -139,7 +145,8 @@ node_groups:
 
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -148,7 +155,8 @@ node_groups:
       - name: spine1
         id: 1
         mgmt_ip: 192.168.0.1/24
-""")
+"""
+        )
 
         host_vars_dir = inventory_dir / "host_vars"
         host_vars_dir.mkdir()
@@ -172,7 +180,8 @@ node_groups:
         group_vars_dir.mkdir()
 
         # Test l3spine -> spine mapping
-        (group_vars_dir / "SPINES.yml").write_text("""---
+        (group_vars_dir / "SPINES.yml").write_text(
+            """---
 fabric_name: TEST
 type: l3spine
 l3spine:
@@ -184,7 +193,8 @@ l3spine:
     - name: spine1
       id: 1
       mgmt_ip: 192.168.0.10/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         device = inventory.fabrics[0].get_all_devices()[0]
@@ -201,7 +211,8 @@ l3spine:
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
 
-        (group_vars_dir / "LEAVES.yml").write_text("""---
+        (group_vars_dir / "LEAVES.yml").write_text(
+            """---
 fabric_name: TEST
 type: l2leaf
 l2leaf:
@@ -213,7 +224,8 @@ l2leaf:
     - name: leaf1
       id: 1
       mgmt_ip: 192.168.0.20/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         device = inventory.fabrics[0].get_all_devices()[0]
@@ -226,7 +238,8 @@ l2leaf:
         inventory_dir.mkdir()
 
         # Create inventory.yml with hosts
-        (inventory_dir / "inventory.yml").write_text("""---
+        (inventory_dir / "inventory.yml").write_text(
+            """---
 all:
   children:
     FABRIC:
@@ -235,11 +248,13 @@ all:
       hosts:
         spine1:
           ansible_host: 192.168.0.10
-""")
+"""
+        )
 
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 type: spine
 node_groups:
   - group: TEST
@@ -247,7 +262,8 @@ node_groups:
       - name: spine1
         id: 1
         mgmt_ip: 192.168.0.10/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         # Verify it loads without error
@@ -262,7 +278,8 @@ node_groups:
         group_vars_dir.mkdir()
 
         # Create inventory with templates
-        (inventory_dir / "inventory.yml").write_text("""---
+        (inventory_dir / "inventory.yml").write_text(
+            """---
 all:
   children:
     FABRIC:
@@ -271,9 +288,11 @@ all:
       hosts:
         spine1:
           ansible_host: 192.168.0.10
-""")
+"""
+        )
 
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -283,7 +302,8 @@ node_groups:
       - name: spine1
         id: 1
         mgmt_ip: "{{ hostvars['spine1'].ansible_host }}/24"
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         device = inventory.fabrics[0].get_all_devices()[0]
@@ -299,7 +319,8 @@ node_groups:
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
 
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: l3spine
 l3spine:
@@ -312,7 +333,8 @@ l3spine:
     - name: spine1
       id: 1
       mgmt_ip: 192.168.0.10/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         device = inventory.fabrics[0].get_all_devices()[0]
@@ -328,7 +350,8 @@ l3spine:
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
 
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: l2leaf
 l2leaf:
@@ -341,7 +364,8 @@ l2leaf:
     - name: leaf1
       id: 1
       mgmt_ip: 192.168.0.20/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
         device = inventory.fabrics[0].get_all_devices()[0]
@@ -360,7 +384,8 @@ l2leaf:
         # fabric_name in a separate file
         (group_vars_dir / "all.yml").write_text("---\nfabric_name: MY_FABRIC\n")
 
-        (group_vars_dir / "SPINES.yml").write_text("""---
+        (group_vars_dir / "SPINES.yml").write_text(
+            """---
 type: spine
 node_groups:
   - group: TEST
@@ -368,7 +393,8 @@ node_groups:
       - name: spine1
         id: 1
         mgmt_ip: 192.168.0.10/24
-""")
+"""
+        )
 
         inventory = loader.load(inventory_dir)
 
@@ -408,9 +434,11 @@ class TestInventoryLoaderEdgeCases:
         group_vars_dir.mkdir()
 
         # Invalid YAML
-        (group_vars_dir / "invalid.yml").write_text("""---
+        (group_vars_dir / "invalid.yml").write_text(
+            """---
 invalid: [unclosed bracket
-""")
+"""
+        )
 
         with pytest.raises((InvalidInventoryError, ValueError)):
             loader.load(inventory_dir)
@@ -423,7 +451,8 @@ invalid: [unclosed bracket
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
 
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -432,7 +461,8 @@ node_groups:
       - name: spine1
         id: 1
         # mgmt_ip is missing
-""")
+"""
+        )
 
         # Should log warning about missing mgmt_ip
         inventory = loader.load(inventory_dir)
@@ -460,7 +490,8 @@ node_groups:
         (all_dir / "platform.yml").write_text("---\ndefault_platform: vEOS-lab\n")
 
         # Create 'FABRIC' as single file
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: MIXED_TEST
 
 # Spine Switches
@@ -475,14 +506,17 @@ spine:
     - name: spine2
       id: 2
       mgmt_ip: 192.168.0.11/24
-""")
+"""
+        )
 
         # Create 'SPINES' as directory
         spines_dir = group_vars_dir / "SPINES"
         spines_dir.mkdir()
-        (spines_dir / "topology.yml").write_text("""---
+        (spines_dir / "topology.yml").write_text(
+            """---
 # Additional spine configuration
-""")
+"""
+        )
         (spines_dir / "bgp.yml").write_text("---\nbgp_peer_groups:\n  - name: IPv4-UNDERLAY-PEERS\n")
 
         # Load inventory
@@ -511,7 +545,8 @@ spine:
         # Create basic fabric
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: HOST_VARS_TEST
 
 # Spine Switches
@@ -525,7 +560,8 @@ spine:
     - name: spine2
       id: 2
       mgmt_ip: 192.168.0.11/24
-""")
+"""
+        )
 
         # Create host_vars with mixed format
         host_vars_dir = inventory_dir / "host_vars"
@@ -558,7 +594,8 @@ spine:
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
 
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: TEST
 type: spine
 node_groups:
@@ -567,7 +604,8 @@ node_groups:
       - name: spine1
         id: 1
         mgmt_ip: not-an-ip
-""")
+"""
+        )
 
         # Should log warning about invalid IP
         inventory = loader.load(inventory_dir)
@@ -589,7 +627,8 @@ node_groups:
         # Create group_vars/FABRIC.yml with BOTH spine and l3leaf sections
         group_vars_dir = inventory_dir / "group_vars"
         group_vars_dir.mkdir()
-        (group_vars_dir / "FABRIC.yml").write_text("""---
+        (group_vars_dir / "FABRIC.yml").write_text(
+            """---
 fabric_name: MULTI_TOPOLOGY_FABRIC
 design_type: l3ls-evpn
 
@@ -621,7 +660,8 @@ l3leaf:
         - name: leaf2
           id: 2
           mgmt_ip: 192.168.0.12
-""")
+"""
+        )
 
         # Load inventory
         inventory = loader.load(inventory_dir)

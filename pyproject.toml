@@ -89,6 +89,7 @@ dev = [
     "types-PyYAML>=6.0.0",
     "tox>=4.0.0",
     "isort>=5.12.0",
+    "types-jinja2>=2.11.9",
 ]
 doc = [
     "mkdocs>=1.5.0",
@@ -109,7 +110,7 @@ packages = ["avd_cli"]
 # Black configuration
 [tool.black]
 line-length = 120
-target-version = ['py39', 'py310', 'py311', 'py313']
+target-version = ['py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -144,6 +145,8 @@ extra_checks = true
 [[tool.mypy.overrides]]
 module = [
     "pyavd.*",
+    "jinja2.*",
+    "rich.*",
 ]
 ignore_missing_imports = true
 

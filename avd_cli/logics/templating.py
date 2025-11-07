@@ -46,7 +46,7 @@ class TemplateResolver:
     """
 
     # Pattern to detect both Jinja2 variables {{ }} and statements {% %}
-    TEMPLATE_PATTERN = re.compile(r'\{\{.*?\}\}|\{%.*?%\}')
+    TEMPLATE_PATTERN = re.compile(r"\{\{.*?\}\}|\{%.*?%\}")
 
     def __init__(self, context: Dict[str, Any]) -> None:
         """Initialize template resolver with context.
@@ -62,14 +62,14 @@ class TemplateResolver:
         # Create Jinja2 environment with default undefined behavior
         # (undefined variables render as empty string instead of raising error)
         self.env = Environment(
-            variable_start_string='{{',
-            variable_end_string='}}',
+            variable_start_string="{{",
+            variable_end_string="}}",
             undefined=Undefined,
             autoescape=False,
         )
 
         # Add custom filters (Ansible-compatible)
-        self.env.filters['bool'] = self._filter_bool
+        self.env.filters["bool"] = self._filter_bool
 
     @staticmethod
     def _filter_bool(value: Any) -> bool:
@@ -88,7 +88,7 @@ class TemplateResolver:
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.lower() in ('yes', 'true', '1', 'on')
+            return value.lower() in ("yes", "true", "1", "on")
         return bool(value)
 
     def has_template(self, value: str) -> bool:
@@ -138,7 +138,7 @@ class TemplateResolver:
 
         try:
             template = self.env.from_string(template_str)
-            result = template.render(self.context)
+            result: str = str(template.render(self.context))
             self.logger.debug("Resolved template '%s' to '%s'", template_str, result)
             return result
         except Jinja2TemplateError as e:
@@ -329,6 +329,5 @@ def build_template_context(
 
     context["hostvars"] = enriched_hostvars
 
-    logger.debug("Built template context with %d top-level keys and %d hosts",
-                 len(context), len(enriched_hostvars))
+    logger.debug("Built template context with %d top-level keys and %d hosts", len(context), len(enriched_hostvars))
     return context

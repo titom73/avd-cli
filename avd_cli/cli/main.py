@@ -30,15 +30,11 @@ def suppress_pyavd_warnings(show_warnings: bool) -> None:
     """
     if not show_warnings:
         import warnings
+
         warnings.filterwarnings("ignore", message=".*is deprecated.*", category=UserWarning)
 
 
-def display_generation_summary(
-    category: str,
-    count: int,
-    output_path: Path,
-    subcategory: str = "configs"
-) -> None:
+def display_generation_summary(category: str, count: int, output_path: Path, subcategory: str = "configs") -> None:
     """Display a summary table for generated files.
 
     Parameters
@@ -147,7 +143,7 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
         envvar="AVD_CLI_LIMIT_TO_GROUPS",
         show_envvar=True,
         help="Limit processing to specific groups (can be used multiple times). "
-             "Use comma-separated values in environment variable",
+        "Use comma-separated values in environment variable",
     )(func)
     func = click.option(
         "--show-deprecation-warnings",
@@ -697,9 +693,7 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
                 table.add_row("  - Design Type", fabric.design_type)
                 table.add_row("  - Spine Devices", str(len(fabric.spine_devices)))
                 table.add_row("  - Leaf Devices", str(len(fabric.leaf_devices)))
-                table.add_row(
-                    "  - Border Leaf Devices", str(len(fabric.border_leaf_devices))
-                )
+                table.add_row("  - Border Leaf Devices", str(len(fabric.border_leaf_devices)))
 
             console.print(table)
 
@@ -713,9 +707,7 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
                 device_table.add_column("Management IP", style="green")
                 device_table.add_column("Fabric", style="blue")
 
-                for device in sorted(
-                    inventory.get_all_devices(), key=lambda d: d.hostname
-                ):
+                for device in sorted(inventory.get_all_devices(), key=lambda d: d.hostname):
                     device_table.add_row(
                         device.hostname,
                         device.device_type,

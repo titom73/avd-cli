@@ -46,12 +46,12 @@ def update_pyproject_classifiers(pyproject_path: Path, versions: List[str]) -> N
         sys.exit(1)
 
     # Find the end of that line (after the comma)
-    end_of_line = content_cleaned.find('\n', insertion_pos)
+    end_of_line = content_cleaned.find("\n", insertion_pos)
     if end_of_line == -1:
         end_of_line = len(content_cleaned)
 
     # Sort versions semantically (3.9, 3.10, 3.11, 3.12) not alphabetically
-    sorted_versions = sorted(versions, key=lambda v: tuple(map(int, v.split('.'))))
+    sorted_versions = sorted(versions, key=lambda v: tuple(map(int, v.split("."))))
 
     # Generate new classifier lines with proper indentation and quote style
     quote_char = '"' if use_double_quotes else "'"
@@ -60,11 +60,7 @@ def update_pyproject_classifiers(pyproject_path: Path, versions: List[str]) -> N
         new_lines.append(f"    {quote_char}Programming Language :: Python :: {version}{quote_char},")
 
     # Insert new classifiers
-    new_content = (
-        content_cleaned[:end_of_line + 1] +
-        '\n'.join(new_lines) + '\n' +
-        content_cleaned[end_of_line + 1:]
-    )
+    new_content = content_cleaned[: end_of_line + 1] + "\n".join(new_lines) + "\n" + content_cleaned[end_of_line + 1 :]
 
     pyproject_path.write_text(new_content, encoding="utf-8")
 
@@ -108,7 +104,7 @@ def main():
     if not versions:
         print("❌ No Python versions found in the JSON file.")
         sys.exit(1)
-    max_version = versions_data.get("max_version", max(versions, key=lambda v: tuple(map(int, v.split('.')))))
+    max_version = versions_data.get("max_version", max(versions, key=lambda v: tuple(map(int, v.split(".")))))
 
     print(f"✅ Found versions: {versions}")
     max_version = versions_data.get("max_version", max(versions, key=lambda v: tuple(map(int, v.split(".")))))

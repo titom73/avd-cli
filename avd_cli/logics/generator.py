@@ -80,9 +80,7 @@ class ConfigurationGenerator:
         try:
             import pyavd
         except ImportError as e:
-            raise ConfigurationGenerationError(
-                "pyavd library not installed. Install with: pip install pyavd"
-            ) from e
+            raise ConfigurationGenerationError("pyavd library not installed. Install with: pip install pyavd") from e
 
         # Create output directory
         configs_dir = output_path / DEFAULT_CONFIGS_DIR
@@ -114,9 +112,7 @@ class ConfigurationGenerator:
                     validation_result = pyavd.validate_inputs(inputs)
                     if validation_result.failed:
                         errors = "\n".join(str(e) for e in validation_result.validation_errors)
-                        raise ConfigurationGenerationError(
-                            f"Input validation failed for {hostname}:\n{errors}"
-                        )
+                        raise ConfigurationGenerationError(f"Input validation failed for {hostname}:\n{errors}")
                     if validation_result.deprecation_warnings:
                         for warning in validation_result.deprecation_warnings:
                             self.logger.warning("Deprecation warning for %s: %s", hostname, warning)
@@ -148,9 +144,7 @@ class ConfigurationGenerator:
                 validation_result = pyavd.validate_structured_config(structured_config)
                 if validation_result.failed:
                     errors = "\n".join(str(e) for e in validation_result.validation_errors)
-                    raise ConfigurationGenerationError(
-                        f"Structured config validation failed for {hostname}:\n{errors}"
-                    )
+                    raise ConfigurationGenerationError(f"Structured config validation failed for {hostname}:\n{errors}")
 
             # Step 5: Generate EOS CLI configurations
             self.logger.info("Generating EOS CLI configurations")
@@ -271,11 +265,7 @@ class ConfigurationGenerator:
 
             all_inputs[device.hostname] = device_input
 
-            self.logger.debug(
-                "Built input for %s with %d top-level keys",
-                device.hostname,
-                len(device_input)
-            )
+            self.logger.debug("Built input for %s with %d top-level keys", device.hostname, len(device_input))
 
         return all_inputs
 
@@ -385,9 +375,7 @@ class ConfigurationGenerator:
                             try:
                                 return int(node_id)
                             except (ValueError, TypeError):
-                                self.logger.warning(
-                                    "Invalid node ID '%s' for device %s", node_id, hostname
-                                )
+                                self.logger.warning("Invalid node ID '%s' for device %s", node_id, hostname)
                                 return None
 
         return None
@@ -549,11 +537,10 @@ class DocumentationGenerator:
         """Import pyavd library with error handling."""
         try:
             import pyavd
+
             return pyavd
         except ImportError as e:
-            raise DocumentationGenerationError(
-                "pyavd library not installed. Install with: pip install pyavd"
-            ) from e
+            raise DocumentationGenerationError("pyavd library not installed. Install with: pip install pyavd") from e
 
     def _get_filtered_devices(
         self, inventory: InventoryData, limit_to_groups: Optional[List[str]]
@@ -712,7 +699,9 @@ class TestGenerator:
                 structured_configs = self._get_structured_configs(inventory, devices)
 
                 # generate_catalog returns list of file paths, not the catalog dict
-                generated_files = anta_generator.generate_catalog(inventory, structured_configs, tests_dir, limit_to_groups)
+                generated_files = anta_generator.generate_catalog(
+                    inventory, structured_configs, tests_dir, limit_to_groups
+                )
 
                 self.logger.info("Generated ANTA catalog with %d files", len(generated_files))
             else:

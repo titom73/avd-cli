@@ -109,6 +109,7 @@ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     Full AVD pipeline with topology design and validation:
     ```bash
     avd-cli generate configs -i ./inventory -o ./output --workflow eos-design
+
 ```
 
     - Runs `eos_design` role to generate structured configs

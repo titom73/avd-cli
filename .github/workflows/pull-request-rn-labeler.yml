@@ -32,7 +32,7 @@ jobs:
         run: |
           # Extract type from PR title (feat, fix, etc.)
           TYPE=$(echo "$PR_TITLE" | grep -oE '^(feat|fix|cut|doc|ci|bump|test|refactor|revert|make|chore)' || echo "")
-          
+
           # Map PR types to release note labels
           case "$TYPE" in
             "feat")
@@ -66,15 +66,15 @@ jobs:
               COLOR="7057FF"
               ;;
           esac
-          
+
           # Create label if it doesn't exist
           gh label create "$LABEL" \
             --description "$DESCRIPTION" \
             --color "$COLOR" \
             --force || true
-          
+
           # Add label to PR
           gh pr edit "$PR_NUMBER" \
             --add-label "$LABEL"
-          
+
           echo "Added label: $LABEL to PR #$PR_NUMBER"

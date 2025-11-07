@@ -742,7 +742,13 @@ class TestDocumentationGenerator:
         empty_inventory = InventoryData(root_path=tmp_path, fabrics=[])
 
         # Mock the _import_pyavd method to raise DocumentationGenerationError
-        with patch.object(generator, '_import_pyavd', side_effect=DocumentationGenerationError("pyavd library not installed. Install with: pip install pyavd")):
+        with patch.object(
+            generator,
+            '_import_pyavd',
+            side_effect=DocumentationGenerationError(
+                "pyavd library not installed. Install with: pip install pyavd"
+            )
+        ):
             with pytest.raises(DocumentationGenerationError, match="pyavd library not installed"):
                 generator.generate(empty_inventory, tmp_path / "output")
 

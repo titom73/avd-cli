@@ -233,7 +233,9 @@ output/
 │   └── fabric/          # Fabric-wide documentation
 │       └── FABRIC-documentation.md
 └── tests/               # Test files (ANTA or Robot)
-    └── FABRIC-tests.yml
+    ├── device1_tests.yaml
+    ├── device2_tests.yaml
+    └── ...
 ```
 
 ---

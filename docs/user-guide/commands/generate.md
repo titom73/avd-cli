@@ -66,14 +66,16 @@ avd-cli generate all -i ./inventory -o ./output --show-deprecation-warnings
 ```
 output/
 ├── configs/
-│   └── *.cfg
+│   └── *.cfg                   # Device configurations
 ├── documentation/
 │   ├── devices/
-│   │   └── *.md
+│   │   └── *.md                # Per-device documentation
 │   └── fabric/
-│       └── *-documentation.md
+│       └── *-documentation.md  # Fabric-wide documentation
 └── tests/
-    └── *-tests.yml
+    ├── device1_tests.yaml      # ANTA tests for device1
+    ├── device2_tests.yaml      # ANTA tests for device2
+    └── ...                     # One test file per device
 ```
 
 ---
@@ -108,7 +110,7 @@ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     ```bash
     avd-cli generate configs -i ./inventory -o ./output --workflow eos-design
     ```
-    
+
     - Runs `eos_design` role to generate structured configs
     - Validates topology structure
     - Generates device configurations
@@ -118,7 +120,7 @@ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     ```bash
     avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     ```
-    
+
     - Skips `eos_design` role
     - Uses existing structured configs from `host_vars/`
     - Faster for iterative testing
@@ -154,7 +156,7 @@ avd-cli generate docs -i ./inventory -o ./output -l RACK1
 
 ## generate tests
 
-Generate ANTA test files.
+Generate test files for network validation using the ANTA framework or Robot Framework.
 
 ### Usage
 
@@ -171,11 +173,86 @@ avd-cli generate tests -i INVENTORY_PATH -o OUTPUT_PATH [OPTIONS]
 ### Examples
 
 ```bash
-# Generate ANTA tests
+# Generate ANTA tests (one file per device)
 avd-cli generate tests -i ./inventory -o ./output
 
 # Generate Robot Framework tests
 avd-cli generate tests -i ./inventory -o ./output --test-type robot
+
+# Generate tests for specific device groups only
+avd-cli generate tests -i ./inventory -o ./output -l SPINES
+```
+
+### ANTA Test Generation
+
+The ANTA test generator creates comprehensive network validation tests by analyzing your AVD inventory and structured configurations. Each device receives its own test catalog file with device-specific tests.
+
+#### Generated Test Structure
+
+```
+tests/
+├── spine01_tests.yaml          # Tests for spine01
+├── spine02_tests.yaml          # Tests for spine02
+├── leaf-1a_tests.yaml          # Tests for leaf-1a
+├── leaf-1b_tests.yaml          # Tests for leaf-1b
+└── ...                         # One file per device
+```
+
+#### Test Categories
+
+Each device test file includes the following categories when applicable:
+
+**Connectivity Tests**
+- Internet connectivity validation (8.8.8.8)
+- Management interface reachability
+
+**BGP Tests**
+- BGP ASN verification
+- BGP peer state validation
+- Address family configuration checks
+
+**EVPN Tests** (for EVPN-capable devices)
+- EVPN peer count validation
+- VNI to VLAN mapping verification
+- EVPN Type-2 route checks
+
+**Interface Tests**
+- Ethernet interface status validation
+- Loopback interface verification
+- Management interface checks
+
+**Hardware Tests**
+- Power supply status
+- Cooling system validation
+- Temperature monitoring
+- Transceiver manufacturer checks
+- Platform-specific tests (DCS-7050, DCS-7280, DCS-7300)
+
+**System Tests**
+- Uptime validation (minimum 24 hours)
+- Reload cause verification
+- Core dump detection
+- Agent log validation
+- NTP synchronization (when configured)
+
+#### Device Role-Based Testing
+
+Tests are automatically adapted based on device roles:
+
+- **Spine devices**: Focus on BGP underlay, hardware health, and system validation
+- **Leaf devices**: Include EVPN overlay tests, VLAN/VNI mappings, and access connectivity
+- **Border leaf devices**: Enhanced EVPN testing with external routing validation
+
+#### Test Execution
+
+Each generated test file is a complete ANTA catalog that can be executed independently:
+
+```bash
+# Execute tests for a specific device
+anta nrfu --catalog spine01_tests.yaml --inventory inventory.yaml --limit spine01
+
+# Execute all device tests in parallel
+find tests/ -name "*_tests.yaml" -exec anta nrfu --catalog {} --inventory inventory.yaml \;
 ```
 
 ---

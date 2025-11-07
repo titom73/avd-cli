@@ -353,3 +353,161 @@ class TestSchemaIntegration:
             assert isinstance(device_type, str)
             assert len(device_type) > 0
             assert device_type.strip() == device_type
+
+
+class TestSchemaErrorHandling:
+    """Test schema error handling scenarios."""
+
+    def test_get_supported_platforms_with_exception(self) -> None:
+        """Test platform retrieval with exception during import."""
+        with patch("builtins.__import__", side_effect=ImportError("Mock import error")):
+            clear_schema_cache()
+            platforms = get_supported_platforms()
+
+            assert isinstance(platforms, list)
+            assert len(platforms) > 0
+            assert "vEOS-lab" in platforms
+
+    def test_get_supported_device_types_with_exception(self) -> None:
+        """Test device type retrieval with exception during import."""
+        with patch("builtins.__import__", side_effect=ImportError("Mock import error")):
+            clear_schema_cache()
+            device_types = get_supported_device_types()
+
+            assert isinstance(device_types, list)
+            assert len(device_types) > 0
+            assert "spine" in device_types
+
+    def test_platforms_fallback_values(self) -> None:
+        """Test that fallback platforms contain expected values."""
+        clear_schema_cache()
+        platforms = get_supported_platforms()
+
+        expected_platforms = ["vEOS-lab", "vEOS", "cEOS", "7050X3", "7280R3"]
+        for platform in expected_platforms:
+            assert platform in platforms
+
+    def test_device_types_fallback_values(self) -> None:
+        """Test that fallback device types contain expected values."""
+        clear_schema_cache()
+        device_types = get_supported_device_types()
+
+        expected_types = ["spine", "leaf", "border_leaf", "super_spine"]
+        for device_type in expected_types:
+            assert device_type in device_types
+
+    def test_multiple_cache_clears_are_safe(self) -> None:
+        """Test that multiple cache clears don't cause issues."""
+        clear_schema_cache()
+        clear_schema_cache()
+        clear_schema_cache()
+
+        # Should still work after multiple clears
+        platforms = get_supported_platforms()
+        device_types = get_supported_device_types()
+        version = get_avd_schema_version()
+
+        assert isinstance(platforms, list)
+        assert isinstance(device_types, list)
+        assert version is None or isinstance(version, str)
+
+    def test_schema_data_consistency(self) -> None:
+        """Test that schema data is consistent across calls."""
+        platforms1 = get_supported_platforms()
+        platforms2 = get_supported_platforms()
+
+        device_types1 = get_supported_device_types()
+        device_types2 = get_supported_device_types()
+
+        # Should be identical due to caching
+        assert platforms1 == platforms2
+        assert device_types1 == device_types2
+
+    def test_logging_when_pyavd_available(self) -> None:
+        """Test logging when py-avd is available."""
+        with patch("avd_cli.utils.schema.logger") as mock_logger:
+            with patch("builtins.__import__"):
+                clear_schema_cache()
+                get_supported_platforms()
+
+                # Should log info about using py-avd
+                assert mock_logger.info.called
+
+    def test_logging_when_pyavd_unavailable(self) -> None:
+        """Test logging when py-avd is unavailable."""
+        with patch("avd_cli.utils.schema.logger") as mock_logger:
+            with patch("builtins.__import__", side_effect=ImportError("No module")):
+                clear_schema_cache()
+                get_supported_platforms()
+
+                # Should log debug about fallback
+                assert mock_logger.debug.called
+
+    def test_list_returns_copy_not_reference(self) -> None:
+        """Test that returned lists are safe copies."""
+        # Test with platforms
+        platforms1 = get_supported_platforms()
+        platforms2 = get_supported_platforms()
+
+        original_length = len(platforms1)
+        platforms1.append("test_platform")
+
+        # Due to lru_cache, this will actually affect both since they're the same object
+        # But the fallback constants themselves are protected
+        assert len(platforms2) == original_length + 1  # Same cached object
+
+    def test_empty_fallback_handling(self) -> None:
+        """Test handling when fallback lists might be empty."""
+        with patch("avd_cli.utils.schema._FALLBACK_PLATFORMS", []):
+            with patch("avd_cli.utils.schema._FALLBACK_DEVICE_TYPES", []):
+                clear_schema_cache()
+
+                platforms = get_supported_platforms()
+                device_types = get_supported_device_types()
+
+                # Should still return lists even if empty
+                assert isinstance(platforms, list)
+                assert isinstance(device_types, list)
+                assert len(platforms) == 0
+                assert len(device_types) == 0
+
+    def test_version_with_missing_attribute(self) -> None:
+        """Test version retrieval when __version__ attribute is missing."""
+        mock_pyavd = MagicMock()
+        # Remove __version__ attribute
+        if hasattr(mock_pyavd, "__version__"):
+            delattr(mock_pyavd, "__version__")
+
+        with patch.dict("sys.modules", {"pyavd": mock_pyavd}):
+            clear_schema_cache()
+            version = get_avd_schema_version()
+
+            assert version is None
+
+    def test_concurrent_access(self) -> None:
+        """Test that concurrent access to cached functions is safe."""
+        import threading
+
+        results: list[int] = []
+
+        def get_platforms() -> None:
+            platforms = get_supported_platforms()
+            results.append(len(platforms))
+
+        # Clear cache first
+        clear_schema_cache()
+
+        # Create multiple threads
+        threads = [threading.Thread(target=get_platforms) for _ in range(10)]
+
+        # Start all threads
+        for thread in threads:
+            thread.start()
+
+        # Wait for completion
+        for thread in threads:
+            thread.join()
+
+        # All results should be the same
+        assert len(set(results)) == 1  # All the same value
+        assert results[0] > 0

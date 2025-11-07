@@ -301,7 +301,7 @@ class AntaCatalogGenerator:
             config = structured_configs.get(device.hostname, {})
 
             # Skip if not a leaf device (EVPN typically on leafs)
-            if device.device_type not in ["l3leaf", "border_leaf"]:
+            if device.device_type not in ["leaf", "border_leaf"]:
                 continue
 
             # Check for EVPN configuration
@@ -443,9 +443,9 @@ class AntaCatalogGenerator:
             )
 
             # Platform specific tests
-            if platform.startswith("DCS-7050"):
+            if platform.startswith("7050"):
                 tests.append({"VerifyEnvironmentSystemCooling": {"result": "ok"}})
-            elif platform.startswith("DCS-7280") or platform.startswith("DCS-7300"):
+            elif platform.startswith("7280") or platform.startswith("7300"):
                 tests.extend([{"VerifyEnvironmentSystemCooling": {"result": "ok"}}, {"VerifyAdverseDrops": {}}])
 
         return {"anta.tests.hardware": tests} if tests else {}

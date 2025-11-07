@@ -1,5 +1,0 @@
----
-# Leaf-specific variables
-type: l3leaf
-platform: vEOS
-device_type: l3leaf

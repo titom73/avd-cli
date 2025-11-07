@@ -1,0 +1,53 @@
+tenants:
+  - name: AVD_CAMPUS
+    vrfs:
+      - name: default
+        mlag_ibgp_peering_vlan: 4093
+        svis:
+          - id: 100
+            name: 'campus-users'
+            tags: ["100"]
+            enabled: true
+            ip_virtual_router_addresses:
+              - 10.1.10.1
+            nodes:
+              - node: spine01
+                ip_address: 10.1.10.2/23
+              - node: spine02
+                ip_address: 10.1.10.3/23
+
+          - id: 300
+            name: 'campus-voice'
+            tags: ["200"]
+            enabled: true
+            ip_virtual_router_addresses:
+              - 10.2.10.1
+            nodes:
+              - node: spine01
+                ip_address: 10.2.10.2/23
+              - node: spine02
+                ip_address: 10.2.10.3/23
+
+          - id: 666
+            name: 'GARBAGE_USERS'
+            tags: ["666"]
+            enabled: true
+            ip_virtual_router_addresses:
+              - 10.3.10.1
+            nodes:
+              - node: spine01
+                ip_address: 10.3.10.2/23
+              - node: spine02
+                ip_address: 10.3.10.3/23
+
+          - id: 667
+            name: 'GARBAGE_PHONES'
+            tags: ["667"]
+            enabled: true
+            ip_virtual_router_addresses:
+              - 10.4.10.1
+            nodes:
+              - node: spine01
+                ip_address: 10.4.10.2/23
+              - node: spine02
+                ip_address: 10.4.10.3/23

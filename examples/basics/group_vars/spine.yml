@@ -1,5 +1,0 @@
----
-# Spine-specific variables
-type: spine
-platform: vEOS
-device_type: spine

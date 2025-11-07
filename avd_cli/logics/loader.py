@@ -812,6 +812,19 @@ class InventoryLoader:
         )
 
         # Parse from different AVD structures
+        # Use independent 'if' statements to handle multiple topology types in same group
+        # (e.g., both "spine" and "l3leaf" in ATD_FABRIC.yml)
+
+        # Support both "spine" and "l3spine" keys
+        if "spine" in group_data:
+            devices.extend(
+                self._parse_node_groups(
+                    group_data["spine"],
+                    self._normalize_device_type("spine"),
+                    fabric_name,
+                    host_vars
+                )
+            )
         if "l3spine" in group_data:
             devices.extend(
                 self._parse_node_groups(
@@ -821,7 +834,16 @@ class InventoryLoader:
                     host_vars
                 )
             )
-        elif "l2leaf" in group_data:
+        if "l3leaf" in group_data:
+            devices.extend(
+                self._parse_node_groups(
+                    group_data["l3leaf"],
+                    self._normalize_device_type("l3leaf"),
+                    fabric_name,
+                    host_vars
+                )
+            )
+        if "l2leaf" in group_data:
             devices.extend(
                 self._parse_node_groups(
                     group_data["l2leaf"],
@@ -830,20 +852,33 @@ class InventoryLoader:
                     host_vars
                 )
             )
-        elif "node_groups" in group_data:
+        if "leaf" in group_data and "l3leaf" not in group_data and "l2leaf" not in group_data:
+            # Generic "leaf" key (but not if l3leaf/l2leaf already processed)
             devices.extend(
                 self._parse_node_groups(
-                    group_data, device_type, fabric_name, host_vars
+                    group_data["leaf"],
+                    self._normalize_device_type("leaf"),
+                    fabric_name,
+                    host_vars
                 )
             )
-        elif "nodes" in group_data:
-            # Direct node list
-            for node_data in group_data.get("nodes", []):
-                device = self._parse_device_node(
-                    node_data, device_type, fabric_name, host_vars
+
+        # Fallback: if no specific topology keys found, try generic structures
+        if not devices:
+            if "node_groups" in group_data:
+                devices.extend(
+                    self._parse_node_groups(
+                        group_data, device_type, fabric_name, host_vars
+                    )
                 )
-                if device:
-                    devices.append(device)
+            elif "nodes" in group_data:
+                # Direct node list
+                for node_data in group_data.get("nodes", []):
+                    device = self._parse_device_node(
+                        node_data, device_type, fabric_name, host_vars
+                    )
+                    if device:
+                        devices.append(device)
 
         return devices
 
@@ -877,6 +912,21 @@ class InventoryLoader:
         # Get topology-level defaults (e.g., l3spine.defaults or l2leaf.defaults)
         topology_defaults = topology_data.get("defaults", {})
 
+        # Handle both "nodes" directly in topology_data (e.g., spine.nodes)
+        # and "node_groups" structure (e.g., l3leaf.node_groups)
+        if "nodes" in topology_data and "node_groups" not in topology_data:
+            # Direct nodes list (e.g., spine.nodes)
+            for node_data in topology_data.get("nodes", []):
+                # Merge topology defaults with node data
+                merged_data = self._deep_merge(topology_defaults, node_data)
+                device = self._parse_device_node(
+                    merged_data, device_type, fabric_name, host_vars
+                )
+                if device:
+                    devices.append(device)
+            return devices
+
+        # Handle node_groups structure
         node_groups = topology_data.get("node_groups", [])
 
         for node_group in node_groups:

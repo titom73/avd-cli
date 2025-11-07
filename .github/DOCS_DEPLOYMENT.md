@@ -17,7 +17,7 @@ make docs-serve
 uv run mkdocs serve
 ```
 
-Access the documentation at: http://127.0.0.1:8000
+Access the documentation at: <http://127.0.0.1:8000>
 
 ### Build Documentation
 

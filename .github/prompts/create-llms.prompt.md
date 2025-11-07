@@ -6,7 +6,7 @@ tools: ['changes', 'codebase', 'editFiles', 'extensions', 'fetch', 'githubRepo',
 
 # Create LLMs.txt File from Repository Structure
 
-Create a new `llms.txt` file from scratch in the root of the repository following the official llms.txt specification at https://llmstxt.org/. This file provides high-level guidance to large language models (LLMs) on where to find relevant content for understanding the repository's purpose and specifications.
+Create a new `llms.txt` file from scratch in the root of the repository following the official llms.txt specification at <https://llmstxt.org/>. This file provides high-level guidance to large language models (LLMs) on where to find relevant content for understanding the repository's purpose and specifications.
 
 ## Primary Directive
 
@@ -18,7 +18,7 @@ Before creating the `llms.txt` file, you must complete a thorough analysis:
 
 ### Step 1: Review llms.txt Specification
 
-- Review the official specification at https://llmstxt.org/ to ensure full compliance
+- Review the official specification at <https://llmstxt.org/> to ensure full compliance
 - Understand the required format structure and guidelines
 - Note the specific markdown structure requirements
 
@@ -92,6 +92,7 @@ Organize files into logical H2 sections such as:
 #### File Selection Criteria
 
 Include files that:
+
 - Explain the repository's purpose and scope
 - Provide essential technical documentation
 - Show usage examples and patterns
@@ -99,6 +100,7 @@ Include files that:
 - Contain configuration and setup instructions
 
 Exclude files that:
+
 - Are purely implementation details
 - Contain redundant information
 - Are build artifacts or generated content
@@ -132,7 +134,7 @@ Exclude files that:
 
 ### Step 4: Validation
 
-1. Verify compliance with https://llmstxt.org/ specification
+1. Verify compliance with <https://llmstxt.org/> specification
 2. Check that all links are valid and accessible
 3. Ensure the file serves as an effective LLM navigation tool
 4. Confirm the file is both human and machine readable
@@ -158,7 +160,7 @@ Exclude files that:
 
 ### Specification Compliance
 
-- ✅ Follows https://llmstxt.org/ format exactly
+- ✅ Follows <https://llmstxt.org/> format exactly
 - ✅ Uses required markdown structure
 - ✅ Implements optional sections appropriately
 - ✅ File located at repository root (`/llms.txt`)
@@ -202,6 +204,7 @@ Exclude files that:
 ## Success Criteria
 
 The created `llms.txt` file should:
+
 1. Enable LLMs to quickly understand the repository's purpose
 2. Provide clear navigation to essential documentation
 3. Follow the official llms.txt specification exactly

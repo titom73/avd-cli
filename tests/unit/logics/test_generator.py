@@ -13,14 +13,9 @@ from unittest.mock import patch
 
 import pytest
 
-from avd_cli.exceptions import (ConfigurationGenerationError,
-                                DocumentationGenerationError,
-                                TestGenerationError)
-from avd_cli.logics.generator import (ConfigurationGenerator,
-                                      DocumentationGenerator, TestGenerator,
-                                      generate_all)
-from avd_cli.models.inventory import (DeviceDefinition, FabricDefinition,
-                                      InventoryData)
+from avd_cli.exceptions import ConfigurationGenerationError, DocumentationGenerationError, TestGenerationError
+from avd_cli.logics.generator import ConfigurationGenerator, DocumentationGenerator, TestGenerator, generate_all
+from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
 
 
 @pytest.fixture

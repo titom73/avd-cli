@@ -16,6 +16,7 @@ This specification defines the workflow processes for AVD inventory processing, 
 ### Purpose
 
 Define the step-by-step processes for:
+
 - AVD inventory validation and loading
 - Configuration generation workflows
 - Documentation generation
@@ -252,6 +253,7 @@ def test_validation_failure_stops_workflow(invalid_inventory, tmp_output):
 ### Why State Machine Pattern?
 
 Using a state machine for workflow management provides:
+
 - **Clear States**: Explicit stages make debugging easier
 - **Error Recovery**: Each state can define rollback behavior
 - **Progress Tracking**: Current state enables accurate progress reporting
@@ -261,6 +263,7 @@ Using a state machine for workflow management provides:
 ### Why Incremental Generation?
 
 Processing devices incrementally rather than all-at-once enables:
+
 - **Memory Efficiency**: Only one device in memory at a time
 - **Fault Tolerance**: Failure on one device doesn't affect others
 - **Progress Reporting**: Real-time updates on per-device progress
@@ -270,6 +273,7 @@ Processing devices incrementally rather than all-at-once enables:
 ### Why Validation Gates?
 
 Validation checkpoints before expensive operations prevent:
+
 - **Wasted Processing**: Don't generate if inventory is invalid
 - **Partial Failures**: Catch errors before writing files
 - **Resource Waste**: Don't consume CPU/memory for doomed operations

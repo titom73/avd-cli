@@ -140,11 +140,13 @@ uv run tox -e ci-all
 ### Linting
 
 **flake8**: Style guide enforcement
+
 ```bash
 uv run flake8 avd_cli tests
 ```
 
 **pylint**: Code quality analysis
+
 ```bash
 uv run pylint avd_cli tests
 ```
@@ -152,6 +154,7 @@ uv run pylint avd_cli tests
 ### Type Checking
 
 **mypy**: Static type checking
+
 ```bash
 uv run mypy avd_cli
 ```
@@ -159,11 +162,13 @@ uv run mypy avd_cli
 ### Formatting
 
 **black**: Code formatting
+
 ```bash
 uv run black avd_cli tests
 ```
 
 **isort**: Import sorting
+
 ```bash
 uv run isort avd_cli tests
 ```
@@ -208,13 +213,15 @@ uv run pytest -m e2e
 
 ## Choosing Between Make and Tox
 
-### Use Make When:
+### Use Make When
+
 - ✅ You want the fastest execution
 - ✅ You're doing local development
 - ✅ You trust your local Python environment
 - ✅ You want simple, direct commands
 
-### Use Tox When:
+### Use Tox When
+
 - ✅ You need to test across multiple Python versions
 - ✅ You want isolated environments
 - ✅ You're preparing for CI/CD
@@ -288,6 +295,7 @@ uv sync --extra dev
 ### "Virtual environment mismatch"
 
 This warning can be ignored - tox creates its own virtual environments:
+
 ```
 warning: `VIRTUAL_ENV=.tox/lint` does not match the project environment path `.venv`
 ```

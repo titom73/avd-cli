@@ -52,7 +52,7 @@ avd-cli generate all \
 
 <div class="grid cards" markdown>
 
--   :material-download:{ .lg .middle } __Getting Started__
+- :material-download:{ .lg .middle } **Getting Started**
 
     ---
 
@@ -60,7 +60,7 @@ avd-cli generate all \
 
     [:octicons-arrow-right-24: Get Started](getting-started/installation.md)
 
--   :material-book-open-variant:{ .lg .middle } __User Guide__
+- :material-book-open-variant:{ .lg .middle } **User Guide**
 
     ---
 
@@ -68,7 +68,7 @@ avd-cli generate all \
 
     [:octicons-arrow-right-24: User Guide](user-guide/commands/overview.md)
 
--   :material-code-braces:{ .lg .middle } __API Reference__
+- :material-code-braces:{ .lg .middle } **API Reference**
 
     ---
 
@@ -76,7 +76,7 @@ avd-cli generate all \
 
     [:octicons-arrow-right-24: API Docs](api/cli/main.md)
 
--   :material-frequently-asked-questions:{ .lg .middle } __FAQ__
+- :material-frequently-asked-questions:{ .lg .middle } **FAQ**
 
     ---
 

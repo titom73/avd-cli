@@ -12,8 +12,9 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from jinja2 import Environment, Undefined
+from jinja2 import Environment
 from jinja2 import TemplateError as Jinja2TemplateError
+from jinja2 import Undefined
 
 from avd_cli.exceptions import TemplateError as AvdTemplateError
 

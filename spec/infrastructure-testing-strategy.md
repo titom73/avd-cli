@@ -488,18 +488,21 @@ output = "coverage.json"
 **Purpose**: Test individual functions/classes in isolation
 
 **Characteristics**:
+
 - Fast (<100ms per test)
 - No file I/O or network calls
 - Mock external dependencies
 - Test single behavior per test
 
 **What to Test**:
+
 - Function input/output correctness
 - Error handling and edge cases
 - Data validation logic
 - Business rule enforcement
 
 **Example**:
+
 ```python
 @pytest.mark.unit
 def test_device_hostname_validation():
@@ -518,18 +521,21 @@ def test_device_hostname_validation():
 **Purpose**: Test multiple components working together
 
 **Characteristics**:
+
 - Slower (up to 5s per test)
 - May use real file system (temporary directories)
 - Mock only external services
 - Test component interactions
 
 **What to Test**:
+
 - Data flow between components
 - File reading/writing operations
 - py-avd integration (with mocks)
 - Workflow stage transitions
 
 **Example**:
+
 ```python
 @pytest.mark.integration
 def test_inventory_to_config_pipeline(tmp_path):
@@ -556,18 +562,21 @@ def test_inventory_to_config_pipeline(tmp_path):
 **Purpose**: Test complete user workflows
 
 **Characteristics**:
+
 - Slowest (may take several seconds)
 - Test through CLI interface
 - Use CliRunner from Click
 - Minimal mocking
 
 **What to Test**:
+
 - Complete CLI commands
 - Real-world user scenarios
 - Error message display
 - Output file generation
 
 **Example**:
+
 ```python
 @pytest.mark.e2e
 def test_complete_generate_workflow(runner, sample_inventory):
@@ -665,6 +674,7 @@ def test_with_mocked_fs(mock_exists):
 ### Why >80% Coverage?
 
 80% coverage strikes balance between:
+
 - **Confidence**: Most code paths are tested
 - **Pragmatism**: 100% is often impractical
 - **Industry Standard**: Widely accepted threshold
@@ -673,6 +683,7 @@ def test_with_mocked_fs(mock_exists):
 ### Why pytest over unittest?
 
 pytest provides superior DX:
+
 - **Simpler Syntax**: Plain `assert` vs `self.assertEqual`
 - **Better Fixtures**: More flexible than setUp/tearDown
 - **Parametrization**: Easy multiple-input testing
@@ -682,6 +693,7 @@ pytest provides superior DX:
 ### Why AAA Pattern?
 
 Arrange-Act-Assert structure provides:
+
 - **Clarity**: Each test section has clear purpose
 - **Readability**: Easy to understand test flow
 - **Maintainability**: Consistent structure across tests

@@ -9,6 +9,7 @@ This directory contains comprehensive specifications for the AVD CLI project. Ea
 **Purpose**: Defines the overall architecture, design patterns, and technical requirements for the AVD CLI tool.
 
 **Key Topics**:
+
 - CLI interface design and command structure
 - Layered architecture (CLI → Logic → Models)
 - Technology stack (Click, Rich, pytest, UV)
@@ -24,6 +25,7 @@ This directory contains comprehensive specifications for the AVD CLI project. Ea
 **Purpose**: Defines the workflow processes for AVD inventory processing, validation, and artifact generation.
 
 **Key Topics**:
+
 - Workflow state machine and execution stages
 - Full workflow vs. config-only modes
 - Validation gates and error handling
@@ -39,6 +41,7 @@ This directory contains comprehensive specifications for the AVD CLI project. Ea
 **Purpose**: Defines data structures, validation rules, and contracts for AVD inventory processing.
 
 **Key Topics**:
+
 - Inventory directory structure requirements
 - YAML schema for group_vars and host_vars
 - Data models (DeviceDefinition, FabricDefinition, InventoryData)
@@ -54,6 +57,7 @@ This directory contains comprehensive specifications for the AVD CLI project. Ea
 **Purpose**: Defines comprehensive testing strategy, coverage requirements, and quality assurance practices.
 
 **Key Topics**:
+
 - Unit, integration, and E2E testing approaches
 - pytest configuration and best practices
 - Test fixtures and mocking strategies
@@ -96,6 +100,7 @@ These specifications provide comprehensive context for code generation:
 - **Testing Spec**: Generate comprehensive test suites
 
 Always:
+
 - Follow patterns defined in specifications
 - Meet acceptance criteria for features
 - Include tests for new functionality
@@ -134,6 +139,7 @@ Use the [create-specification.prompt.md](../.github/prompts/create-specification
 **Naming Convention**: `[type]-[purpose].md`
 
 **Types**:
+
 - `tool-*`: Tool and application specifications
 - `process-*`: Workflow and process specifications
 - `data-*`: Data schema and structure specifications
@@ -177,6 +183,7 @@ Use the [create-specification.prompt.md](../.github/prompts/create-specification
 ### When to Create a New Specification
 
 Create a new specification when:
+
 - Starting a major new feature or component
 - Defining a new subsystem or module
 - Establishing standards for a domain
@@ -194,6 +201,7 @@ Create a new specification when:
 ## 📞 Questions?
 
 If you have questions about:
+
 - **Specification content**: Consult the specification owner
 - **How to use specs**: Review this README and examples
 - **Creating new specs**: Use the template in `.github/prompts/`

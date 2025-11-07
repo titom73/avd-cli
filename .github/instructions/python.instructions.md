@@ -105,8 +105,7 @@ def function_with_types_in_docstring(param1, param2):
     """
 ```
 
-Reference: https://numpy.org/doc/1.19/docs/howto_document.html
-
+Reference: <https://numpy.org/doc/1.19/docs/howto_document.html>
 
 ### PEP 8 Compliance
 
@@ -199,18 +198,21 @@ def generate_configs(inventory_path: Path, output_path: Path) -> None:
 ```
 
 **When to use lazy imports:**
+
 - ✅ CLI commands that load heavy libraries (pyavd, pandas, etc.)
 - ✅ Optional dependencies that might not be installed
 - ✅ Modules with expensive initialization
 - ✅ Commands that aren't always used (avoids loading for `--help`, `--version`)
 
 **When NOT to use lazy imports:**
+
 - ❌ Core library modules (use top-level imports)
 - ❌ Type checking imports (use `TYPE_CHECKING` guard instead)
 - ❌ Constants, exceptions, and lightweight utilities
 - ❌ Standard library imports (already fast)
 
 **Rationale:**
+
 - **UX**: `avd-cli --help` should be instant (<100ms)
 - **Performance**: Don't load pyavd/heavy libs unless actually needed
 - **Dependency isolation**: Allows showing help even if optional deps missing
@@ -221,6 +223,7 @@ def generate_configs(inventory_path: Path, output_path: Path) -> None:
 ### Mandatory Type Hints
 
 Always provide type hints for:
+
 - Function parameters
 - Function return types
 - Class attributes
@@ -1053,6 +1056,7 @@ tox
 ## Common Anti-Patterns to Avoid
 
 1. ❌ **Mutable default arguments**
+
 ```python
 # ❌ Bad
 def add_item(item, items=[]):  # Shared between calls!
@@ -1068,6 +1072,7 @@ def add_item(item: str, items: Optional[List[str]] = None) -> List[str]:
 ```
 
 2. ❌ **Catching Exception without context**
+
 ```python
 # ❌ Bad
 try:
@@ -1084,6 +1089,7 @@ except SpecificException as e:
 ```
 
 3. ❌ **Not using context managers**
+
 ```python
 # ❌ Bad
 f = open("file.txt")
@@ -1096,6 +1102,7 @@ with open("file.txt") as f:
 ```
 
 4. ❌ **String formatting with %**
+
 ```python
 # ❌ Bad
 message = "Version %s downloaded" % version
@@ -1105,6 +1112,7 @@ message = f"Version {version} downloaded"
 ```
 
 5. ❌ **Not using enumerate**
+
 ```python
 # ❌ Bad
 for i in range(len(items)):
@@ -1120,6 +1128,7 @@ for i, item in enumerate(items):
 ### Version Handling
 
 Always use the version models:
+
 ```python
 from eos_downloader.models.version import EosVersion, CvpVersion
 
@@ -1135,6 +1144,7 @@ print(version.rtype)   # "M"
 ### Constants
 
 Use constants from `defaults.py`:
+
 ```python
 from eos_downloader.defaults import (
     DEFAULT_SOFTWARE_FOLDER_TREE,

@@ -13,8 +13,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from avd_cli.cli.main import cli
-from avd_cli.models.inventory import (DeviceDefinition, FabricDefinition,
-                                      InventoryData)
+from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
 
 
 class TestGenerateAllCommand:

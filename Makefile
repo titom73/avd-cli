@@ -159,4 +159,3 @@ install-doc: ## Install documentation dependencies
 	@echo "Installing documentation dependencies..."
 	uv sync --extra doc
 	@echo "✓ Documentation dependencies installed"
-

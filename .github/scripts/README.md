@@ -9,11 +9,13 @@ This directory contains helper scripts for various development and deployment ta
 Interactive helper script for managing documentation with MkDocs and mike.
 
 **Usage:**
+
 ```bash
 ./scripts/docs-helper.sh <command> [options]
 ```
 
 **Commands:**
+
 - `serve` - Start local documentation server with live reload
 - `build` - Build documentation with strict validation
 - `test` - Test mike deployment locally (no push)
@@ -24,6 +26,7 @@ Interactive helper script for managing documentation with MkDocs and mike.
 - `help` - Show help message
 
 **Examples:**
+
 ```bash
 # Development workflow
 ./scripts/docs-helper.sh serve
@@ -39,6 +42,7 @@ Interactive helper script for managing documentation with MkDocs and mike.
 ```
 
 **Features:**
+
 - ✅ Colored output for better readability
 - ✅ Dependency checking
 - ✅ Interactive prompts for destructive operations
@@ -73,6 +77,7 @@ See `Makefile` for all available targets.
 ## Documentation
 
 For detailed documentation on the deployment process:
+
 - **Deployment Guide**: `docs/contributing/documentation-deployment.md`
 - **Workflow Reference**: `.github/workflows/README.md`
 - **Summary**: `docs/contributing/docs-deployment-summary.md`
@@ -80,12 +85,14 @@ For detailed documentation on the deployment process:
 ## Requirements
 
 ### For Documentation Scripts
+
 - Python 3.9+
 - MkDocs and dependencies (install with `pip install -e ".[doc]"`)
 - Git
 - mike (included in doc dependencies)
 
 ### System Dependencies
+
 - bash or zsh shell
 - Standard Unix utilities (grep, awk, sed)
 
@@ -176,12 +183,14 @@ main "$@"
 ## Troubleshooting
 
 ### Script Permission Denied
+
 ```bash
 # Fix: Make script executable
 chmod +x scripts/your-script.sh
 ```
 
 ### Command Not Found
+
 ```bash
 # Fix: Run from project root or use absolute path
 cd /path/to/eos-downloader
@@ -189,6 +198,7 @@ cd /path/to/eos-downloader
 ```
 
 ### Missing Dependencies
+
 ```bash
 # Fix: Install project dependencies
 pip install -e ".[dev,doc]"
@@ -197,6 +207,7 @@ pip install -e ".[dev,doc]"
 ## Support
 
 For issues with scripts:
+
 1. Check script has execute permissions: `ls -l scripts/`
 2. Verify dependencies are installed
 3. Run with `bash -x` for debugging: `bash -x scripts/docs-helper.sh command`
@@ -205,6 +216,7 @@ For issues with scripts:
 ## Contributing
 
 When contributing scripts:
+
 - Follow the template above
 - Add comprehensive error handling
 - Include helpful error messages

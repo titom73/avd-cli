@@ -155,12 +155,14 @@ Now that AVD CLI is installed, you can:
 If you get a `command not found` error after installation:
 
 1. **With pipx**: Ensure pipx's bin directory is in your PATH:
+
    ```bash
    python3 -m pipx ensurepath
    # Then restart your terminal
    ```
 
 2. **With pip**: If installed with `--user`, ensure your user's bin directory is in PATH:
+
    ```bash
    export PATH="$HOME/.local/bin:$PATH"
    # Add this to your ~/.bashrc or ~/.zshrc for persistence

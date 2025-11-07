@@ -9,10 +9,12 @@ with fallback handling when py-avd is unavailable.
 
 from unittest.mock import MagicMock, patch
 
-from avd_cli.utils.schema import (clear_schema_cache,
-                                  get_avd_schema_version,
-                                  get_supported_device_types,
-                                  get_supported_platforms)
+from avd_cli.utils.schema import (
+    clear_schema_cache,
+    get_avd_schema_version,
+    get_supported_device_types,
+    get_supported_platforms,
+)
 
 
 class TestGetSupportedPlatforms:

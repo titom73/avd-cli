@@ -21,8 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from avd_cli.models.inventory import (DeviceDefinition, FabricDefinition,
-                                      InventoryData)
+from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
 
 
 class TestDeviceDefinition:

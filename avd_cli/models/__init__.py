@@ -3,8 +3,7 @@
 
 """Data models package initialization."""
 
-from avd_cli.models.inventory import (DeviceDefinition, FabricDefinition,
-                                      InventoryData)
+from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
 
 __all__ = [
     "DeviceDefinition",

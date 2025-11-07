@@ -162,6 +162,7 @@ validate:
 ### Missing Spine Devices
 
 **Error:**
+
 ```
 ✗ Spine devices not found in topology
 ```
@@ -180,6 +181,7 @@ spine:
 ### Invalid YAML Syntax
 
 **Error:**
+
 ```
 ✗ Failed to parse group_vars/FABRIC.yml: YAML syntax error
 ```
@@ -190,6 +192,7 @@ Check YAML syntax, indentation, and special characters.
 ### Missing Required Variables
 
 **Error:**
+
 ```
 ✗ Required variable 'fabric_name' not found
 ```

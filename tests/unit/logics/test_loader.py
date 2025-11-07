@@ -7,8 +7,9 @@ Tests cover YAML loading, device parsing, fabric creation,
 and validation as specified in AC-001 to AC-010.
 """
 
-import pytest
 from ipaddress import IPv4Address
+
+import pytest
 
 from avd_cli.exceptions import FileSystemError, InvalidInventoryError
 from avd_cli.logics.loader import InventoryLoader

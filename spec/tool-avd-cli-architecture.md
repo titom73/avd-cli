@@ -14,9 +14,11 @@ This specification defines the architecture, design patterns, and technical requ
 ## 1. Purpose & Scope
 
 ### Purpose
+
 Define the architectural components, design patterns, and technical constraints for building a maintainable, testable, and extensible CLI tool for AVD inventory processing.
 
 ### Scope
+
 - CLI interface design and command structure
 - Core architectural layers and component boundaries
 - Technology stack and framework integration patterns
@@ -24,12 +26,14 @@ Define the architectural components, design patterns, and technical constraints 
 - Configuration management approach
 
 ### Audience
+
 - Development team implementing the AVD CLI
 - AI coding assistants (GitHub Copilot)
 - Code reviewers and maintainers
 - Future contributors
 
 ### Assumptions
+
 - Users have basic knowledge of Arista AVD and Ansible inventory structure
 - Python 3.9+ is available in the target environment
 - Users have valid access to AVD inventory files
@@ -173,6 +177,7 @@ avd-cli generate all [OPTIONS]          # Generate everything (default)
 
 **Rationale for Command Groups:**
 The CLI uses Click's group functionality to organize related commands under logical groups. The `generate` group contains subcommands for different generation tasks, providing:
+
 - Clear command hierarchy and discoverability
 - Extensibility for future generation types (e.g., `generate diagrams`, `generate reports`)
 - Consistent user experience with other modern CLI tools
@@ -185,6 +190,7 @@ The CLI uses Click's group functionality to organize related commands under logi
 All CLI options support corresponding environment variables following the naming convention `AVD_CLI_<OPTION_NAME>` (uppercase, underscores for word separation).
 
 **Priority Order:**
+
 1. Command-line arguments (highest priority)
 2. Environment variables
 3. Default values (lowest priority)
@@ -230,6 +236,7 @@ Options:
 ```
 
 #### Generate Command Group
+
 ```python
 @click.group()
 @click.pass_context
@@ -426,6 +433,7 @@ def generate_tests(
 ### Internal API Contracts
 
 #### Inventory Processor Interface
+
 ```python
 from typing import Protocol, List, Dict, Any, Optional
 from pathlib import Path
@@ -625,11 +633,13 @@ limits:
 ### Why Layered Architecture?
 
 A layered architecture provides clear separation of concerns:
+
 - **CLI Layer**: Handles user interaction and input validation
 - **Logic Layer**: Contains business logic and AVD processing
 - **Model Layer**: Defines data structures and validation rules
 
 This separation enables:
+
 - Independent testing of each layer
 - Easy replacement of CLI framework if needed
 - Reusability of business logic in other contexts
@@ -638,6 +648,7 @@ This separation enables:
 ### Why Click over argparse?
 
 Click provides several advantages:
+
 - **Better UX**: Automatic help generation with beautiful formatting
 - **Nested Commands**: Natural support for command groups
 - **Type Conversion**: Automatic validation and type conversion
@@ -648,6 +659,7 @@ Click provides several advantages:
 ### Why Rich for Output?
 
 Rich transforms CLI output from plain text to professional-grade UI:
+
 - **Visual Hierarchy**: Tables, panels, trees for structured data
 - **Progress Tracking**: Built-in progress bars and spinners
 - **Color and Style**: Consistent theming across all output
@@ -657,6 +669,7 @@ Rich transforms CLI output from plain text to professional-grade UI:
 ### Why UV Package Manager?
 
 UV offers modern Python package management:
+
 - **Speed**: Significantly faster than pip/poetry
 - **Reliability**: Deterministic dependency resolution
 - **Simplicity**: Single tool for package management and script running
@@ -694,6 +707,7 @@ Using Click's command groups provides significant architectural benefits:
 The CLI supports two distinct workflow modes to accommodate different use cases:
 
 **eos-design workflow** (default):
+
 - **Purpose**: Complete automation from high-level design to CLI configurations
 - **Rationale**:
   - Most AVD users start with fabric topology definitions
@@ -707,6 +721,7 @@ The CLI supports two distinct workflow modes to accommodate different use cases:
   - Consistent configurations across entire fabric
 
 **cli-config workflow**:
+
 - **Purpose**: Direct CLI generation when structured configs already exist
 - **Rationale**:
   - Some users manually create structured configurations
@@ -721,6 +736,7 @@ The CLI supports two distinct workflow modes to accommodate different use cases:
   - Suitable for iterative config updates
 
 **Naming Convention Rationale**:
+
 - `eos-design`: Clearly indicates the eos_design role is involved
 - `cli-config`: Focuses on the final output (CLI configs) and the role used (eos_cli_config_gen)
 - Avoids ambiguous terms like "full" or "config-only"
@@ -874,6 +890,7 @@ avd-cli generate configs -i ./inventory -o ./output -l spine
 The `--workflow` option controls how AVD processes the inventory:
 
 **eos-design workflow (default)**:
+
 - **Purpose**: Complete AVD pipeline from fabric definitions to EOS CLI configurations
 - **Process**:
   1. Reads fabric topology from group_vars (spine, l3leaf, l2leaf sections)
@@ -884,6 +901,7 @@ The `--workflow` option controls how AVD processes the inventory:
 - **Output**: Structured configs + CLI configs + documentation
 
 **cli-config workflow**:
+
 - **Purpose**: Direct CLI configuration generation from existing structured configurations
 - **Process**:
   1. Reads existing structured configurations from Ansible inventory
@@ -973,6 +991,7 @@ avd-cli generate configs --help
 ### Edge Cases
 
 #### Empty Inventory
+
 ```python
 # Given: Empty inventory directory
 # When: User runs generate command
@@ -990,6 +1009,7 @@ Suggestion: Ensure inventory contains:
 ```
 
 #### Invalid YAML
+
 ```python
 # Given: Inventory with malformed YAML
 # When: User runs generate command
@@ -1007,6 +1027,7 @@ Suggestion: Validate YAML syntax using:
 ```
 
 #### Missing Required Fields
+
 ```python
 # Given: Inventory missing required AVD fields
 # When: User runs generate command
@@ -1027,6 +1048,7 @@ Suggestion: Review AVD schema documentation:
 ```
 
 #### Permission Denied
+
 ```python
 # Given: No write permission to output directory
 # When: User runs generate command
@@ -1134,12 +1156,14 @@ except Exception as e:
 ## 11. Related Specifications / Further Reading
 
 ### Internal Specifications
+
 - [Process: AVD Workflow Specification](./process-avd-workflow.md)
 - [Data: AVD Inventory Schema](./data-avd-inventory-schema.md)
 - [Design: CLI Interface Design](./design-cli-interface.md)
 - [Infrastructure: Testing Strategy](./infrastructure-testing-strategy.md)
 
 ### External Documentation
+
 - [Arista AVD Documentation](https://avd.arista.com/5.7/index.html)
 - [py-avd Documentation](https://avd.arista.com/5.7/docs/pyavd/pyavd.html)
 - [Click Documentation](https://click.palletsprojects.com/en/stable/)

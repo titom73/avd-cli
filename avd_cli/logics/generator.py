@@ -14,11 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
 
-from avd_cli.constants import (DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR,
-                               DEFAULT_TESTS_DIR)
-from avd_cli.exceptions import (ConfigurationGenerationError,
-                                DocumentationGenerationError,
-                                TestGenerationError)
+from avd_cli.constants import DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR, DEFAULT_TESTS_DIR
+from avd_cli.exceptions import ConfigurationGenerationError, DocumentationGenerationError, TestGenerationError
 from avd_cli.logics.anta_generator import AntaCatalogGenerator
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
 

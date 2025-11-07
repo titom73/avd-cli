@@ -3,6 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/titom73/6af809c95b2b659058da5539ddba7791/raw/avd-cli-coverage.json)](https://github.com/titom73/avd-cli/actions/workflows/coverage-badge.yml)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://titom73.github.io/avd-cli/)
 
 A command-line interface for processing [Arista AVD](https://avd.arista.com/) inventories and generating configurations, documentation, and ANTA tests using pyavd.
@@ -47,7 +48,7 @@ This project is licensed under the **Apache License 2.0**.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
 
-http://www.apache.org/licenses/LICENSE-2.0
+<http://www.apache.org/licenses/LICENSE-2.0>
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
@@ -56,6 +57,7 @@ Unless required by applicable law or agreed to in writing, software distributed 
 ## 🙏 Acknowledgments
 
 **Core Dependencies:**
+
 - [Arista Networks](https://www.arista.com/) - AVD collection and pyavd library
 - [Click](https://click.palletsprojects.com/) - Elegant CLI framework
 - [Rich](https://github.com/Textualize/rich) - Beautiful terminal formatting

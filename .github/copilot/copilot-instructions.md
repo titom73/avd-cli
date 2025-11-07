@@ -44,6 +44,7 @@ Prioritize the following files in .github directory (if they exist):
 ## Project Architecture
 
 ### Core Project Structure
+
 This is a Python CLI application with the following architectural decisions:
 
 - **CLI Framework**: Click library for command-line interface
@@ -53,6 +54,7 @@ This is a Python CLI application with the following architectural decisions:
 - **Code Quality**: Enforced through pre-commit hooks (black, mypy, flake8, pylint)
 
 ### Expected Directory Structure
+
 ```
 avd-cli/
 ├── avd_cli/                    # Main package
@@ -91,6 +93,7 @@ When context files don't provide specific guidance:
 ## Code Quality Standards
 
 ### Maintainability
+
 - Write self-documenting code with clear naming
 - Follow snake_case for functions, variables, and modules
 - Follow PascalCase for classes and exceptions
@@ -100,6 +103,7 @@ When context files don't provide specific guidance:
 - Use pathlib.Path instead of string concatenation for file paths
 
 ### Performance
+
 - Use async/await for I/O operations when appropriate
 - Implement lazy evaluation with generators for large datasets
 - Use context managers for resource management
@@ -107,6 +111,7 @@ When context files don't provide specific guidance:
 - Prefer list comprehensions over loops when appropriate
 
 ### Security
+
 - Never hardcode sensitive information (tokens, passwords)
 - Use environment variables for configuration
 - Validate all user inputs before processing
@@ -114,12 +119,14 @@ When context files don't provide specific guidance:
 - Use parameterized queries and safe string formatting
 
 ### Accessibility
+
 - Provide clear, actionable error messages
 - Support keyboard navigation in interactive components
 - Use Rich library's accessibility features
 - Ensure output is readable in different terminal environments
 
 ### Testability
+
 - Write testable code with dependency injection
 - Separate pure functions from side effects
 - Use pytest fixtures for test setup
@@ -129,6 +136,7 @@ When context files don't provide specific guidance:
 ## Documentation Requirements
 
 ### Docstring Format
+
 Follow NumPy-style docstrings for all public functions and classes:
 
 ```python
@@ -172,6 +180,7 @@ def process_avd_inventory(
 ```
 
 ### Code Comments
+
 - Document complex business logic and algorithms
 - Explain non-obvious design decisions
 - Use TODO comments for planned improvements
@@ -180,6 +189,7 @@ def process_avd_inventory(
 ## Testing Approach
 
 ### Unit Testing
+
 - Test all public functions and methods
 - Use pytest fixtures for reusable test setup
 - Parametrize tests for multiple input scenarios
@@ -187,12 +197,14 @@ def process_avd_inventory(
 - Test error conditions and edge cases
 
 ### Integration Testing
+
 - Test CLI commands end-to-end
 - Verify AVD integration workflows
 - Test file generation and validation
 - Use temporary directories for file operations
 
 ### Test Structure
+
 ```python
 import pytest
 from pathlib import Path
@@ -237,14 +249,16 @@ class TestAvdInventory:
 ## Technology-Specific Guidelines
 
 ### Python Guidelines
+
 - Use Python 3.9+ features but maintain compatibility with 3.9
 - Follow PEP 8 style guidelines (enforced by black)
 - Use type hints for all function signatures
 - Prefer f-strings over .format() or % formatting
 - Use dataclasses for simple data containers
-- Implement __str__ and __repr__ methods for custom classes
+- Implement **str** and **repr** methods for custom classes
 
 ### Click CLI Guidelines
+
 - Use Click decorators for command definition
 - Group related commands using click.Group
 - Implement proper help text and descriptions
@@ -304,6 +318,7 @@ def generate(
 ```
 
 ### Rich Output Guidelines
+
 - Use Rich Console for all output formatting
 - Create themed output with consistent colors
 - Use tables for structured data display
@@ -344,6 +359,7 @@ def show_progress_operation(operation_name: str) -> Progress:
 ```
 
 ### UV Package Manager Guidelines
+
 - Use `uv sync` for installing dependencies
 - Use `uv run` for executing Python scripts
 - Manage dependencies in pyproject.toml
@@ -353,13 +369,16 @@ def show_progress_operation(operation_name: str) -> Progress:
 ## Version Control Guidelines
 
 ### Semantic Versioning
+
 - Follow Semantic Versioning (MAJOR.MINOR.PATCH)
 - Use conventional commits for automatic versioning
 - Document breaking changes in CHANGELOG.md
 - Tag releases with version numbers
 
 ### Commit Messages
+
 Follow conventional commit format:
+
 ```
 type(scope): description
 
@@ -373,6 +392,7 @@ Types: feat, fix, docs, style, refactor, test, chore
 ## General Best Practices
 
 ### Error Handling
+
 - Create custom exception classes for domain-specific errors
 - Provide clear, actionable error messages
 - Log errors with appropriate detail level
@@ -393,6 +413,7 @@ class ConfigurationGenerationError(AvdCliError):
 ```
 
 ### Logging Configuration
+
 - Use Python's logging module with structured output
 - Configure different log levels for different environments
 - Use Rich's logging handler for beautiful console output
@@ -417,6 +438,7 @@ def setup_logging(verbose: bool = False) -> None:
 ```
 
 ### File Operations
+
 - Use pathlib.Path for all file operations
 - Implement proper error handling for file I/O
 - Use context managers for file operations
@@ -444,6 +466,7 @@ def ensure_output_directory(output_path: Path) -> Path:
 ## Project-Specific Guidance
 
 ### AVD Integration Patterns
+
 - Use py-avd library for AVD operations
 - Validate inventory structure before processing
 - Support both eos_design + eos_cli_config_gen and eos_cli_config_gen only workflows
@@ -451,6 +474,7 @@ def ensure_output_directory(output_path: Path) -> Path:
 - Implement proper error handling for AVD operations
 
 ### CLI Command Structure
+
 ```
 avd-cli
 ├── generate          # Generate configurations and documentation
@@ -460,6 +484,7 @@ avd-cli
 ```
 
 ### Configuration Management
+
 - Support configuration through:
   - Command-line options
   - Environment variables

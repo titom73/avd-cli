@@ -17,12 +17,14 @@ As GitHub Copilot working on the **eos-downloader** project, you must understand
 EOS is Arista's Linux-based network operating system that powers their switches and routers. It's designed for cloud networking with a focus on programmability, automation, and operational simplicity.
 
 **Key Characteristics:**
+
 - **Single Binary Image**: One image runs across all Arista platforms
 - **State Separation**: Configuration and state are separated from the OS
 - **Linux Foundation**: Built on standard Linux kernel with full Linux shell access
 - **Programmability**: Supports APIs, automation tools, and custom scripting
 
 **Version Format:**
+
 ```
 MAJOR.MINOR.PATCH[RELEASE_TYPE]
 
@@ -53,6 +55,7 @@ Examples:
    - Example: `4.31.0F-INT`
 
 **Branch Structure:**
+
 ```python
 # Branch is MAJOR.MINOR
 version = "4.29.3M"
@@ -76,6 +79,7 @@ Arista provides EOS in multiple formats for different deployment scenarios:
 #### 1. Physical Hardware Images
 
 **64-bit (64)**
+
 - Standard image for 64-bit Arista switches
 - File extension: `.swi`
 - Typical size: 500MB - 1GB
@@ -91,12 +95,14 @@ format_info = software_mapping.EOS["64"]
 ```
 
 **INT (Internal Build)**
+
 - Internal development builds
 - File extension: `-INT.swi`
 - Example: `EOS-4.29.3M-INT.swi`
 - Use case: Testing pre-release features
 
 **2GB-INT**
+
 - 2GB variant of internal builds
 - File extension: `-INT.swi`
 - Optimized for devices with limited storage
@@ -104,6 +110,7 @@ format_info = software_mapping.EOS["64"]
 #### 2. Virtual Images (vEOS)
 
 **vEOS (Virtual EOS)**
+
 - Full-featured virtual machine image
 - File extensions: `.vmdk`, `.ova`, `.qcow2`
 - Typical size: 300MB - 600MB
@@ -111,6 +118,7 @@ format_info = software_mapping.EOS["64"]
 - Use case: VMware, KVM, VirtualBox environments
 
 **vEOS-lab**
+
 - Lightweight version for lab/testing
 - Reduced functionality for simulation
 - File extension: `.vmdk`, `.qcow2`
@@ -140,6 +148,7 @@ def install_to_eveng(image_path: Path, version: str) -> Path:
 #### 3. Container Images (cEOS)
 
 **cEOS (Container EOS)**
+
 - Docker container image
 - File extension: `.tar`, `.tar.xz`
 - Typical size: 400MB - 800MB
@@ -147,6 +156,7 @@ def install_to_eveng(image_path: Path, version: str) -> Path:
 - Use case: Container-based network testing, CI/CD pipelines
 
 **cEOS64**
+
 - 64-bit optimized container version
 - Better performance on modern hardware
 - Example: `cEOS64-lab-4.29.3M.tar.xz`
@@ -191,11 +201,13 @@ def import_ceos_to_docker(
 #### 4. Documentation & Source
 
 **RN (Release Notes)**
+
 - Release notes and documentation
 - File extension: `.pdf`, `.html`
 - Example: `RN-4.29.3M.pdf`
 
 **SOURCE**
+
 - Source code files (when available)
 - File extension: `.tar.gz`, `.zip`
 - Example: `EOS-4.29.3M-source.tar.gz`
@@ -206,6 +218,7 @@ def import_ceos_to_docker(
 CloudVision Portal is Arista's network-wide workload orchestration and automation platform. It provides centralized management, telemetry, and automation for Arista devices.
 
 **Key Features:**
+
 - **Centralized Management**: Manage all Arista devices from one interface
 - **Configuration Management**: Deploy and manage configurations at scale
 - **Telemetry & Analytics**: Real-time network telemetry and analytics
@@ -213,6 +226,7 @@ CloudVision Portal is Arista's network-wide workload orchestration and automatio
 - **Automation**: API-driven automation and integration
 
 **Version Format:**
+
 ```
 MAJOR.MINOR.PATCH
 
@@ -609,6 +623,7 @@ def download_eos_file(
 ### Why This Tool Exists
 
 Network engineers and automation teams need to:
+
 1. **Download EOS images** for device upgrades
 2. **Provision lab environments** (EVE-NG, GNS3)
 3. **Test network configurations** in containers (cEOS)
@@ -618,6 +633,7 @@ Network engineers and automation teams need to:
 ### Common Workflows
 
 **Workflow 1: Production Upgrade**
+
 ```bash
 # Download latest maintenance release
 ardl get eos --version 4.29.3M --format 64 --output /staging
@@ -629,6 +645,7 @@ sha256sum EOS-4.29.3M.swi
 ```
 
 **Workflow 2: Lab Setup**
+
 ```bash
 # Download and install to EVE-NG
 ardl get eos --version 4.29.3M --format vEOS-lab --eve-ng
@@ -637,6 +654,7 @@ ardl get eos --version 4.29.3M --format vEOS-lab --eve-ng
 ```
 
 **Workflow 3: CI/CD Testing**
+
 ```bash
 # Download and import cEOS
 ardl get eos --version 4.29.3M --format cEOS --import-docker

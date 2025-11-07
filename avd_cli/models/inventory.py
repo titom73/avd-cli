@@ -12,8 +12,7 @@ from ipaddress import IPv4Address, IPv6Address, ip_address
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from avd_cli.utils.schema import (get_supported_device_types,
-                                  get_supported_platforms)
+from avd_cli.utils.schema import get_supported_device_types, get_supported_platforms
 
 
 @dataclass

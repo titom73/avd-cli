@@ -129,6 +129,7 @@ Variables are inherited in this specific order (last wins):
 ### Example Inheritance Flow
 
 For device `s1-leaf1` in the hierarchy above:
+
 ```
 all.yml → ATD_LAB.yml → ATD_FABRIC.yml → ATD_LEAFS.yml → pod1.yml → host_vars/s1-leaf1.yml
 ```
@@ -138,6 +139,7 @@ all.yml → ATD_LAB.yml → ATD_FABRIC.yml → ATD_LEAFS.yml → pod1.yml → ho
 ## Group Variable Organization
 
 ### Single File per Group
+
 ```
 group_vars/
 ├── all.yml              # Global settings
@@ -147,6 +149,7 @@ group_vars/
 ```
 
 ### Directory Structure per Group
+
 ```
 group_vars/
 ├── all/
@@ -169,6 +172,7 @@ AVD CLI supports Jinja2 templating in all variable files, enabling dynamic confi
 ### Basic Jinja2 Examples
 
 #### Conditional Values
+
 ```yaml
 # Platform-dependent MTU settings
 default_interface_mtu: "{% if lab_type == 'act' %}1500{% else %}{{poc_platform_mtu}}{% endif %}"
@@ -180,6 +184,7 @@ default_poc_syslog_vrf: "{{ default_poc_management_vrf }}"
 ```
 
 #### Variable References
+
 ```yaml
 # Reference other variables
 default_poc_management_vrf: MGMT
@@ -189,6 +194,7 @@ default_poc_radius_vrf: "{{ default_poc_management_vrf }}"
 ```
 
 #### Complex Logic
+
 ```yaml
 # Feature flags with conditions
 lab_type: "act"
@@ -207,6 +213,7 @@ platform_settings:
 ### Advanced Jinja2 Usage
 
 #### Switch-Specific Configuration
+
 ```yaml
 network_ports:
   - switches:
@@ -234,6 +241,7 @@ network_ports:
 ```
 
 #### Custom Structured Configuration
+
 ```yaml
 # Prefix for custom configuration sections
 custom_structured_configuration_prefix:
@@ -252,26 +260,31 @@ cv_tags:
 ## Best Practices
 
 ### 1. Group Organization
+
 - Use hierarchical groups that reflect your network topology
 - Separate fabric configuration from tenant/service configuration
 - Group devices by role (spine, leaf, border-leaf, etc.)
 
 ### 2. Variable Structure
+
 - Keep global settings in `group_vars/all.yml`
 - Use fabric-specific files for topology and underlay settings
 - Separate tenant/service configuration into dedicated groups
 
 ### 3. Jinja2 Usage
+
 - Use Jinja2 for environment-specific values (lab vs production)
 - Reference variables to avoid duplication
 - Keep complex logic in dedicated variable files
 
 ### 4. File Organization
+
 - Use single files for simple groups
 - Use directories for complex groups with multiple configuration aspects
 - Name files descriptively (e.g., `interfaces.yml`, `routing.yml`)
 
 ### 5. Host Variables
+
 - Use `host_vars/` sparingly for device-specific overrides
 - Prefer group variables for consistent configuration
 - Document any host-specific exceptions

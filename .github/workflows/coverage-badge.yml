@@ -1,117 +1,117 @@
-# ---
-# name: Coverage Badge
+---
+name: Coverage Badge
 
-# # Permissions required for this workflow
-# permissions:
-#   contents: write  # Needed to commit coverage badge
+# Permissions required for this workflow
+permissions:
+  contents: write  # Needed to commit coverage badge
 
-# on:
-#   push:
-#     branches:
-#       - main
-#   workflow_dispatch:  # Allow manual trigger
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
 
-# jobs:
-#   coverage:
-#     name: Generate Coverage Badge
-#     runs-on: ubuntu-latest
+jobs:
+  coverage:
+    name: Generate Coverage Badge
+    runs-on: ubuntu-latest
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v5
-#         with:
-#           fetch-depth: 0  # Full history for better context
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Full history for better context
 
-#       - name: Load Python and UV versions
-#         id: versions
-#         run: |
-#           DEFAULT_VERSION=$(cat .github/python-versions.json | jq -r '.default_version')
-#           UV_VERSION=$(cat .github/python-versions.json | jq -r '.uv_version')
-#           echo "python-version=$DEFAULT_VERSION" >> $GITHUB_OUTPUT
-#           echo "uv-version=$UV_VERSION" >> $GITHUB_OUTPUT
-#           echo "Using Python version: $DEFAULT_VERSION"
-#           echo "Using UV version: $UV_VERSION"
+      - name: Load Python and UV versions
+        id: versions
+        run: |
+          DEFAULT_VERSION=$(cat .github/python-versions.json | jq -r '.default_version')
+          UV_VERSION=$(cat .github/python-versions.json | jq -r '.uv_version')
+          echo "python-version=$DEFAULT_VERSION" >> $GITHUB_OUTPUT
+          echo "uv-version=$UV_VERSION" >> $GITHUB_OUTPUT
+          echo "Using Python version: $DEFAULT_VERSION"
+          echo "Using UV version: $UV_VERSION"
 
-#       - name: Set up Python
-#         uses: actions/setup-python@v6
-#         with:
-#           python-version: ${{ steps.versions.outputs.python-version }}
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ steps.versions.outputs.python-version }}
 
-#       - name: Install UV
-#         uses: astral-sh/setup-uv@v3
-#         with:
-#           version: ${{ steps.versions.outputs.uv-version }}
-#           enable-cache: true
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ steps.versions.outputs.uv-version }}
+          enable-cache: true
 
-#       - name: Install dependencies
-#         run: |
-#           uv sync --frozen --extra dev
+      - name: Install dependencies
+        run: |
+          uv sync --frozen --extra dev
 
-#       - name: Run tests with coverage
-#         run: |
-#           uv run pytest --cov=eos_downloader --cov-report=term-missing --cov-report=json --cov-branch tests/
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov=eos_downloader --cov-report=term-missing --cov-report=json --cov-branch tests/
 
-#       - name: Debug coverage file
-#         run: |
-#           echo "Checking if coverage.json exists..."
-#           ls -la coverage.json || echo "coverage.json not found"
-#           if [ -f coverage.json ]; then
-#             echo "Coverage file content:"
-#             cat coverage.json
-#           fi
+      - name: Debug coverage file
+        run: |
+          echo "Checking if coverage.json exists..."
+          ls -la coverage.json || echo "coverage.json not found"
+          if [ -f coverage.json ]; then
+            echo "Coverage file content:"
+            cat coverage.json
+          fi
 
-#       - name: Extract coverage percentage
-#         id: coverage
-#         run: |
-#           if [ -f coverage.json ]; then
-#             COVERAGE=$(python -c "import json; data=json.load(open('coverage.json')); print(data['totals']['percent_covered_display'] if 'totals' in data and 'percent_covered_display' in data['totals'] else '0')")
-#             echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
-#             echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
-#             echo "Coverage: $COVERAGE%"
-#           else
-#             echo "coverage.json not found, setting coverage to 0"
-#             echo "percentage=0" >> $GITHUB_OUTPUT
-#             echo "COVERAGE=0" >> $GITHUB_ENV
-#           fi
+      - name: Extract coverage percentage
+        id: coverage
+        run: |
+          if [ -f coverage.json ]; then
+            COVERAGE=$(python -c "import json; data=json.load(open('coverage.json')); print(data['totals']['percent_covered_display'] if 'totals' in data and 'percent_covered_display' in data['totals'] else '0')")
+            echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+            echo "Coverage: $COVERAGE%"
+          else
+            echo "coverage.json not found, setting coverage to 0"
+            echo "percentage=0" >> $GITHUB_OUTPUT
+            echo "COVERAGE=0" >> $GITHUB_ENV
+          fi
 
-#       - name: Update Coverage Badge
-#         uses: schneegans/dynamic-badges-action@v1.7.0
-#         with:
-#           auth: ${{ secrets.GIST_TOKEN }}
-#           gistID: ${{ secrets.GIST_ID }}
-#           filename: eos-downloader-coverage.json
-#           label: coverage
-#           message: ${{ steps.coverage.outputs.percentage }}%
-#           minColorRange: 50
-#           maxColorRange: 90
-#           valColorRange: ${{ steps.coverage.outputs.percentage }}
+      - name: Update Coverage Badge
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ secrets.GIST_ID }}
+          filename: eos-downloader-coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.percentage }}%
+          minColorRange: 50
+          maxColorRange: 90
+          valColorRange: ${{ steps.coverage.outputs.percentage }}
 
-#       - name: Upload coverage report as artifact
-#         uses: actions/upload-artifact@v5
-#         with:
-#           name: coverage-report
-#           path: |
-#             coverage.json
-#             .coverage
-#           retention-days: 30
+      - name: Upload coverage report as artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: |
+            coverage.json
+            .coverage
+          retention-days: 30
 
-#       - name: Comment coverage on commit
-#         if: github.event_name == 'push'
-#         uses: actions/github-script@v8
-#         with:
-#           script: |
-#             const coverage = '${{ steps.coverage.outputs.percentage }}';
-#             const message = `## 📊 Test Coverage Report
+      - name: Comment coverage on commit
+        if: github.event_name == 'push'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.percentage }}';
+            const message = `## 📊 Test Coverage Report
 
-#             **Coverage**: ${coverage}%
+            **Coverage**: ${coverage}%
 
-#             View the full report in the workflow artifacts.
-#             `;
+            View the full report in the workflow artifacts.
+            `;
 
-#             // Find the commit SHA
-#             const sha = context.sha;
+            // Find the commit SHA
+            const sha = context.sha;
 
-#             // Get repository info
-#             const { owner, repo } = context.repo;
+            // Get repository info
+            const { owner, repo } = context.repo;
 
-#             console.log(`Coverage: ${coverage}%`);
+            console.log(`Coverage: ${coverage}%`);

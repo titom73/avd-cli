@@ -109,7 +109,7 @@ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     Full AVD pipeline with topology design and validation:
     ```bash
     avd-cli generate configs -i ./inventory -o ./output --workflow eos-design
-    ```
+```
 
     - Runs `eos_design` role to generate structured configs
     - Validates topology structure
@@ -119,7 +119,7 @@ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
     Direct configuration generation from existing structured configs:
     ```bash
     avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
-    ```
+```
 
     - Skips `eos_design` role
     - Uses existing structured configs from `host_vars/`
@@ -203,25 +203,30 @@ tests/
 Each device test file includes the following categories when applicable:
 
 **Connectivity Tests**
+
 - Internet connectivity validation (8.8.8.8)
 - Management interface reachability
 
 **BGP Tests**
+
 - BGP ASN verification
 - BGP peer state validation
 - Address family configuration checks
 
 **EVPN Tests** (for EVPN-capable devices)
+
 - EVPN peer count validation
 - VNI to VLAN mapping verification
 - EVPN Type-2 route checks
 
 **Interface Tests**
+
 - Ethernet interface status validation
 - Loopback interface verification
 - Management interface checks
 
 **Hardware Tests**
+
 - Power supply status
 - Cooling system validation
 - Temperature monitoring
@@ -229,6 +234,7 @@ Each device test file includes the following categories when applicable:
 - Platform-specific tests (DCS-7050, DCS-7280, DCS-7300)
 
 **System Tests**
+
 - Uptime validation (minimum 24 hours)
 - Reload cause verification
 - Core dump detection

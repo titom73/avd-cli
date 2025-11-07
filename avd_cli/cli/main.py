@@ -728,7 +728,8 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
 
         elif format == "json":
             # Display as JSON
-            from typing import List as ListType, Dict as DictType
+            from typing import Dict as DictType
+            from typing import List as ListType
 
             info_data: DictType[str, Any] = {
                 "total_devices": total_devices,
@@ -762,8 +763,10 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
 
         elif format == "yaml":
             # Display as YAML
+            from typing import Dict as DictType
+            from typing import List as ListType
+
             import yaml as yaml_lib
-            from typing import List as ListType, Dict as DictType
 
             yaml_info_data: DictType[str, Any] = {
                 "total_devices": total_devices,

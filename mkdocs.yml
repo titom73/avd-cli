@@ -1,0 +1,188 @@
+# Project information
+site_name: AVD CLI
+site_author: AVD CLI Development Team
+site_description: A powerful CLI tool for processing Arista AVD inventories and generating configurations
+copyright: Copyright &copy; 2025 AVD CLI Development Team
+
+# Repository
+repo_name: avd-cli on Github
+repo_url: https://github.com/titom73/avd-cli
+
+# Configuration
+use_directory_urls: true
+
+# Theme configuration
+theme:
+  name: material
+  features:
+  - navigation.instant
+  - navigation.top
+  - content.tabs.link
+  - content.code.copy
+  - toc.follow
+  - navigation.indexes
+  highlightjs: true
+  hljs_languages:
+  - yaml
+  - python
+  - shell
+  icon:
+    repo: fontawesome/brands/github
+    logo: fontawesome/solid/terminal
+  favicon: assets/favicon.ico
+  font:
+    code: Fira Mono
+  language: en
+  include_search_page: false
+  search_index_only: true
+  palette:
+  # Light mode
+  - media: "(prefers-color-scheme: light)"
+    scheme: default
+    primary: white
+    accent: blue
+    toggle:
+      icon: material/weather-night
+      name: Switch to dark mode
+  # Dark mode
+  - media: "(prefers-color-scheme: dark)"
+    scheme: slate
+    primary: black
+    accent: blue
+    toggle:
+      icon: material/weather-sunny
+      name: Switch to light mode
+
+# Extra CSS and JavaScript
+extra_css:
+- stylesheets/extra.material.css
+
+extra_javascript:
+- https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js
+- https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.2/highlight.min.js
+
+# Watch directories
+watch:
+- docs
+- avd_cli
+
+# Plugins
+plugins:
+- mkdocstrings:
+    handlers:
+      python:
+        paths: [ avd_cli ]
+        import:
+        - https://docs.python.org/3/objects.inv
+        - https://mkdocstrings.github.io/objects.inv
+        - https://mkdocstrings.github.io/griffe/objects.inv
+        options:
+          docstring_style: numpy
+          docstring_options:
+            ignore_init_summary: true
+          docstring_section_style: table
+          show_docstring_other_parameters: true
+          heading_level: 2
+          inherited_members: false
+          merge_init_into_class: true
+          separate_signature: true
+          show_root_heading: true
+          show_root_full_path: false
+          show_signature_annotations: true
+          filters: [ "!^_[^_]" ]
+- search:
+    lang: en
+- git-revision-date-localized:
+    type: date
+- mike:
+- glightbox:
+    background: none
+    shadow: true
+    touchNavigation: true
+    loop: false
+    effect: fade
+    slide_effect: slide
+    width: 90vw
+
+# Markdown extensions
+markdown_extensions:
+- admonition
+- attr_list
+- def_list
+- md_in_html
+- codehilite:
+    guess_lang: true
+- pymdownx.arithmatex:
+    generic: true
+- pymdownx.betterem:
+    smart_enable: all
+- pymdownx.caret
+- pymdownx.critic
+- pymdownx.details
+- pymdownx.emoji:
+    emoji_index: !!python/name:material.extensions.emoji.twemoji ""
+    emoji_generator: !!python/name:material.extensions.emoji.to_svg ""
+- pymdownx.highlight:
+    anchor_linenums: true
+    line_spans: __span
+    pygments_lang_class: true
+- pymdownx.inlinehilite
+- pymdownx.magiclink
+- pymdownx.mark
+- pymdownx.smartsymbols
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format ""
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.tasklist:
+    custom_checkbox: true
+- pymdownx.tilde
+- smarty
+- toc:
+    separator: "-"
+    permalink: true
+    baselevel: 2
+
+# Extra configuration
+extra:
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/titom73/avd-cli
+  - icon: fontawesome/brands/python
+    link: https://pypi.org/project/avd-cli/
+  version:
+    provider: mike
+    default:
+    - stable
+
+# Navigation
+nav:
+- Home: index.md
+- Getting Started:
+  - Installation: getting-started/installation.md
+  - Quick Start: getting-started/quickstart.md
+  - Basic Usage: getting-started/basic-usage.md
+- User Guide:
+  - Commands Overview: user-guide/commands/overview.md
+  - generate: user-guide/commands/generate.md
+  - validate: user-guide/commands/validate.md
+  - info: user-guide/commands/info.md
+  - Inventory Structure: user-guide/inventory-structure.md
+  - Environment Variables: user-guide/environment-variables.md
+  - Workflows: user-guide/workflows.md
+  - Configuration: user-guide/configuration.md
+- API Reference:
+  - CLI: api/cli/main.md
+  - Models: api/models/inventory.md
+  - Loader: api/logics/loader.md
+  - Generator: api/logics/generator.md
+  - Templating: api/logics/templating.md
+  - Schema: api/utils/schema.md
+- Development:
+  - Contributing: development/contributing.md
+  - Architecture: development/architecture.md
+  - Testing: development/testing.md
+- FAQ: faq.md

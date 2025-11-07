@@ -1,0 +1,125 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., v0.1.0)'
+        required: false
+      alias:
+        description: 'Version alias (e.g., stable, latest)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for mike
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra doc
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine version and alias
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Tag push - deploy as versioned release
+            VERSION="${GITHUB_REF#refs/tags/}"
+            ALIAS="stable"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "alias=$ALIAS" >> $GITHUB_OUTPUT
+            echo "deploy=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            # Main branch push - deploy as development
+            VERSION="main"
+            ALIAS="development"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "alias=$ALIAS" >> $GITHUB_OUTPUT
+            echo "deploy=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual deployment
+            VERSION="${{ github.event.inputs.version }}"
+            ALIAS="${{ github.event.inputs.alias }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "alias=$ALIAS" >> $GITHUB_OUTPUT
+            echo "deploy=true" >> $GITHUB_OUTPUT
+          else
+            # Pull request - just build, don't deploy
+            echo "deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build documentation (PR only)
+        if: steps.version.outputs.deploy == 'false'
+        run: |
+          uv run mkdocs build --strict --verbose
+
+      - name: Deploy documentation
+        if: steps.version.outputs.deploy == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ALIAS="${{ steps.version.outputs.alias }}"
+
+          if [ -n "$ALIAS" ]; then
+            uv run mike deploy --push "$VERSION" "$ALIAS"
+            if [ "$ALIAS" == "stable" ]; then
+              uv run mike set-default --push stable
+            fi
+          else
+            uv run mike deploy --push "$VERSION"
+          fi
+
+      - name: Create deployment summary
+        if: steps.version.outputs.deploy == 'true'
+        run: |
+          echo "## 📚 Documentation Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Alias:** ${{ steps.version.outputs.alias }}" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://titom73.github.io/avd-cli/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Available Versions" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          uv run mike list >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create PR build summary
+        if: steps.version.outputs.deploy == 'false'
+        run: |
+          echo "## 📚 Documentation Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Documentation built successfully for pull request validation." >> $GITHUB_STEP_SUMMARY
+          echo "No deployment performed." >> $GITHUB_STEP_SUMMARY

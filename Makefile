@@ -88,3 +88,75 @@ tox-test: ## Run tox test environment
 tox-all: ## Run all tox environments
 	uv run tox
 
+################################################################################
+# Documentation targets
+################################################################################
+
+.PHONY: docs-serve
+docs-serve: ## Serve documentation locally (with live reload)
+	@echo "Starting MkDocs server..."
+	@echo "Access at: http://127.0.0.1:8000"
+	uv run mkdocs serve
+
+.PHONY: docs-build
+docs-build: ## Build documentation (with strict mode)
+	@echo "Building documentation..."
+	uv run mkdocs build --strict --verbose --clean
+	@echo "✓ Documentation built successfully in ./site/"
+
+.PHONY: docs-test
+docs-test: ## Test mike deployment locally (no push)
+	@echo "Testing mike deployment..."
+	uv run mike deploy test-build test
+	@echo "✓ Mike test successful (commit not pushed)"
+	uv run mike list
+	@echo ""
+	@echo "⚠️  To undo the local commit: git reset --soft HEAD~1"
+
+.PHONY: docs-list
+docs-list: ## List all deployed documentation versions
+	@echo "Deployed documentation versions:"
+	uv run mike list
+
+.PHONY: docs-deploy-dev
+docs-deploy-dev: ## Deploy development documentation (main)
+	@echo "Deploying development documentation..."
+	uv run mike deploy --push main development
+	@echo "✓ Development documentation deployed"
+
+.PHONY: docs-deploy-stable
+docs-deploy-stable: ## Deploy stable documentation (requires VERSION var)
+ifndef VERSION
+	@echo "Error: VERSION variable is required"
+	@echo "Usage: make docs-deploy-stable VERSION=v0.1.0"
+	@exit 1
+endif
+	@echo "Deploying stable documentation for $(VERSION)..."
+	uv run mike deploy --push $(VERSION) stable
+	uv run mike set-default --push stable
+	@echo "✓ Stable documentation deployed for $(VERSION)"
+
+.PHONY: docs-delete
+docs-delete: ## Delete a documentation version (requires VERSION var)
+ifndef VERSION
+	@echo "Error: VERSION variable is required"
+	@echo "Usage: make docs-delete VERSION=v0.1.0"
+	@exit 1
+endif
+	@echo "Deleting documentation version $(VERSION)..."
+	@read -p "Are you sure? [y/N]: " confirm && [ "$$confirm" = "y" ]
+	uv run mike delete --push $(VERSION)
+	@echo "✓ Documentation version $(VERSION) deleted"
+
+.PHONY: docs-clean
+docs-clean: ## Clean built documentation
+	@echo "Cleaning documentation build..."
+	rm -rf site/
+	@echo "✓ Documentation build cleaned"
+
+.PHONY: install-doc
+install-doc: ## Install documentation dependencies
+	@echo "Installing documentation dependencies..."
+	uv sync --extra doc
+	@echo "✓ Documentation dependencies installed"
+

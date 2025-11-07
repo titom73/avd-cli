@@ -57,6 +57,15 @@ dev = [
     "tox>=4.0.0",
     "isort>=5.12.0",
 ]
+doc = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+    "mkdocs-glightbox>=0.3.0",
+    "mike>=2.0.0",
+    "pymdown-extensions>=10.0.0",
+]
 
 [project.scripts]
 avd-cli = "avd_cli.cli.main:cli"
@@ -80,6 +89,15 @@ dev = [
     "types-PyYAML>=6.0.0",
     "tox>=4.0.0",
     "isort>=5.12.0",
+]
+doc = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+    "mkdocs-glightbox>=0.3.0",
+    "mike>=2.0.0",
+    "pymdown-extensions>=10.0.0",
 ]
 
 [tool.uv]

@@ -785,7 +785,7 @@ class InventoryLoader:
                     break
         if not fabric_name:
             fabric_name = global_vars.get("fabric_name", "DEFAULT")
-        return fabric_name
+        return str(fabric_name)
 
     def _apply_custom_configurations(
         self, devices: List[DeviceDefinition], group_vars: Dict[str, Dict[str, Any]]

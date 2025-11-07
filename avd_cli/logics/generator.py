@@ -528,7 +528,7 @@ class DocumentationGenerator:
 
         try:
             # Import and validate pyavd
-            pyavd = self._import_pyavd()
+            pyavd: Any = self._import_pyavd()
 
             # Get and filter devices
             devices = self._get_filtered_devices(inventory, limit_to_groups)
@@ -547,7 +547,7 @@ class DocumentationGenerator:
         except Exception as e:
             raise DocumentationGenerationError(f"Failed to generate documentation: {e}") from e
 
-    def _import_pyavd(self):
+    def _import_pyavd(self) -> Any:
         """Import pyavd library with error handling."""
         try:
             import pyavd
@@ -557,14 +557,18 @@ class DocumentationGenerator:
                 "pyavd library not installed. Install with: pip install pyavd"
             ) from e
 
-    def _get_filtered_devices(self, inventory: InventoryData, limit_to_groups: Optional[List[str]]):
+    def _get_filtered_devices(
+        self, inventory: InventoryData, limit_to_groups: Optional[List[str]]
+    ) -> List[DeviceDefinition]:
         """Get devices filtered by groups if specified."""
         devices = inventory.get_all_devices()
         if limit_to_groups:
             devices = [d for d in devices if d.fabric in limit_to_groups]
         return devices
 
-    def _build_structured_configs(self, inventory: InventoryData, devices, pyavd) -> Dict[str, Dict[str, Any]]:
+    def _build_structured_configs(
+        self, inventory: InventoryData, devices: List[DeviceDefinition], pyavd: Any
+    ) -> Dict[str, Dict[str, Any]]:
         """Build structured configs based on workflow."""
         from avd_cli.logics.generator import ConfigurationGenerator
 
@@ -583,7 +587,7 @@ class DocumentationGenerator:
 
         return structured_configs
 
-    def _build_eos_design_configs(self, all_inputs, pyavd) -> Dict[str, Dict[str, Any]]:
+    def _build_eos_design_configs(self, all_inputs: Dict[str, Dict[str, Any]], pyavd: Any) -> Dict[str, Dict[str, Any]]:
         """Build structured configs for eos-design workflow."""
         self.logger.info("Generating AVD facts for documentation")
         avd_facts = pyavd.get_avd_facts(all_inputs)
@@ -597,13 +601,15 @@ class DocumentationGenerator:
 
         return structured_configs
 
-    def _build_cli_config_configs(self, all_inputs) -> Dict[str, Dict[str, Any]]:
+    def _build_cli_config_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Build structured configs for cli-config workflow."""
         self.logger.info("Using existing structured configs for documentation")
         # For cli-config, inputs ARE the structured configs
         return dict(all_inputs)
 
-    def _generate_doc_files(self, structured_configs: Dict[str, Dict[str, Any]], docs_dir: Path, pyavd) -> List[Path]:
+    def _generate_doc_files(
+        self, structured_configs: Dict[str, Dict[str, Any]], docs_dir: Path, pyavd: Any
+    ) -> List[Path]:
         """Generate documentation files from structured configs."""
         self.logger.info("Generating device documentation")
         generated_files: List[Path] = []

@@ -25,7 +25,7 @@ jobs:
   check_pr_semantic:
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       # Please look up the latest version from

@@ -549,7 +549,7 @@ spine:
         # The fact that loading succeeds validates mixed format support
         assert inventory is not None
 
-    def test_invalid_yaml_syntax(self, loader, tmp_path):
+    def test_invalid_ip_address_format(self, loader, tmp_path):
         """AC-012: Given invalid IP address format, When validating, Then error explains requirements."""
         inventory_dir = tmp_path / "inventory"
         inventory_dir.mkdir()

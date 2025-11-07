@@ -54,6 +54,9 @@ jobs:
             cli
             deps-dev
             deps
+            logics
+            models
+            utils
           # Configure that a scope must always be provided.
           requireScope: false
           # Configure additional validation for the subject based on a regex.

@@ -64,9 +64,9 @@ jobs:
             echo "alias=$ALIAS" >> $GITHUB_OUTPUT
             echo "deploy=true" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            # Main branch push - deploy as development
+            # Main branch push - deploy as latest
             VERSION="main"
-            ALIAS="development"
+            ALIAS="latest"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "alias=$ALIAS" >> $GITHUB_OUTPUT
             echo "deploy=true" >> $GITHUB_OUTPUT
@@ -97,6 +97,11 @@ jobs:
             uv run mike deploy --push "$VERSION" "$ALIAS"
             if [ "$ALIAS" == "stable" ]; then
               uv run mike set-default --push stable
+            elif [ "$ALIAS" == "latest" ]; then
+              # Set latest as default if no stable version exists
+              if ! uv run mike list | grep -q stable; then
+                uv run mike set-default --push latest
+              fi
             fi
           else
             uv run mike deploy --push "$VERSION"

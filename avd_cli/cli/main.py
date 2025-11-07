@@ -194,7 +194,10 @@ def generate(ctx: click.Context) -> None:
     default="eos-design",
     envvar="AVD_CLI_WORKFLOW",
     show_envvar=True,
-    help="Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). Legacy values 'full' and 'config-only' are deprecated.",
+    help=(
+        "Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). "
+        "Legacy values 'full' and 'config-only' are deprecated."
+    ),
 )
 def generate_all(
     ctx: click.Context,
@@ -306,7 +309,10 @@ def generate_all(
     default="eos-design",
     envvar="AVD_CLI_WORKFLOW",
     show_envvar=True,
-    help="Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). Legacy values 'full' and 'config-only' are deprecated.",
+    help=(
+        "Workflow type: eos-design (eos_design + eos_cli_config_gen) or cli-config (eos_cli_config_gen only). "
+        "Legacy values 'full' and 'config-only' are deprecated."
+    ),
 )
 def generate_configs(
     ctx: click.Context,

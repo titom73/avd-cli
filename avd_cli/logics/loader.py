@@ -705,107 +705,133 @@ class InventoryLoader:
         List[FabricDefinition]
             List of parsed fabric definitions
         """
-        fabrics: List[FabricDefinition] = []
         devices_by_fabric: Dict[str, List[DeviceDefinition]] = {}
 
         # Parse devices from group variables
-        for group_name, group_data in group_vars.items():
-            # Check if group defines device topology (spine, leaf, l2leaf, etc.)
-            if self._is_device_topology_group(group_data):
-                # Try to find fabric_name in this order:
-                # 1. Current group_data
-                # 2. Any other group_vars (might be parent group like campus_avd)
-                # 3. Global vars
-                # 4. Default to "DEFAULT"
-                fabric_name = group_data.get("fabric_name")
-                if not fabric_name:
-                    # Search all group_vars for fabric_name
-                    for other_group_data in group_vars.values():
-                        if "fabric_name" in other_group_data:
-                            fabric_name = other_group_data["fabric_name"]
-                            break
-                if not fabric_name:
-                    fabric_name = global_vars.get("fabric_name", "DEFAULT")
+        self._parse_devices_from_groups(devices_by_fabric, global_vars, group_vars, host_vars)
 
-                if fabric_name not in devices_by_fabric:
-                    devices_by_fabric[fabric_name] = []
-
-                # Parse devices from this group (pass resolved fabric_name)
-                devices = self._parse_devices_from_group(
-                    group_name, group_data, host_vars, global_vars, fabric_name
-                )
-
-                # Apply custom configurations to all devices
-                for i, device in enumerate(devices):
-                    device = self._apply_custom_platform_settings(device, group_vars)
-                    device = self._apply_custom_structured_configuration(device, group_vars)
-                    devices[i] = device
-
-                devices_by_fabric[fabric_name].extend(devices)
-
-        # Also parse devices directly from host_vars for Ansible-style inventories
-        # (hosts defined in inventory.yml with ansible_host, and structured configs in host_vars/)
-        for hostname, hvars in host_vars.items():
-            # Skip if this host was already parsed from AVD topology
-            already_parsed = any(
-                hostname in [d.hostname for d in fabric_devices]
-                for fabric_devices in devices_by_fabric.values()
-            )
-            if already_parsed:
-                continue
-
-            # Check if this is a network device (has typical EOS structured config keys)
-            # Exclude CloudVision servers and other management hosts
-            network_config_keys = {
-                "router_bgp", "static_routes", "vlans", "interfaces",
-                "ethernet_interfaces", "port_channel_interfaces",
-                "vlan_interfaces", "loopback_interfaces"
-            }
-            has_network_config = any(key in hvars for key in network_config_keys)
-
-            # Exclude hosts that are clearly not network devices
-            is_cv_server = hvars.get("cv_collection") is not None or "cv_" in hostname
-
-            is_network_device = (
-                has_network_config
-                and not is_cv_server
-                and ("ansible_host" in hvars or "mgmt_ip" in hvars)
-            )
-
-            if is_network_device:
-                # Determine fabric
-                fabric_name = hvars.get("fabric_name")
-                if not fabric_name:
-                    # Try to find from group_vars
-                    for group_data in group_vars.values():
-                        if "fabric_name" in group_data:
-                            fabric_name = group_data["fabric_name"]
-                            break
-                if not fabric_name:
-                    fabric_name = global_vars.get("fabric_name", "DEFAULT")
-
-                if fabric_name not in devices_by_fabric:
-                    devices_by_fabric[fabric_name] = []
-
-                # Create device from host_vars
-                device = self._parse_device_from_host_vars(
-                    hostname, hvars, global_vars, fabric_name
-                )
-                if device:
-                    # Apply custom configurations
-                    device = self._apply_custom_platform_settings(device, group_vars)
-                    device = self._apply_custom_structured_configuration(device, group_vars)
-                    devices_by_fabric[fabric_name].append(device)
-                    self.logger.debug(
-                        "Parsed device %s from host_vars (Ansible-style inventory)",
-                        hostname
-                    )
+        # Parse devices from host_vars for Ansible-style inventories
+        self._parse_devices_from_host_vars(devices_by_fabric, global_vars, group_vars, host_vars)
 
         # Create fabric definitions
+        return self._create_fabric_definitions(devices_by_fabric, group_vars)
+
+    def _parse_devices_from_groups(
+        self,
+        devices_by_fabric: Dict[str, List[DeviceDefinition]],
+        global_vars: Dict[str, Any],
+        group_vars: Dict[str, Dict[str, Any]],
+        host_vars: Dict[str, Dict[str, Any]],
+    ) -> None:
+        """Parse devices from group variables."""
+        for group_name, group_data in group_vars.items():
+            if not self._is_device_topology_group(group_data):
+                continue
+
+            fabric_name = self._resolve_fabric_name(group_data, group_vars, global_vars)
+
+            if fabric_name not in devices_by_fabric:
+                devices_by_fabric[fabric_name] = []
+
+            # Parse devices from this group
+            devices = self._parse_devices_from_group(
+                group_name, group_data, host_vars, global_vars, fabric_name
+            )
+
+            # Apply custom configurations to all devices
+            devices = self._apply_custom_configurations(devices, group_vars)
+            devices_by_fabric[fabric_name].extend(devices)
+
+    def _parse_devices_from_host_vars(
+        self,
+        devices_by_fabric: Dict[str, List[DeviceDefinition]],
+        global_vars: Dict[str, Any],
+        group_vars: Dict[str, Dict[str, Any]],
+        host_vars: Dict[str, Dict[str, Any]],
+    ) -> None:
+        """Parse devices from host_vars for Ansible-style inventories."""
+        for hostname, hvars in host_vars.items():
+            if self._is_device_already_parsed(hostname, devices_by_fabric):
+                continue
+
+            if not self._is_network_device_from_host_vars(hostname, hvars):
+                continue
+
+            fabric_name = self._resolve_fabric_name(hvars, group_vars, global_vars)
+
+            if fabric_name not in devices_by_fabric:
+                devices_by_fabric[fabric_name] = []
+
+            device = self._parse_device_from_host_vars(hostname, hvars, global_vars, fabric_name)
+            if device:
+                device = self._apply_custom_platform_settings(device, group_vars)
+                device = self._apply_custom_structured_configuration(device, group_vars)
+                devices_by_fabric[fabric_name].append(device)
+                self.logger.debug("Parsed device %s from host_vars (Ansible-style inventory)", hostname)
+
+    def _resolve_fabric_name(
+        self,
+        data: Dict[str, Any],
+        group_vars: Dict[str, Dict[str, Any]],
+        global_vars: Dict[str, Any]
+    ) -> str:
+        """Resolve fabric name from data sources."""
+        fabric_name = data.get("fabric_name")
+        if not fabric_name:
+            # Search all group_vars for fabric_name
+            for other_group_data in group_vars.values():
+                if "fabric_name" in other_group_data:
+                    fabric_name = other_group_data["fabric_name"]
+                    break
+        if not fabric_name:
+            fabric_name = global_vars.get("fabric_name", "DEFAULT")
+        return fabric_name
+
+    def _apply_custom_configurations(
+        self, devices: List[DeviceDefinition], group_vars: Dict[str, Dict[str, Any]]
+    ) -> List[DeviceDefinition]:
+        """Apply custom configurations to all devices."""
+        for i, device in enumerate(devices):
+            device = self._apply_custom_platform_settings(device, group_vars)
+            device = self._apply_custom_structured_configuration(device, group_vars)
+            devices[i] = device
+        return devices
+
+    def _is_device_already_parsed(
+        self, hostname: str, devices_by_fabric: Dict[str, List[DeviceDefinition]]
+    ) -> bool:
+        """Check if device was already parsed from AVD topology."""
+        return any(
+            hostname in [d.hostname for d in fabric_devices]
+            for fabric_devices in devices_by_fabric.values()
+        )
+
+    def _is_network_device_from_host_vars(self, hostname: str, hvars: Dict[str, Any]) -> bool:
+        """Check if host_vars represent a network device."""
+        network_config_keys = {
+            "router_bgp", "static_routes", "vlans", "interfaces",
+            "ethernet_interfaces", "port_channel_interfaces",
+            "vlan_interfaces", "loopback_interfaces"
+        }
+        has_network_config = any(key in hvars for key in network_config_keys)
+        is_cv_server = hvars.get("cv_collection") is not None or "cv_" in hostname
+
+        return (
+            has_network_config
+            and not is_cv_server
+            and ("ansible_host" in hvars or "mgmt_ip" in hvars)
+        )
+
+    def _create_fabric_definitions(
+        self,
+        devices_by_fabric: Dict[str, List[DeviceDefinition]],
+        group_vars: Dict[str, Dict[str, Any]]
+    ) -> List[FabricDefinition]:
+        """Create fabric definitions from devices."""
+        fabrics = []
         for fabric_name, devices in devices_by_fabric.items():
             fabric = self._create_fabric_definition(fabric_name, devices, group_vars)
             fabrics.append(fabric)
-
         return fabrics
 
     def _is_device_topology_group(self, group_data: Dict[str, Any]) -> bool:
@@ -861,82 +887,90 @@ class InventoryLoader:
         List[DeviceDefinition]
             List of parsed devices
         """
-        devices: List[DeviceDefinition] = []
-        # fabric_name is now passed as parameter, no need to resolve again
+        device_type = self._normalize_device_type(group_data.get("type", group_name.lower()))
 
-        # Determine device type from group data and normalize it
-        device_type = self._normalize_device_type(
-            group_data.get("type", group_name.lower())
-        )
+        # Parse topology-specific keys
+        devices = self._parse_topology_keys(group_data, fabric_name, host_vars)
 
-        # Parse from different AVD structures
-        # Use independent 'if' statements to handle multiple topology types in same group
-        # (e.g., both "spine" and "l3leaf" in ATD_FABRIC.yml)
-
-        # Support both "spine" and "l3spine" keys
-        if "spine" in group_data:
-            devices.extend(
-                self._parse_node_groups(
-                    group_data["spine"],
-                    self._normalize_device_type("spine"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-        if "l3spine" in group_data:
-            devices.extend(
-                self._parse_node_groups(
-                    group_data["l3spine"],
-                    self._normalize_device_type("l3spine"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-        if "l3leaf" in group_data:
-            devices.extend(
-                self._parse_node_groups(
-                    group_data["l3leaf"],
-                    self._normalize_device_type("l3leaf"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-        if "l2leaf" in group_data:
-            devices.extend(
-                self._parse_node_groups(
-                    group_data["l2leaf"],
-                    self._normalize_device_type("l2leaf"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-        if "leaf" in group_data and "l3leaf" not in group_data and "l2leaf" not in group_data:
-            # Generic "leaf" key (but not if l3leaf/l2leaf already processed)
-            devices.extend(
-                self._parse_node_groups(
-                    group_data["leaf"],
-                    self._normalize_device_type("leaf"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-
-        # Fallback: if no specific topology keys found, try generic structures
+        # Fallback to generic structures if no devices found
         if not devices:
-            if "node_groups" in group_data:
-                devices.extend(
-                    self._parse_node_groups(
-                        group_data, device_type, fabric_name, host_vars
-                    )
-                )
-            elif "nodes" in group_data:
-                # Direct node list
-                for node_data in group_data.get("nodes", []):
-                    device = self._parse_device_node(
-                        node_data, device_type, fabric_name, host_vars
-                    )
-                    if device:
-                        devices.append(device)
+            devices = self._parse_generic_structures(group_data, device_type, fabric_name, host_vars)
+
+        return devices
+
+    def _parse_topology_keys(
+        self,
+        group_data: Dict[str, Any],
+        fabric_name: str,
+        host_vars: Dict[str, Dict[str, Any]]
+    ) -> List[DeviceDefinition]:
+        """Parse devices from topology-specific keys."""
+        devices: List[DeviceDefinition] = []
+
+        # Define topology keys and their corresponding device types
+        topology_mappings = [
+            ("spine", "spine"),
+            ("l3spine", "l3spine"),
+            ("l3leaf", "l3leaf"),
+            ("l2leaf", "l2leaf"),
+        ]
+
+        # Process each topology type
+        for key, device_type in topology_mappings:
+            if key in group_data:
+                devices.extend(self._parse_node_groups(
+                    group_data[key],
+                    self._normalize_device_type(device_type),
+                    fabric_name,
+                    host_vars
+                ))
+
+        # Handle generic "leaf" key (only if specific leaf types not processed)
+        if ("leaf" in group_data and
+                "l3leaf" not in group_data and
+                "l2leaf" not in group_data):
+            devices.extend(self._parse_node_groups(
+                group_data["leaf"],
+                self._normalize_device_type("leaf"),
+                fabric_name,
+                host_vars
+            ))
+
+        return devices
+
+    def _parse_generic_structures(
+        self,
+        group_data: Dict[str, Any],
+        device_type: str,
+        fabric_name: str,
+        host_vars: Dict[str, Dict[str, Any]]
+    ) -> List[DeviceDefinition]:
+        """Parse devices from generic structures when no topology keys found."""
+        devices: List[DeviceDefinition] = []
+
+        if "node_groups" in group_data:
+            devices.extend(self._parse_node_groups(group_data, device_type, fabric_name, host_vars))
+        elif "nodes" in group_data:
+            devices.extend(self._parse_direct_nodes(
+                group_data.get("nodes", []), device_type, fabric_name, host_vars
+            ))
+
+        return devices
+
+    def _parse_direct_nodes(
+        self,
+        nodes_data: List[Dict[str, Any]],
+        device_type: str,
+        fabric_name: str,
+        host_vars: Dict[str, Dict[str, Any]]
+    ) -> List[DeviceDefinition]:
+        """Parse devices from direct node list."""
+        devices: List[DeviceDefinition] = []
+
+        for node_data in nodes_data:
+            device = self._parse_device_node(node_data, device_type, fabric_name, host_vars)
+            if device:
+                devices.append(device)
 
         return devices
 

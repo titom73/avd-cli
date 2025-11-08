@@ -29,7 +29,7 @@ theme:
   icon:
     repo: fontawesome/brands/github
     logo: fontawesome/solid/terminal
-  favicon: assets/favicon.ico
+  favicon: imgs/avd-cli-favicon.jpg
   font:
     code: Fira Mono
   language: en

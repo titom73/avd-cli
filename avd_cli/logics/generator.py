@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from rich.console import Console
 
 from avd_cli.constants import (DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR,
-                               DEFAULT_TESTS_DIR)
+                               DEFAULT_TESTS_DIR, normalize_workflow)
 from avd_cli.exceptions import (ConfigurationGenerationError,
                                 DocumentationGenerationError,
                                 TestGenerationError)
@@ -38,15 +38,15 @@ class ConfigurationGenerator:
     >>> print(f"Generated {len(configs)} configurations")
     """
 
-    def __init__(self, workflow: str = "full") -> None:
+    def __init__(self, workflow: str = "eos-design") -> None:
         """Initialize the configuration generator.
 
         Parameters
         ----------
         workflow : str, optional
-            Workflow type ('full' or 'config-only'), by default "full"
+            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
         """
-        self.workflow = workflow
+        self.workflow = normalize_workflow(workflow)
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.pyavd: Any = None  # Will be initialized when needed
 
@@ -70,7 +70,11 @@ class ConfigurationGenerator:
         """Filter devices by groups if specified."""
         devices = inventory.get_all_devices()
         if limit_to_groups:
-            devices = [d for d in devices if d.fabric in limit_to_groups]
+            # Filter by fabric name OR by any group membership
+            devices = [
+                d for d in devices
+                if d.fabric in limit_to_groups or any(g in limit_to_groups for g in d.groups)
+            ]
             self.logger.info("Limited to %d devices in groups: %s", len(devices), limit_to_groups)
         return devices
 
@@ -78,7 +82,7 @@ class ConfigurationGenerator:
         """Generate structured configurations based on workflow."""
         structured_configs: Dict[str, Dict[str, Any]] = {}
 
-        if self.workflow == "full":
+        if self.workflow == "eos-design":
             # Validate inputs first
             self.logger.info("Validating inputs against eos_designs schema")
             for hostname, inputs in all_inputs.items():
@@ -103,8 +107,8 @@ class ConfigurationGenerator:
                 )
                 structured_configs[hostname] = structured_config
         else:
-            # Config-only workflow
-            self.logger.info("Using config-only workflow (eos_cli_config_gen only)")
+            # Config-only workflow (cli-config)
+            self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
             for hostname, inputs in all_inputs.items():
                 structured_configs[hostname] = inputs
 
@@ -292,6 +296,31 @@ class ConfigurationGenerator:
 
         return all_inputs
 
+    def _convert_inventory_to_pyavd_inputs(
+        self, inventory: InventoryData, devices: List[DeviceDefinition]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Build pyavd inputs from resolved inventory data (legacy wrapper).
+
+        This is a backward-compatibility wrapper for the renamed method.
+
+        Parameters
+        ----------
+        inventory : InventoryData
+            Complete inventory data with resolved variables
+        devices : List[DeviceDefinition]
+            List of devices to build inputs for
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            Dictionary mapping hostnames to their complete AVD variables
+
+        See Also
+        --------
+        _build_pyavd_inputs_from_inventory : New method name
+        """
+        return self._build_pyavd_inputs_from_inventory(inventory, devices)
+
     def _find_node_in_groups(self, node_groups: List[Any], hostname: str) -> Union[int, None]:
         """Search through node groups for a hostname and return its ID."""
         for node_group in node_groups:
@@ -440,62 +469,6 @@ class ConfigurationGenerator:
 
         return result
 
-    def _convert_inventory_to_pyavd_inputs(
-        self, inventory: InventoryData, devices: List[DeviceDefinition]
-    ) -> Dict[str, Dict[str, Any]]:
-        """Convert avd-cli inventory to pyavd input format.
-
-        Parameters
-        ----------
-        inventory : InventoryData
-            Complete inventory data
-        devices : List[DeviceDefinition]
-            List of devices to convert
-
-        Returns
-        -------
-        Dict[str, Dict[str, Any]]
-            Dictionary mapping hostnames to their pyavd input variables
-        """
-        all_inputs: Dict[str, Dict[str, Any]] = {}
-
-        for device in devices:
-            # Start with device's custom_variables and structured_config
-            device_vars = deepcopy(device.custom_variables)
-
-            # Add required device fields
-            device_vars.update(
-                {
-                    "hostname": device.hostname,
-                    "platform": device.platform,
-                    "mgmt_ip": str(device.mgmt_ip),
-                    "type": device.device_type,  # 'type' is the AVD key for device_type
-                }
-            )
-
-            # Add optional fields if present
-            if device.mgmt_gateway:
-                device_vars["mgmt_gateway"] = str(device.mgmt_gateway)
-            if device.serial_number:
-                device_vars["serial_number"] = device.serial_number
-            if device.system_mac_address:
-                device_vars["system_mac_address"] = device.system_mac_address
-            if device.pod:
-                device_vars["pod"] = device.pod
-            if device.rack:
-                device_vars["rack"] = device.rack
-
-            # Add fabric information
-            device_vars["fabric_name"] = device.fabric
-
-            # Merge structured_config if present
-            if device.structured_config:
-                device_vars["structured_config"] = deepcopy(device.structured_config)
-
-            all_inputs[device.hostname] = device_vars
-
-        return all_inputs
-
 
 class DocumentationGenerator:
     """Generator for device documentation.
@@ -507,6 +480,28 @@ class DocumentationGenerator:
     def __init__(self) -> None:
         """Initialize the documentation generator."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.pyavd: Any = None
+
+    def _import_pyavd(self) -> Any:
+        """Import pyavd library.
+
+        Returns
+        -------
+        Any
+            pyavd module
+
+        Raises
+        ------
+        DocumentationGenerationError
+            If pyavd is not installed
+        """
+        try:
+            import pyavd
+            return pyavd
+        except ImportError as e:
+            raise DocumentationGenerationError(
+                "pyavd library not installed. Install with: pip install pyavd"
+            ) from e
 
     def generate(
         self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
@@ -542,12 +537,7 @@ class DocumentationGenerator:
 
         try:
             # Import pyavd
-            try:
-                import pyavd
-            except ImportError as e:
-                raise DocumentationGenerationError(
-                    "pyavd library not installed. Install with: pip install pyavd"
-                ) from e
+            pyavd = self._import_pyavd()
 
             devices = inventory.get_all_devices()
 
@@ -558,8 +548,8 @@ class DocumentationGenerator:
             # Reuse the conversion logic from ConfigurationGenerator
             from avd_cli.logics.generator import ConfigurationGenerator
 
-            config_gen = ConfigurationGenerator(workflow="full")
-            all_inputs = config_gen._convert_inventory_to_pyavd_inputs(inventory, devices)
+            config_gen = ConfigurationGenerator(workflow="eos-design")
+            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
@@ -677,7 +667,7 @@ class TestGenerator:
 def generate_all(
     inventory: InventoryData,
     output_path: Path,
-    workflow: str = "full",
+    workflow: str = "eos-design",
     limit_to_groups: Optional[List[str]] = None,
 ) -> Tuple[List[Path], List[Path], List[Path]]:
     """Generate all outputs: configurations, documentation, and tests.
@@ -689,7 +679,7 @@ def generate_all(
     output_path : Path
         Output directory for all generated files
     workflow : str, optional
-        Workflow type, by default "full"
+        Workflow type, by default "eos-design"
     limit_to_groups : Optional[List[str]], optional
         Groups to limit generation to, by default None
 
@@ -698,7 +688,7 @@ def generate_all(
     Tuple[List[Path], List[Path], List[Path]]
         Tuple of (config_files, doc_files, test_files)
     """
-    config_gen = ConfigurationGenerator(workflow=workflow)
+    config_gen = ConfigurationGenerator(workflow=normalize_workflow(workflow))
     doc_gen = DocumentationGenerator()
     test_gen = TestGenerator()
 

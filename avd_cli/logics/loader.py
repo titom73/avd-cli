@@ -730,15 +730,18 @@ class InventoryLoader:
                 if fabric_name not in devices_by_fabric:
                     devices_by_fabric[fabric_name] = []
 
-                # Parse devices from this group (pass resolved fabric_name)
+                # Parse devices from this group (pass resolved fabric_name and group_name)
                 devices = self._parse_devices_from_group(
                     group_name, group_data, host_vars, global_vars, fabric_name
                 )
 
-                # Apply custom configurations to all devices
+                # Apply custom configurations and add group membership to all devices
                 for i, device in enumerate(devices):
                     device = self._apply_custom_platform_settings(device, group_vars)
                     device = self._apply_custom_structured_configuration(device, group_vars)
+                    # Add this group to the device's groups list if not already present
+                    if group_name not in device.groups:
+                        device.groups.append(group_name)
                     devices[i] = device
 
                 devices_by_fabric[fabric_name].extend(devices)
@@ -812,38 +815,119 @@ class InventoryLoader:
         )
 
         # Parse from different AVD structures
+        # NOTE: Use separate if statements (not elif) because a single file
+        # can contain multiple topology types (e.g., spine: AND l3leaf:)
+        if "spine" in group_data:
+            # Parse spine topology
+            spine_data = group_data["spine"]
+            devices.extend(
+                self._parse_topology_section(
+                    spine_data,
+                    "spine",
+                    fabric_name,
+                    host_vars
+                )
+            )
+
         if "l3spine" in group_data:
             devices.extend(
-                self._parse_node_groups(
+                self._parse_topology_section(
                     group_data["l3spine"],
                     self._normalize_device_type("l3spine"),
                     fabric_name,
                     host_vars
                 )
             )
-        elif "l2leaf" in group_data:
+
+        if "leaf" in group_data:
+            # Parse leaf topology
+            leaf_data = group_data["leaf"]
             devices.extend(
-                self._parse_node_groups(
+                self._parse_topology_section(
+                    leaf_data,
+                    "leaf",
+                    fabric_name,
+                    host_vars
+                )
+            )
+
+        if "l3leaf" in group_data:
+            devices.extend(
+                self._parse_topology_section(
+                    group_data["l3leaf"],
+                    self._normalize_device_type("l3leaf"),
+                    fabric_name,
+                    host_vars
+                )
+            )
+
+        if "l2leaf" in group_data:
+            devices.extend(
+                self._parse_topology_section(
                     group_data["l2leaf"],
                     self._normalize_device_type("l2leaf"),
                     fabric_name,
                     host_vars
                 )
             )
-        elif "node_groups" in group_data:
+
+        # Legacy support: if no specific topology keys, check for generic structures
+        if not devices:
+            if "node_groups" in group_data:
+                devices.extend(
+                    self._parse_node_groups(
+                        group_data, device_type, fabric_name, host_vars
+                    )
+                )
+            elif "nodes" in group_data:
+                # Direct node list
+                for node_data in group_data.get("nodes", []):
+                    device = self._parse_device_node(
+                        node_data, device_type, fabric_name, host_vars
+                    )
+                    if device:
+                        devices.append(device)
+
+        return devices
+
+    def _parse_topology_section(
+        self,
+        topology_data: Dict[str, Any],
+        device_type: str,
+        fabric_name: str,
+        host_vars: Dict[str, Dict[str, Any]],
+    ) -> List[DeviceDefinition]:
+        """Parse device nodes from a topology section (spine, leaf, etc.).
+
+        This method handles parsing of topology sections that can contain either:
+        - node_groups: list of node groups
+        - nodes: direct list of nodes
+
+        Parameters
+        ----------
+        topology_data : Dict[str, Any]
+            Topology data (e.g., spine dict or leaf dict)
+        device_type : str
+            Device type
+        fabric_name : str
+            Fabric name
+        host_vars : Dict[str, Dict[str, Any]]
+            Host variables
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            List of parsed devices
+        """
+        devices: List[DeviceDefinition] = []
+
+        # Check if this section has node_groups or direct nodes
+        if "node_groups" in topology_data or "nodes" in topology_data:
             devices.extend(
                 self._parse_node_groups(
-                    group_data, device_type, fabric_name, host_vars
+                    topology_data, device_type, fabric_name, host_vars
                 )
             )
-        elif "nodes" in group_data:
-            # Direct node list
-            for node_data in group_data.get("nodes", []):
-                device = self._parse_device_node(
-                    node_data, device_type, fabric_name, host_vars
-                )
-                if device:
-                    devices.append(device)
 
         return devices
 
@@ -877,6 +961,20 @@ class InventoryLoader:
         # Get topology-level defaults (e.g., l3spine.defaults or l2leaf.defaults)
         topology_defaults = topology_data.get("defaults", {})
 
+        # Handle direct nodes list (e.g., spine.nodes)
+        if "nodes" in topology_data and "node_groups" not in topology_data:
+            for node_data in topology_data.get("nodes", []):
+                # Merge topology defaults with node data
+                merged_data = self._deep_merge(topology_defaults, node_data)
+
+                device = self._parse_device_node(
+                    merged_data, device_type, fabric_name, host_vars
+                )
+                if device:
+                    devices.append(device)
+            return devices
+
+        # Handle node_groups structure (e.g., l3leaf.node_groups)
         node_groups = topology_data.get("node_groups", [])
 
         for node_group in node_groups:

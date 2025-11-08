@@ -10,13 +10,15 @@ documentation, and test files from AVD inventory data.
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from rich.console import Console
 
-from avd_cli.constants import DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR, DEFAULT_TESTS_DIR
-from avd_cli.exceptions import ConfigurationGenerationError, DocumentationGenerationError, TestGenerationError
-from avd_cli.logics.anta_generator import AntaCatalogGenerator
+from avd_cli.constants import (DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR,
+                               DEFAULT_TESTS_DIR)
+from avd_cli.exceptions import (ConfigurationGenerationError,
+                                DocumentationGenerationError,
+                                TestGenerationError)
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
 
 logger = logging.getLogger(__name__)
@@ -36,21 +38,107 @@ class ConfigurationGenerator:
     >>> print(f"Generated {len(configs)} configurations")
     """
 
-    def __init__(self, workflow: str = "eos-design") -> None:
+    def __init__(self, workflow: str = "full") -> None:
         """Initialize the configuration generator.
 
         Parameters
         ----------
         workflow : str, optional
-            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
-            Legacy values 'full' and 'config-only' are also supported for backward compatibility.
+            Workflow type ('full' or 'config-only'), by default "full"
         """
-        from avd_cli.constants import normalize_workflow
-
-        self.workflow = normalize_workflow(workflow)
+        self.workflow = workflow
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.pyavd: Any = None  # Will be initialized when needed
 
-    def generate(  # noqa: C901
+    def _setup_generation(self, output_path: Path) -> Path:
+        """Setup directories and import pyavd for generation."""
+        # Import pyavd
+        try:
+            import pyavd
+            self.pyavd = pyavd
+        except ImportError as e:
+            raise ConfigurationGenerationError(
+                "pyavd library not installed. Install with: pip install pyavd"
+            ) from e
+
+        # Create output directory
+        configs_dir = output_path / DEFAULT_CONFIGS_DIR
+        configs_dir.mkdir(parents=True, exist_ok=True)
+        return configs_dir
+
+    def _filter_devices(self, inventory: InventoryData, limit_to_groups: Optional[List[str]]) -> List[DeviceDefinition]:
+        """Filter devices by groups if specified."""
+        devices = inventory.get_all_devices()
+        if limit_to_groups:
+            devices = [d for d in devices if d.fabric in limit_to_groups]
+            self.logger.info("Limited to %d devices in groups: %s", len(devices), limit_to_groups)
+        return devices
+
+    def _generate_structured_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Generate structured configurations based on workflow."""
+        structured_configs: Dict[str, Dict[str, Any]] = {}
+
+        if self.workflow == "full":
+            # Validate inputs first
+            self.logger.info("Validating inputs against eos_designs schema")
+            for hostname, inputs in all_inputs.items():
+                validation_result = self.pyavd.validate_inputs(inputs)
+                if validation_result.failed:
+                    errors = "\n".join(str(e) for e in validation_result.validation_errors)
+                    raise ConfigurationGenerationError(
+                        f"Input validation failed for {hostname}:\n{errors}"
+                    )
+                if validation_result.deprecation_warnings:
+                    for warning in validation_result.deprecation_warnings:
+                        self.logger.warning("Deprecation warning for %s: %s", hostname, warning)
+
+            # Generate AVD facts and structured configs
+            self.logger.info("Generating AVD facts for %d devices", len(all_inputs))
+            avd_facts = self.pyavd.get_avd_facts(all_inputs)
+
+            self.logger.info("Generating structured configurations")
+            for hostname, inputs in all_inputs.items():
+                structured_config = self.pyavd.get_device_structured_config(
+                    hostname=hostname, inputs=inputs, avd_facts=avd_facts
+                )
+                structured_configs[hostname] = structured_config
+        else:
+            # Config-only workflow
+            self.logger.info("Using config-only workflow (eos_cli_config_gen only)")
+            for hostname, inputs in all_inputs.items():
+                structured_configs[hostname] = inputs
+
+        return structured_configs
+
+    def _write_config_files(self, structured_configs: Dict[str, Dict[str, Any]], configs_dir: Path) -> List[Path]:
+        """Write configuration files to disk."""
+        generated_files: List[Path] = []
+
+        # Validate structured configs
+        self.logger.info("Validating structured configurations")
+        for hostname, structured_config in structured_configs.items():
+            validation_result = self.pyavd.validate_structured_config(structured_config)
+            if validation_result.failed:
+                errors = "\n".join(str(e) for e in validation_result.validation_errors)
+                raise ConfigurationGenerationError(
+                    f"Structured config validation failed for {hostname}:\n{errors}"
+                )
+
+        # Generate EOS CLI configurations
+        self.logger.info("Generating EOS CLI configurations")
+        for hostname, structured_config in structured_configs.items():
+            config_file = configs_dir / f"{hostname}.cfg"
+            config_text = self.pyavd.get_device_config(structured_config)
+
+            with open(config_file, "w", encoding="utf-8") as f:
+                f.write(config_text)
+
+            generated_files.append(config_file)
+            self.logger.debug("Generated config: %s", config_file)
+
+        return generated_files
+
+    def generate(
         self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
     ) -> List[Path]:
         """Generate device configurations.
@@ -76,87 +164,21 @@ class ConfigurationGenerator:
         """
         self.logger.info("Generating configurations with workflow: %s", self.workflow)
 
-        # Import pyavd
-        try:
-            import pyavd
-        except ImportError as e:
-            raise ConfigurationGenerationError("pyavd library not installed. Install with: pip install pyavd") from e
-
-        # Create output directory
-        configs_dir = output_path / DEFAULT_CONFIGS_DIR
-        configs_dir.mkdir(parents=True, exist_ok=True)
-
-        generated_files: List[Path] = []
+        configs_dir = self._setup_generation(output_path)
 
         try:
-            devices = inventory.get_all_devices()
+            devices = self._filter_devices(inventory, limit_to_groups)
 
-            # Filter by groups if specified
-            if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
-                self.logger.info("Limited to %d devices in groups: %s", len(devices), limit_to_groups)
-
-            # Build pyavd inputs from inventory (already resolved by InventoryLoader)
-            # This reuses the Jinja2 template resolution from InventoryLoader
+            # Build pyavd inputs from inventory
             self.logger.info("Building pyavd inputs from resolved inventory")
             all_inputs = self._build_pyavd_inputs_from_inventory(inventory, devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
-                return generated_files
+                return []
 
-            # Step 1: Validate inputs (eos_designs schema)
-            if self.workflow == "eos-design":
-                self.logger.info("Validating inputs against eos_designs schema")
-                for hostname, inputs in all_inputs.items():
-                    validation_result = pyavd.validate_inputs(inputs)
-                    if validation_result.failed:
-                        errors = "\n".join(str(e) for e in validation_result.validation_errors)
-                        raise ConfigurationGenerationError(f"Input validation failed for {hostname}:\n{errors}")
-                    if validation_result.deprecation_warnings:
-                        for warning in validation_result.deprecation_warnings:
-                            self.logger.warning("Deprecation warning for %s: %s", hostname, warning)
-
-                # Step 2: Generate AVD facts (eos_design workflow)
-                self.logger.info("Generating AVD facts for %d devices", len(all_inputs))
-                avd_facts = pyavd.get_avd_facts(all_inputs)
-
-                # Step 3: Generate structured configs for each device
-                self.logger.info("Generating structured configurations")
-                structured_configs: Dict[str, Dict[str, Any]] = {}
-                for hostname, inputs in all_inputs.items():
-                    structured_config = pyavd.get_device_structured_config(
-                        hostname=hostname, inputs=inputs, avd_facts=avd_facts
-                    )
-                    structured_configs[hostname] = structured_config
-
-            else:  # workflow == "cli-config"
-                # Skip eos_design, only use eos_cli_config_gen
-                self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
-                structured_configs = {}
-                for hostname, inputs in all_inputs.items():
-                    # For cli-config, inputs should already be structured_config
-                    structured_configs[hostname] = inputs
-
-            # Step 4: Validate structured configs
-            self.logger.info("Validating structured configurations")
-            for hostname, structured_config in structured_configs.items():
-                validation_result = pyavd.validate_structured_config(structured_config)
-                if validation_result.failed:
-                    errors = "\n".join(str(e) for e in validation_result.validation_errors)
-                    raise ConfigurationGenerationError(f"Structured config validation failed for {hostname}:\n{errors}")
-
-            # Step 5: Generate EOS CLI configurations
-            self.logger.info("Generating EOS CLI configurations")
-            for hostname, structured_config in structured_configs.items():
-                config_file = configs_dir / f"{hostname}.cfg"
-                config_text = pyavd.get_device_config(structured_config)
-
-                with open(config_file, "w", encoding="utf-8") as f:
-                    f.write(config_text)
-
-                generated_files.append(config_file)
-                self.logger.debug("Generated config: %s", config_file)
+            structured_configs = self._generate_structured_configs(all_inputs)
+            generated_files = self._write_config_files(structured_configs, configs_dir)
 
             self.logger.info("Generated %d configuration files", len(generated_files))
             return generated_files
@@ -205,9 +227,8 @@ class ConfigurationGenerator:
     ) -> Dict[str, Dict[str, Any]]:
         """Build pyavd inputs from resolved inventory data.
 
-        Following Ansible's model, each device gets the complete inventory structure
-        (global_vars + all group_vars + host_vars) so pyavd can extract device-specific
-        data from topology structures like l2leaf.node_groups[].nodes[].
+        This reuses the InventoryLoader's variable resolution (including Jinja2 templates)
+        and builds the input structure expected by pyavd.
 
         Parameters
         ----------
@@ -221,79 +242,106 @@ class ConfigurationGenerator:
         Dict[str, Dict[str, Any]]
             Dictionary mapping hostnames to their complete AVD variables
         """
-        # Build the base structure: global_vars + all group_vars merged
-        # This gives us the complete topology (l2leaf, l3leaf, spine structures, etc.)
-        base_structure: Dict[str, Any] = deepcopy(inventory.global_vars)
-
-        for group_name in sorted(inventory.group_vars.keys()):
-            base_structure = self._deep_merge(base_structure, inventory.group_vars[group_name])
-
-        # Convert numeric strings (from Jinja2) to proper numbers
-        base_structure = self._convert_numeric_strings(base_structure)
-
-        # Each device gets the SAME base structure + its own host_vars
         all_inputs: Dict[str, Dict[str, Any]] = {}
 
-        # Remove 'type' from base_structure (it will be set per-device)
-        base_structure.pop("type", None)
-
         for device in devices:
-            device_input = deepcopy(base_structure)
+            device_vars: Dict[str, Any] = {}
 
-            # Set hostname (required by pyavd)
-            device_input["hostname"] = device.hostname
+            # Start with global variables
+            device_vars = deepcopy(inventory.global_vars)
 
-            # For cli-config workflow, use device.device_type directly (already in device definition)
-            # For eos-design workflow, determine type from topology structure
-            if self.workflow == "cli-config":
-                device_input["type"] = device.device_type
-                self.logger.debug(
-                    "Using device type '%s' for %s (from device definition)", device.device_type, device.hostname
-                )
-            else:
-                # Determine device type by finding which topology structure contains this device
-                device_type = self._determine_device_type(base_structure, device.hostname)
-                if device_type:
-                    device_input["type"] = device_type
-                    self.logger.debug("Determined type '%s' for device %s", device_type, device.hostname)
-                else:
-                    self.logger.warning("Could not determine type for device %s", device.hostname)
+            # Merge ALL group variables (already resolved by InventoryLoader)
+            # We merge all groups because we don't track the exact group hierarchy
+            for group_name in sorted(inventory.group_vars.keys()):
+                device_vars = self._deep_merge(device_vars, inventory.group_vars[group_name])
 
-            # Merge host-specific variables last (they override everything)
+            # Merge host-specific variables (highest priority, already resolved)
             if device.hostname in inventory.host_vars:
-                device_input = self._deep_merge(device_input, inventory.host_vars[device.hostname])
+                device_vars = self._deep_merge(device_vars, inventory.host_vars[device.hostname])
 
-            all_inputs[device.hostname] = device_input
+            # Convert numeric strings to actual numbers (for pyavd schema validation)
+            # This handles Jinja2 templates that resolve to string numbers
+            device_vars = self._convert_numeric_strings(device_vars)
 
-            self.logger.debug("Built input for %s with %d top-level keys", device.hostname, len(device_input))
+            # Ensure hostname is present (required by pyavd)
+            device_vars.setdefault("hostname", device.hostname)
+
+            # Only set type if not already defined in variables
+            # AVD group_vars should define the correct type (l3leaf, l2leaf, spine, etc.)
+            if "type" not in device_vars:
+                self.logger.warning(
+                    "Device %s has no 'type' defined in AVD variables, using inventory type: %s",
+                    device.hostname,
+                    device.device_type,
+                )
+                device_vars["type"] = device.device_type
+
+            # Extract node ID from AVD topology structure (required by pyavd)
+            # The ID is nested in l2leaf/l3spine/spine/leaf node_groups
+            if "id" not in device_vars:
+                node_id = self._extract_node_id(device_vars, device.hostname)
+                if node_id is not None:
+                    device_vars["id"] = node_id
+                    self.logger.info("Extracted node ID %s for device %s", node_id, device.hostname)
+                else:
+                    self.logger.warning(
+                        "Device %s has no 'id' defined in AVD topology structure", device.hostname
+                    )
+
+            all_inputs[device.hostname] = device_vars
 
         return all_inputs
 
-    def _determine_device_type(self, data: Dict[str, Any], hostname: str) -> Optional[str]:  # noqa: C901
-        """Determine device type by finding which topology structure contains this device.
+    def _find_node_in_groups(self, node_groups: List[Any], hostname: str) -> Union[int, None]:
+        """Search through node groups for a hostname and return its ID."""
+        for node_group in node_groups:
+            if not isinstance(node_group, dict):
+                continue
 
-        AVD topology types: l2leaf, l3leaf, l3spine, spine, super_spine, etc.
+            nodes = node_group.get("nodes", [])
+            if not isinstance(nodes, list):
+                continue
+
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+
+                if node.get("name") == hostname:
+                    node_id = node.get("id")
+                    if node_id is not None:
+                        return self._validate_node_id(node_id, hostname)
+        return None
+
+    def _validate_node_id(self, node_id: Any, hostname: str) -> Union[int, None]:
+        """Validate and convert node ID to integer."""
+        try:
+            return int(node_id)
+        except (ValueError, TypeError):
+            self.logger.warning(
+                "Invalid node ID '%s' for device %s", node_id, hostname
+            )
+            return None
+
+    def _determine_device_type(self, device_vars: Dict[str, Any], hostname: str) -> Union[str, None]:
+        """Determine device type from AVD topology structure.
 
         Parameters
         ----------
-        data : Dict[str, Any]
-            Dictionary containing topology structures
+        device_vars : Dict[str, Any]
+            Device variables containing AVD topology structure
         hostname : str
-            Hostname to find
+            Hostname to find type for
 
         Returns
         -------
         str | None
-            Device type if found, None otherwise
+            Device type (spine, leaf, etc.) if found, None otherwise
         """
-        # Common AVD topology keys
-        topology_keys = ["l2leaf", "l3leaf", "l3spine", "spine", "super_spine", "leaf"]
+        # Look for common AVD topology keys
+        topology_keys = ["l2leaf", "l3spine", "spine", "leaf", "super_spine"]
 
         for topology_key in topology_keys:
-            if topology_key not in data:
-                continue
-
-            topology_data = data[topology_key]
+            topology_data = device_vars.get(topology_key)
             if not isinstance(topology_data, dict):
                 continue
 
@@ -315,11 +363,20 @@ class ConfigurationGenerator:
                         continue
 
                     if node.get("name") == hostname:
-                        return topology_key
+                        # Return the device type (topology_key)
+                        # Map l2leaf/l3spine to leaf/spine for consistency
+                        type_mapping = {
+                            "l2leaf": "leaf",
+                            "l3spine": "spine",
+                            "spine": "spine",
+                            "leaf": "leaf",
+                            "super_spine": "super_spine"
+                        }
+                        return type_mapping.get(topology_key, topology_key)
 
         return None
 
-    def _extract_node_id(self, device_vars: Dict[str, Any], hostname: str) -> Optional[int]:  # noqa: C901
+    def _extract_node_id(self, device_vars: Dict[str, Any], hostname: str) -> Union[int, None]:
         """Extract node ID from AVD topology structure.
 
         AVD stores node IDs in structures like:
@@ -344,10 +401,7 @@ class ConfigurationGenerator:
         topology_keys = ["l2leaf", "l3spine", "spine", "leaf", "super_spine"]
 
         for topology_key in topology_keys:
-            if topology_key not in device_vars:
-                continue
-
-            topology_data = device_vars[topology_key]
+            topology_data = device_vars.get(topology_key)
             if not isinstance(topology_data, dict):
                 continue
 
@@ -355,28 +409,9 @@ class ConfigurationGenerator:
             if not isinstance(node_groups, list):
                 continue
 
-            # Search through all node groups for matching hostname
-            for node_group in node_groups:
-                if not isinstance(node_group, dict):
-                    continue
-
-                nodes = node_group.get("nodes", [])
-                if not isinstance(nodes, list):
-                    continue
-
-                for node in nodes:
-                    if not isinstance(node, dict):
-                        continue
-
-                    if node.get("name") == hostname:
-                        node_id = node.get("id")
-                        if node_id is not None:
-                            # Ensure it's an integer
-                            try:
-                                return int(node_id)
-                            except (ValueError, TypeError):
-                                self.logger.warning("Invalid node ID '%s' for device %s", node_id, hostname)
-                                return None
+            result = self._find_node_in_groups(node_groups, hostname)
+            if result is not None:
+                return result
 
         return None
 
@@ -469,17 +504,8 @@ class DocumentationGenerator:
     data using py-avd library.
     """
 
-    def __init__(self, workflow: str = "eos-design") -> None:
-        """Initialize the documentation generator.
-
-        Parameters
-        ----------
-        workflow : str, optional
-            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
-        """
-        from avd_cli.constants import normalize_workflow
-
-        self.workflow = normalize_workflow(workflow)
+    def __init__(self) -> None:
+        """Initialize the documentation generator."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def generate(
@@ -506,111 +532,69 @@ class DocumentationGenerator:
         DocumentationGenerationError
             If generation fails
         """
-        self.logger.info("Generating documentation with workflow: %s", self.workflow)
+        self.logger.info("Generating documentation")
 
         # Create output directory
         docs_dir = output_path / DEFAULT_DOCS_DIR
         docs_dir.mkdir(parents=True, exist_ok=True)
 
+        generated_files: List[Path] = []
+
         try:
-            # Import and validate pyavd
-            pyavd: Any = self._import_pyavd()
+            # Import pyavd
+            try:
+                import pyavd
+            except ImportError as e:
+                raise DocumentationGenerationError(
+                    "pyavd library not installed. Install with: pip install pyavd"
+                ) from e
 
-            # Get and filter devices
-            devices = self._get_filtered_devices(inventory, limit_to_groups)
-            if not devices:
+            devices = inventory.get_all_devices()
+
+            # Filter by groups if specified
+            if limit_to_groups:
+                devices = [d for d in devices if d.fabric in limit_to_groups]
+
+            # Reuse the conversion logic from ConfigurationGenerator
+            from avd_cli.logics.generator import ConfigurationGenerator
+
+            config_gen = ConfigurationGenerator(workflow="full")
+            all_inputs = config_gen._convert_inventory_to_pyavd_inputs(inventory, devices)
+
+            if not all_inputs:
                 self.logger.warning("No devices to process")
-                return []
+                return generated_files
 
-            # Build structured configs
-            structured_configs = self._build_structured_configs(inventory, devices, pyavd)
+            # Generate AVD facts and structured configs
+            self.logger.info("Generating AVD facts for documentation")
+            avd_facts = pyavd.get_avd_facts(all_inputs)
 
-            # Generate documentation files
-            return self._generate_doc_files(structured_configs, docs_dir, pyavd)
+            structured_configs: Dict[str, Dict[str, Any]] = {}
+            for hostname, inputs in all_inputs.items():
+                structured_config = pyavd.get_device_structured_config(
+                    hostname=hostname, inputs=inputs, avd_facts=avd_facts
+                )
+                structured_configs[hostname] = structured_config
+
+            # Generate device documentation
+            self.logger.info("Generating device documentation")
+            for hostname, structured_config in structured_configs.items():
+                doc_file = docs_dir / f"{hostname}.md"
+                doc_text = pyavd.get_device_doc(structured_config, add_md_toc=True)
+
+                with open(doc_file, "w", encoding="utf-8") as f:
+                    f.write(doc_text)
+
+                generated_files.append(doc_file)
+                self.logger.debug("Generated doc: %s", doc_file)
+
+            self.logger.info("Generated %d documentation files", len(generated_files))
+            return generated_files
 
         except DocumentationGenerationError:
             raise
         except Exception as e:
             raise DocumentationGenerationError(f"Failed to generate documentation: {e}") from e
-
-    def _import_pyavd(self) -> Any:
-        """Import pyavd library with error handling."""
-        try:
-            import pyavd
-
-            return pyavd
-        except ImportError as e:
-            raise DocumentationGenerationError("pyavd library not installed. Install with: pip install pyavd") from e
-
-    def _get_filtered_devices(
-        self, inventory: InventoryData, limit_to_groups: Optional[List[str]]
-    ) -> List[DeviceDefinition]:
-        """Get devices filtered by groups if specified."""
-        devices = inventory.get_all_devices()
-        if limit_to_groups:
-            devices = [d for d in devices if d.fabric in limit_to_groups]
-        return devices
-
-    def _build_structured_configs(
-        self, inventory: InventoryData, devices: List[DeviceDefinition], pyavd: Any
-    ) -> Dict[str, Dict[str, Any]]:
-        """Build structured configs based on workflow."""
-        from avd_cli.logics.generator import ConfigurationGenerator
-
-        config_gen = ConfigurationGenerator(workflow=self.workflow)
-        all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
-
-        if not all_inputs:
-            return {}
-
-        structured_configs: Dict[str, Dict[str, Any]] = {}
-
-        if self.workflow == "eos-design":
-            structured_configs = self._build_eos_design_configs(all_inputs, pyavd)
-        else:  # workflow == "cli-config"
-            structured_configs = self._build_cli_config_configs(all_inputs)
-
-        return structured_configs
-
-    def _build_eos_design_configs(self, all_inputs: Dict[str, Dict[str, Any]], pyavd: Any) -> Dict[str, Dict[str, Any]]:
-        """Build structured configs for eos-design workflow."""
-        self.logger.info("Generating AVD facts for documentation")
-        avd_facts = pyavd.get_avd_facts(all_inputs)
-
-        structured_configs = {}
-        for hostname, inputs in all_inputs.items():
-            structured_config = pyavd.get_device_structured_config(
-                hostname=hostname, inputs=inputs, avd_facts=avd_facts
-            )
-            structured_configs[hostname] = structured_config
-
-        return structured_configs
-
-    def _build_cli_config_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        """Build structured configs for cli-config workflow."""
-        self.logger.info("Using existing structured configs for documentation")
-        # For cli-config, inputs ARE the structured configs
-        return dict(all_inputs)
-
-    def _generate_doc_files(
-        self, structured_configs: Dict[str, Dict[str, Any]], docs_dir: Path, pyavd: Any
-    ) -> List[Path]:
-        """Generate documentation files from structured configs."""
-        self.logger.info("Generating device documentation")
-        generated_files: List[Path] = []
-
-        for hostname, structured_config in structured_configs.items():
-            doc_file = docs_dir / f"{hostname}.md"
-            doc_text = pyavd.get_device_doc(structured_config, add_md_toc=True)
-
-            with open(doc_file, "w", encoding="utf-8") as f:
-                f.write(doc_text)
-
-            generated_files.append(doc_file)
-            self.logger.debug("Generated doc: %s", doc_file)
-
-        self.logger.info("Generated %d documentation files", len(generated_files))
-        return generated_files
 
 
 class TestGenerator:
@@ -629,28 +613,6 @@ class TestGenerator:
         """
         self.test_type = test_type
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-
-    def _get_structured_configs(
-        self, inventory: InventoryData, devices: List[DeviceDefinition]
-    ) -> Dict[str, Dict[str, Any]]:
-        """Get structured configs for devices (simplified for testing)."""
-        # For now, return basic structured configs with device info
-        # In a real implementation, this would use pyavd
-        structured_configs: Dict[str, Dict[str, Any]] = {}
-
-        for device in devices:
-            structured_configs[device.hostname] = {
-                "hostname": device.hostname,
-                "platform": device.platform,
-                "mgmt_ip": device.mgmt_ip,
-                "device_type": device.device_type,
-                # Basic structure for ANTA generator to work
-                "router_bgp": {"as": 65000 + hash(device.hostname) % 1000},
-                "ethernet_interfaces": {},
-                "loopback_interfaces": {"Loopback0": {"ip_address": f"10.0.{hash(device.hostname) % 255}.1/32"}},
-            }
-
-        return structured_configs
 
     def generate(
         self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
@@ -691,33 +653,19 @@ class TestGenerator:
             if limit_to_groups:
                 devices = [d for d in devices if d.fabric in limit_to_groups]
 
-            if self.test_type == "anta":
-                # Use the sophisticated ANTA catalog generator
-                anta_generator = AntaCatalogGenerator()
-
-                # Get structured configs for ANTA catalog generation
-                structured_configs = self._get_structured_configs(inventory, devices)
-
-                # generate_catalog returns list of file paths, not the catalog dict
-                generated_files = anta_generator.generate_catalog(
-                    inventory, structured_configs, tests_dir, limit_to_groups
-                )
-
-                self.logger.info("Generated ANTA catalog with %d files", len(generated_files))
-            else:
-                # Fallback to simple test generation for other types
-                test_file = tests_dir / "devices_tests.yaml"
-                with open(test_file, "w", encoding="utf-8") as f:
-                    f.write("---\n")
-                    f.write(f"# {self.test_type.upper()} Tests\n")
-                    f.write("# Generated by avd-cli\n\n")
-                    f.write("anta.tests.connectivity:\n")
-                    for device in devices:
-                        f.write("  - VerifyReachability:\n")
-                        f.write("      hosts:\n")
-                        f.write(f"        - destination: {device.mgmt_ip}\n")
-                        f.write("          source: Management1\n")
-                generated_files.append(test_file)
+            # TODO: Implement actual test generation
+            test_file = tests_dir / "devices_tests.yaml"
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("---\n")
+                f.write(f"# {self.test_type.upper()} Tests\n")
+                f.write("# Generated by avd-cli (placeholder)\n\n")
+                f.write("anta.tests.connectivity:\n")
+                for device in devices:
+                    f.write("  - VerifyReachability:\n")
+                    f.write("      hosts:\n")
+                    f.write(f"        - destination: {device.mgmt_ip}\n")
+                    f.write("          source: Management1\n")
+            generated_files.append(test_file)
 
             self.logger.info("Generated %d test files", len(generated_files))
             return generated_files
@@ -729,7 +677,7 @@ class TestGenerator:
 def generate_all(
     inventory: InventoryData,
     output_path: Path,
-    workflow: str = "eos-design",
+    workflow: str = "full",
     limit_to_groups: Optional[List[str]] = None,
 ) -> Tuple[List[Path], List[Path], List[Path]]:
     """Generate all outputs: configurations, documentation, and tests.
@@ -741,8 +689,7 @@ def generate_all(
     output_path : Path
         Output directory for all generated files
     workflow : str, optional
-        Workflow type, by default "eos-design"
-        Legacy values 'full' and 'config-only' are also supported for backward compatibility.
+        Workflow type, by default "full"
     limit_to_groups : Optional[List[str]], optional
         Groups to limit generation to, by default None
 
@@ -751,12 +698,8 @@ def generate_all(
     Tuple[List[Path], List[Path], List[Path]]
         Tuple of (config_files, doc_files, test_files)
     """
-    from avd_cli.constants import normalize_workflow
-
-    workflow = normalize_workflow(workflow)
-
     config_gen = ConfigurationGenerator(workflow=workflow)
-    doc_gen = DocumentationGenerator(workflow=workflow)
+    doc_gen = DocumentationGenerator()
     test_gen = TestGenerator()
 
     configs = config_gen.generate(inventory, output_path, limit_to_groups)

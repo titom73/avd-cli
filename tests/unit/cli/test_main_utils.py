@@ -69,10 +69,7 @@ class TestUtilityFunctions:
 class TestCliErrorHandling:
     """Test CLI error handling scenarios."""
 
-    def __init__(self):
-        """Initialize test class."""
-        self.runner = None
-
+    # pylint: disable=attribute-defined-outside-init
     def setup_method(self):
         """Set up test runner."""
         self.runner = CliRunner()
@@ -117,10 +114,7 @@ class TestCliErrorHandling:
 class TestEnvironmentVariableHandling:
     """Test environment variable processing."""
 
-    def __init__(self):
-        """Initialize test class."""
-        self.runner = None
-
+    # pylint: disable=attribute-defined-outside-init
     def setup_method(self):
         """Set up test runner."""
         self.runner = CliRunner()

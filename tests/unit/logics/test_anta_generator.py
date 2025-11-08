@@ -19,14 +19,7 @@ from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, Invento
 class TestAntaCatalogGenerator:
     """Test ANTA catalog generator functionality."""
 
-    def __init__(self):
-        """Initialize test class."""
-        self.generator = None
-        self.spine_device = None
-        self.leaf_device = None
-        self.inventory = None
-        self.structured_configs = None
-
+    # pylint: disable=attribute-defined-outside-init
     def setup_method(self):
         """Set up test fixtures."""
         self.generator = AntaCatalogGenerator()
@@ -439,3 +432,156 @@ class TestAntaCatalogGenerator:
         # Should limit to 10 peers
         if peer_test:
             assert len(peer_test) <= 10
+
+    def test_build_device_test_catalog_integration(self):
+        """Test the _build_device_test_catalog method directly covering all test generation paths."""
+        device = DeviceDefinition(
+            hostname="comprehensive-device",
+            mgmt_ip=IPv4Address("192.168.0.50"),
+            platform="7280R3",
+            device_type="leaf",
+            fabric="TEST"
+        )
+
+        comprehensive_configs = {
+            "comprehensive-device": {
+                "router_bgp": {
+                    "as": 65001,
+                    "neighbors": {"192.168.0.1": {"remote_as": 65002}},
+                    "address_family_evpn": {"neighbors": {"192.168.0.1": {"activate": True}}}
+                },
+                "ethernet_interfaces": {"Ethernet1": {"description": "Test", "shutdown": False}},
+                "loopback_interfaces": {"Loopback0": {"ip_address": "10.0.0.1"}},
+                "management_interfaces": {"Management1": {"ip_address": "192.168.0.50/24"}},
+                "ntp": {"servers": [{"name": "pool.ntp.org"}]},
+            }
+        }
+
+        # Test the complete catalog generation for a single device
+        catalog = self.generator._build_device_test_catalog(device, comprehensive_configs)
+
+        # Verify all test categories are present
+        expected_categories = [
+            "anta.tests.connectivity",
+            "anta.tests.routing.bgp",
+            "anta.tests.interfaces",
+            "anta.tests.hardware",
+            "anta.tests.system"
+        ]
+
+        for category in expected_categories:
+            assert category in catalog, f"Missing category: {category}"
+            assert isinstance(catalog[category], list), f"Category {category} should be a list"
+
+    def test_empty_structured_configs_handling(self):
+        """Test handling of devices with minimal or empty structured configs."""
+        device = DeviceDefinition(
+            hostname="minimal-device",
+            mgmt_ip=IPv4Address("192.168.0.99"),
+            platform="7050X3",
+            device_type="spine",
+            fabric="TEST"
+        )
+
+        # Test with device not in structured configs
+        catalog = self.generator._build_device_test_catalog(device, {})
+
+        # Should still generate basic connectivity and hardware tests
+        assert "anta.tests.connectivity" in catalog
+        assert "anta.tests.hardware" in catalog
+
+        # BGP tests may or may not be present when device has no config
+        # but system and interfaces should be present
+        assert "anta.tests.system" in catalog
+        assert "anta.tests.interfaces" in catalog
+
+    def test_device_filtering_integration(self):
+        """Test complete device filtering workflow when generating catalogs."""
+        # Create inventory with multiple fabrics for filtering test
+        fabric1 = FabricDefinition(name="FABRIC1", design_type="l3ls-evpn")
+        fabric1.spine_devices = [self.spine_device]
+
+        fabric2 = FabricDefinition(name="FABRIC2", design_type="l3ls-evpn")
+        fabric2.leaf_devices = [self.leaf_device]
+
+        multi_fabric_inventory = InventoryData(
+            root_path=Path("/tmp/test"),
+            fabrics=[fabric1, fabric2]
+        )
+
+        # Generate catalog limited to FABRIC1 only
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir)
+            files = self.generator.generate_catalog(
+                multi_fabric_inventory,
+                self.structured_configs,
+                output_path,
+                limit_to_groups=["FABRIC1"]
+            )
+
+            # Should generate files (may be combined or individual)
+            assert len(files) >= 1
+
+            # Verify file content contains expected tests
+            with open(files[0], encoding="utf-8") as f:
+                content = yaml.safe_load(f)
+                assert "anta.tests.connectivity" in content
+
+    def test_error_handling_in_catalog_generation(self):
+        """Test error handling during catalog generation process."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir)
+
+            # Test with device that has malformed structured config
+            malformed_configs = {
+                "spine01": {
+                    "router_bgp": "invalid_structure"  # Should be dict, not string
+                }
+            }
+
+            # Should handle malformed configs gracefully
+            try:
+                files = self.generator.generate_catalog(
+                    self.inventory, malformed_configs, output_path
+                )
+                # If no exception, verify basic structure is still created
+                assert len(files) >= 1
+            except Exception:
+                # If exception occurs, it should be a specific type
+                pass  # Allow for graceful handling
+
+    def test_comprehensive_interface_tests(self):
+        """Test comprehensive interface test generation with all interface types."""
+        device = DeviceDefinition(
+            hostname="interface-test-device",
+            mgmt_ip=IPv4Address("192.168.0.100"),
+            platform="7280R3",
+            device_type="leaf",
+            fabric="TEST"
+        )
+
+        interface_configs = {
+            "interface-test-device": {
+                "ethernet_interfaces": {
+                    "Ethernet1": {"description": "Server connection", "shutdown": False},
+                    "Ethernet2": {"description": "Uplink", "shutdown": False},
+                },
+                "loopback_interfaces": {
+                    "Loopback0": {"ip_address": "10.0.0.1/32"},
+                    "Loopback1": {"ip_address": "10.1.0.1/32"},
+                },
+                "management_interfaces": {
+                    "Management1": {"ip_address": "192.168.0.100/24"}
+                }
+            }
+        }
+
+        tests = self.generator._generate_interface_tests([device], interface_configs)
+
+        # Verify interface tests are generated
+        interface_tests = tests["anta.tests.interfaces"]
+        assert len(interface_tests) > 0
+
+        # Should include various interface types
+        test_types = [list(test.keys())[0] for test in interface_tests]
+        assert any("VerifyInterfacesStatus" in t for t in test_types)

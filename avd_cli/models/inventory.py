@@ -34,6 +34,8 @@ class DeviceDefinition:
         Device role type (validated against supported types)
     fabric : str
         Fabric name this device belongs to
+    groups : List[str], optional
+        List of inventory groups this device belongs to, by default empty list
     pod : Optional[str], optional
         Pod identifier, by default None
     rack : Optional[str], optional
@@ -58,6 +60,7 @@ class DeviceDefinition:
     fabric: str
 
     # Optional topology fields
+    groups: List[str] = field(default_factory=list)
     pod: Optional[str] = None
     rack: Optional[str] = None
 

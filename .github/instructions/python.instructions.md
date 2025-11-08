@@ -1,18 +1,78 @@
 ---
 applyTo: '**/*.py'
-description: 'Python coding standards, best practices, and project-specific conventions for eos-downloader.'
+description: 'Python coding standards, best practices, and project-specific conventions for avd-cli.'
 ---
 
-# Python Coding Standards for eos-downloader
+# Python Coding Standards for avd-cli
 
 ## Your Mission
 
-As GitHub Copilot working on Python code in **eos-downloader**, you must follow strict Python coding standards, project conventions, and best practices. This ensures code quality, maintainability, and consistency across the codebase.
+As GitHub Copilot working on Python code in **avd-cli**, you must follow strict Python coding standards, project conventions, and best practices. This ensures code quality, maintainability, and consistency across the codebase.
+
+## Development Environment
+
+### UV Package Manager
+
+**This project uses UV as the primary package and project management tool.** UV is a fast, modern Python package manager that provides:
+
+- Fast dependency resolution and installation
+- Integrated project management (pyproject.toml)
+- Built-in virtual environment management
+- Python version management
+- Lock file support for reproducible builds
+
+**Key UV Commands:**
+
+```bash
+# Run Python scripts with UV
+uv run python script.py
+
+# Execute commands in the UV environment
+uv run pytest
+uv run mypy avd_cli
+uv run flake8 avd_cli
+
+# Install dependencies
+uv sync
+
+# Add a new dependency
+uv add package-name
+
+# Add a development dependency
+uv add --dev package-name
+
+# Run a tool without installing it globally
+uvx ruff check avd_cli
+```
+
+**In Code and Documentation:**
+
+- Always reference UV commands in examples and documentation
+- When suggesting package installation, use `uv add` instead of `pip install`
+- When running tests or scripts, use `uv run` prefix
+- Assume UV is available in the development environment
+
+**Makefile Integration:**
+
+The project's Makefile uses UV for all operations:
+
+```makefile
+# Examples from the project
+ci-test:
+	uv run pytest tests/
+
+ci-lint:
+	uv run flake8 avd_cli
+	uv run pylint avd_cli
+
+ci-type:
+	uv run mypy --strict avd_cli
+```
 
 ## Python Version Support
 
 - **Minimum**: Python 3.9
-- **Tested**: Python 3.9, 3.10, 3.11
+- **Tested**: Python 3.9, 3.10, 3.11, 3.12, 3.13
 - **Use modern Python features**: Type hints, f-strings, pathlib, dataclasses, async/await where appropriate
 
 ## Requirements
@@ -151,14 +211,13 @@ from typing import Any, Dict, List, Optional, Union
 
 # Third-party imports (alphabetically sorted)
 import click
-import requests
 from rich.console import Console
 from rich.table import Table
 
 # Local application imports (alphabetically sorted)
-from eos_downloader.exceptions import DownloadError, TokenExpiredError
-from eos_downloader.logics.download import SoftManager
-from eos_downloader.models.version import EosVersion
+from avd_cli.exceptions import ValidationError, LoaderError
+from avd_cli.logics.generator import ConfigurationGenerator
+from avd_cli.models.inventory import DeviceDefinition
 ```
 
 ### Lazy Imports for CLI Performance
@@ -332,24 +391,24 @@ Examples
 --------
 Basic usage:
 
->>> from eos_downloader.logics.download import SoftManager
->>> downloader = SoftManager()
->>> downloader.download_file(url, output_dir, filename)
+>>> from avd_cli.logics.loader import InventoryLoader
+>>> loader = InventoryLoader()
+>>> inventory = loader.load("inventory.yml")
 
-With authentication:
+With configuration:
 
->>> token = os.environ["ARISTA_TOKEN"]
->>> downloader = EosDownloader(token=token)
->>> image_path = downloader.download("4.29.3M", format="64")
+>>> from avd_cli.logics.generator import ConfigurationGenerator
+>>> generator = ConfigurationGenerator(workflow="eos-design")
+>>> generator.generate_structured_configs(inventory)
 
 Notes
 -----
-Requires valid Arista customer portal credentials.
+Requires valid AVD inventory structure.
 
 See Also
 --------
-eos_downloader.logics.arista_xml_server : XML API interaction
-eos_downloader.models.version : Version parsing and validation
+avd_cli.logics.generator : Configuration generation logic
+avd_cli.models.inventory : Inventory data models
 """
 ```
 
@@ -358,82 +417,76 @@ eos_downloader.models.version : Version parsing and validation
 Use NumPy style docstrings:
 
 ```python
-def download_eos_image(
-    version: str,
-    image_format: str,
+def generate_device_config(
+    device: DeviceDefinition,
+    workflow: str,
     output_dir: Path,
-    token: str,
-    verify_checksum: bool = True,
+    validate: bool = True,
 ) -> Path:
-    """Download an EOS image from Arista's software repository.
+    """Generate configuration for a device using AVD workflow.
 
-    This function authenticates with Arista's API, locates the specified
-    EOS version and format, downloads it to the specified directory, and
-    optionally verifies the file integrity using checksums.
+    This function generates structured configurations for the specified
+    device using the AVD workflow, saves it to the output directory, and
+    optionally validates the configuration against the schema.
 
     Parameters
     ----------
-    version : str
-        EOS version in format MAJOR.MINOR.PATCH[TYPE] (e.g., "4.29.3M")
-    image_format : str
-        Image format. One of: "64", "vEOS", "cEOS", "INT"
+    device : DeviceDefinition
+        Device definition from AVD inventory
+    workflow : str
+        AVD workflow to use. One of: "eos-design", "cli-config"
     output_dir : Path
-        Directory where the image will be saved
-    token : str
-        Arista API authentication token from arista.com
-    verify_checksum : bool, optional
-        Whether to verify file integrity after download, by default True
+        Directory where the configuration will be saved
+    validate : bool, optional
+        Whether to validate configuration against schema, by default True
 
     Returns
     -------
     Path
-        Path to the downloaded image file
+        Path to the generated configuration file
 
     Raises
     ------
-    TokenExpiredError
-        If the authentication token has expired or is invalid
-    DownloadError
-        If the download fails due to network or server errors
+    ValidationError
+        If the device definition or generated config fails validation
+    LoaderError
+        If required inventory data is missing or invalid
     ValueError
-        If the version format is invalid or image_format is not supported
+        If the workflow is not supported
     FileNotFoundError
         If the output directory does not exist and cannot be created
 
     Examples
     --------
-    Download a specific version:
+    Generate configuration for a device:
 
-    >>> image_path = download_eos_image(
-    ...     version="4.29.3M",
-    ...     image_format="64",
-    ...     output_dir=Path("/downloads"),
-    ...     token=os.environ["ARISTA_TOKEN"]
+    >>> config_path = generate_device_config(
+    ...     device=device,
+    ...     workflow="eos-design",
+    ...     output_dir=Path("/configs"),
     ... )
-    >>> print(f"Downloaded to: {image_path}")
-    Downloaded to: /downloads/EOS-4.29.3M.swi
+    >>> print(f"Configuration saved to: {config_path}")
+    Configuration saved to: /configs/leaf1.cfg
 
-    Download without checksum verification:
+    Generate without validation:
 
-    >>> image_path = download_eos_image(
-    ...     version="4.30.1F",
-    ...     image_format="cEOS",
+    >>> config_path = generate_device_config(
+    ...     device=device,
+    ...     workflow="cli-config",
     ...     output_dir=Path("/tmp"),
-    ...     token=token,
-    ...     verify_checksum=False
+    ...     validate=False
     ... )
 
     Notes
     -----
-    - Requires a valid Arista customer account token
-    - Large files may take significant time to download
-    - Network interruptions may cause download failures
+    - Requires a valid AVD inventory structure
+    - Configuration generation may take time for complex topologies
     - The function will create the output directory if it doesn't exist
 
     See Also
     --------
-    validate_checksum : Verify file integrity after download
-    generate_filename : Generate standard filename for the image
+    validate_configuration : Verify configuration against schema
+    ConfigurationGenerator : Main generator class
     """
     # Implementation
     pass
@@ -442,55 +495,52 @@ def download_eos_image(
 ### Class Docstrings
 
 ```python
-class EosDownloader:
-    """Download and manage Arista EOS software images.
+class ConfigurationGenerator:
+    """Generate device configurations from AVD inventory.
 
-    This class provides a high-level interface for downloading EOS images
-    from Arista's software repository. It handles authentication, version
-    discovery, and download management.
+    This class provides a high-level interface for generating device
+    configurations using AVD workflows. It handles inventory loading,
+    validation, and configuration generation.
 
     Parameters
     ----------
-    token : str
-        Arista API authentication token
-    timeout : int, optional
-        Request timeout in seconds, by default 30
-    verify_ssl : bool, optional
-        Whether to verify SSL certificates, by default True
+    workflow : str, optional
+        AVD workflow to use, by default "eos-design"
+    validate : bool, optional
+        Whether to validate configurations, by default True
 
     Attributes
     ----------
-    token : str
-        The authentication token
-    session : requests.Session
-        Persistent HTTP session for API calls
-    timeout : int
-        Request timeout value
+    workflow : str
+        The active workflow name
+    inventory : InventoryModel
+        Loaded AVD inventory
+    validate : bool
+        Validation flag
 
     Examples
     --------
     Basic usage:
 
-    >>> downloader = EosDownloader(token=os.environ["ARISTA_TOKEN"])
-    >>> versions = downloader.get_available_versions(branch="4.29")
-    >>> image = downloader.download(version="4.29.3M", format="64")
+    >>> generator = ConfigurationGenerator(workflow="eos-design")
+    >>> generator.load_inventory("inventory.yml")
+    >>> configs = generator.generate_structured_configs()
 
-    With custom timeout:
+    With custom workflow:
 
-    >>> downloader = EosDownloader(
-    ...     token=token,
-    ...     timeout=60,
-    ...     verify_ssl=True
+    >>> generator = ConfigurationGenerator(
+    ...     workflow="cli-config",
+    ...     validate=True
     ... )
 
     Notes
     -----
-    Always use context managers or explicitly close the session when done.
+    Always validate inventory structure before generating configurations.
 
     See Also
     --------
-    SoftManager : Lower-level download management
-    AristaXmlQuerier : Version discovery and querying
+    InventoryLoader : Inventory loading and parsing
+    DocumentationGenerator : Generate documentation from inventory
     """
 
     def __init__(
@@ -512,52 +562,39 @@ class EosDownloader:
 
 ```python
 # ✅ Good: Specific exception handling
-from eos_downloader.exceptions import (
-    TokenExpiredError,
-    DownloadError,
-    AuthenticationError,
+from avd_cli.exceptions import (
+    ValidationError,
+    LoaderError,
+    GeneratorError,
 )
 
-def download_file(url: str, token: str) -> bytes:
-    """Download file with proper error handling."""
+def load_inventory(inventory_path: Path) -> InventoryModel:
+    """Load inventory with proper error handling."""
     try:
-        response = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30
-        )
-        response.raise_for_status()
-        return response.content
+        with open(inventory_path) as f:
+            data = yaml.safe_load(f)
+        
+        inventory = InventoryModel(**data)
+        return inventory
 
-    except requests.HTTPError as e:
-        if e.response.status_code == 401:
-            raise TokenExpiredError(
-                "API token expired. Please regenerate at arista.com"
-            ) from e
-        elif e.response.status_code == 404:
-            raise DownloadError(
-                f"Resource not found: {url}"
-            ) from e
-        else:
-            raise DownloadError(
-                f"HTTP error {e.response.status_code}: {e}"
-            ) from e
-
-    except requests.Timeout as e:
-        raise DownloadError(
-            f"Download timeout after 30s: {url}"
+    except FileNotFoundError as e:
+        raise LoaderError(
+            f"Inventory file not found: {inventory_path}"
         ) from e
-
-    except requests.RequestException as e:
-        raise DownloadError(
-            f"Network error during download: {e}"
+    except yaml.YAMLError as e:
+        raise LoaderError(
+            f"Invalid YAML format in inventory: {e}"
+        ) from e
+    except ValidationError as e:
+        raise LoaderError(
+            f"Inventory validation failed: {e}"
         ) from e
 
 # ❌ Bad: Generic exception handling
-def download_file_bad(url, token):
+def load_inventory_bad(path):
     try:
-        response = requests.get(url)
-        return response.content
+        with open(path) as f:
+            return yaml.safe_load(f)
     except Exception as e:  # Too broad
         print(f"Error: {e}")  # Poor error handling
         return None  # Silent failure
@@ -603,36 +640,36 @@ def download_file(url: str, output_path: Path) -> None:
     )
 
     try:
-        # Download logic
-        size = download_logic(url, output_path)
+        # Generation logic
+        result = generation_logic(inventory, output_path)
 
         logger.info(
-            "Download completed successfully",
+            "Configuration generation completed",
             extra={
-                "url": url,
+                "inventory_path": str(inventory_path),
                 "output_path": str(output_path),
-                "size_bytes": size,
-                "operation": "download_complete"
+                "device_count": result.device_count,
+                "operation": "generation_complete"
             }
         )
 
-    except DownloadError as e:
+    except LoaderError as e:
         logger.error(
-            "Download failed",
+            "Configuration generation failed",
             extra={
-                "url": url,
+                "inventory_path": str(inventory_path),
                 "error": str(e),
-                "operation": "download_failed"
+                "operation": "generation_failed"
             },
             exc_info=True
         )
         raise
 
 # ❌ Bad: Print statements and poor logging
-def download_file_bad(url, output_path):
-    print(f"Downloading {url}")  # Should use logging
+def generate_configs_bad(inventory_path, output_path):
+    print(f"Generating from {inventory_path}")  # Should use logging
     try:
-        download_logic(url, output_path)
+        generation_logic(inventory_path, output_path)
         print("Done")  # No context
     except Exception as e:
         print(f"Error: {e}")  # No structured data
@@ -644,19 +681,19 @@ Use appropriate log levels:
 
 ```python
 # DEBUG: Detailed diagnostic information
-logger.debug("XML response: %s", xml_content[:100])
+logger.debug("Inventory data: %s", inventory_data[:100])
 
 # INFO: Normal operations and confirmations
-logger.info("Version 4.29.3M found in catalog")
+logger.info("Loaded 10 devices from inventory")
 
 # WARNING: Something unexpected but handled
-logger.warning("Token expires in 1 hour")
+logger.warning("Device missing optional group_vars file")
 
 # ERROR: Error that prevents operation
-logger.error("Failed to download file", exc_info=True)
+logger.error("Failed to generate configuration", exc_info=True)
 
 # CRITICAL: System-level failure
-logger.critical("Unable to connect to Arista API")
+logger.critical("Unable to load required AVD inventory")
 ```
 
 ## Path Handling
@@ -1032,25 +1069,29 @@ The project uses these tools (configured in `pyproject.toml`):
 
 ### Run Before Committing
 
+**All commands use UV to run in the project environment:**
+
 ```bash
 # Format code
-black eos_downloader/
+uv run black avd_cli/
 
 # Sort imports
-isort eos_downloader/
+uv run isort avd_cli/
 
 # Type check
-mypy eos_downloader/
+uv run mypy avd_cli/
 
 # Lint
-flake8 eos_downloader/
-pylint eos_downloader/
+uv run flake8 avd_cli/
+uv run pylint avd_cli/
 
 # Run all tests
-pytest --cov=eos_downloader
+uv run pytest tests/
 
-# Or use tox to run everything
-tox
+# Or use make commands (which internally use UV)
+make ci-test    # Run tests with coverage
+make ci-lint    # Run linters
+make ci-type    # Run type checking
 ```
 
 ## Common Anti-Patterns to Avoid
@@ -1125,38 +1166,33 @@ for i, item in enumerate(items):
 
 ## Project-Specific Conventions
 
-### Version Handling
+### Workflow Handling
 
-Always use the version models:
+Always use the workflow normalization function:
 
 ```python
-from eos_downloader.models.version import EosVersion, CvpVersion
+from avd_cli.constants import normalize_workflow
 
-# Parse version
-version = EosVersion.from_str("4.29.3M")
-
-# Access properties
-print(version.major)   # 4
-print(version.branch)  # "4.29"
-print(version.rtype)   # "M"
+# Normalize legacy workflow names
+workflow = normalize_workflow("full")  # Returns "eos-design"
+workflow = normalize_workflow("config-only")  # Returns "cli-config"
 ```
 
 ### Constants
 
-Use constants from `defaults.py`:
+Use constants from `constants.py`:
 
 ```python
-from eos_downloader.defaults import (
-    DEFAULT_SOFTWARE_FOLDER_TREE,
-    DEFAULT_DOWNLOAD_URL,
-    DEFAULT_REQUEST_HEADERS,
-    EVE_QEMU_FOLDER_PATH,
+from avd_cli.constants import (
+    DEFAULT_WORKFLOW,
+    WORKFLOW_MAPPING,
+    normalize_workflow,
 )
 ```
 
 ### CLI Commands
 
-Follow the standard pattern for Click commands (see `.github/copilot-instructions.md`).
+Follow the standard pattern for Click commands. Use lazy imports for heavy dependencies to keep CLI startup fast (see Lazy Imports section above).
 
 ---
 

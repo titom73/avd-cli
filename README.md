@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/titom73/6af809c95b2b659058da5539ddba7791/raw/avd-cli-coverage.json)](https://github.com/titom73/avd-cli/actions/workflows/coverage-badge.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/titom73/6af809c95b2b659058da5539ddba7791/raw/avd-cli-coverage.json&cacheSeconds=300)](https://github.com/titom73/avd-cli/actions/workflows/coverage-badge.yml)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://titom73.github.io/avd-cli/)
 
 A command-line interface for processing [Arista AVD](https://avd.arista.com/) inventories and generating configurations, documentation, and ANTA tests using pyavd.

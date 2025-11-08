@@ -573,7 +573,7 @@ def load_inventory(inventory_path: Path) -> InventoryModel:
     try:
         with open(inventory_path) as f:
             data = yaml.safe_load(f)
-        
+
         inventory = InventoryModel(**data)
         return inventory
 

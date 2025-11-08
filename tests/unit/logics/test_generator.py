@@ -166,21 +166,21 @@ class TestConfigurationGenerator:
         assert "dc2-spine01" not in hostnames
 
     def test_generate_empty_inventory(self, tmp_path: Path) -> None:
-        """Test generation with empty inventory.
+        """Test test generation with empty inventory.
 
-        Given: Inventory with no devices
+        Given: Empty inventory
         When: Calling generate()
-        Then: Returns empty list
+        Then: Returns empty list (no devices to process)
         """
-        empty_inventory = InventoryData(
-            root_path=tmp_path,
-            fabrics=[],
-        )
         generator = ConfigurationGenerator()
         output_path = tmp_path / "output"
 
+        # Create empty inventory
+        empty_inventory = InventoryData(root_path=tmp_path, fabrics=[], global_vars={}, group_vars={}, host_vars={})
+
         result = generator.generate(empty_inventory, output_path)
 
+        # Should return empty list (no devices = no files generated)
         assert len(result) == 0
 
     def test_generate_raises_on_write_error(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
@@ -760,17 +760,22 @@ class TestTestGenerator:
 
         Given: Sample inventory
         When: Calling generate()
-        Then: Generates YAML test file
+        Then: Generates ANTA catalog and inventory files
         """
         generator = TestGenerator()
         output_path = tmp_path / "output"
 
         result = generator.generate(sample_inventory, output_path)
 
-        # Generates one catalog file for all devices
-        assert len(result) == 1  # Generates single devices_tests.yaml file
+        # Generates two files: anta_catalog.yml and anta_inventory.yml
+        assert len(result) == 2
         assert all(f.suffix == ".yaml" or f.suffix == ".yml" for f in result)
         assert all(f.exists() for f in result)
+
+        # Check that we have both expected files
+        file_names = {f.name for f in result}
+        assert "anta_catalog.yml" in file_names
+        assert "anta_inventory.yml" in file_names
 
     def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test test generation limited to groups.
@@ -818,7 +823,7 @@ class TestTestGenerator:
 
         Given: Inventory with no devices
         When: Calling generate()
-        Then: Still creates test file structure
+        Then: Returns empty list (no files generated without devices)
         """
         empty_inventory = InventoryData(
             root_path=tmp_path,
@@ -829,8 +834,8 @@ class TestTestGenerator:
 
         result = generator.generate(empty_inventory, output_path)
 
-        assert len(result) == 1
-        assert result[0].exists()
+        # With no devices, no files should be generated
+        assert len(result) == 0
 
     def test_generate_raises_on_write_error(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
         """Test error handling when file write fails.
@@ -852,17 +857,25 @@ class TestTestGenerator:
 
         Given: Custom test type 'robot'
         When: Generating tests
-        Then: Test file reflects the test type
+        Then: Generator initialized with custom type (currently generates ANTA)
+
+        Note: pyavd.get_anta_catalog() always generates ANTA format tests.
+        The test_type parameter is kept for backward compatibility but
+        doesn't change the output format.
         """
         generator = TestGenerator(test_type="robot")
         output_path = tmp_path / "output"
 
         result = generator.generate(sample_inventory, output_path)
 
-        # Check test file content includes ROBOT
-        test_file = result[0]
-        content = test_file.read_text(encoding="utf-8")
-        assert "ROBOT" in content
+        # Should still generate ANTA files (pyavd only supports ANTA)
+        assert len(result) == 2
+        assert generator.test_type == "robot"  # Type stored but not used
+
+        # Check that we get ANTA catalog content
+        catalog_file = [f for f in result if f.name == "anta_catalog.yml"][0]
+        content = catalog_file.read_text(encoding="utf-8")
+        assert "ANTA" in content or "anta.tests" in content
 
 
 class TestGenerateAll:

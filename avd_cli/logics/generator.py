@@ -825,12 +825,17 @@ class TestGenerator:
                 )
                 all_tests.extend(device_catalog.tests)
 
-            # Write combined catalog
+            # Write combined catalog using ANTA's native dump method
             self.logger.info("Writing ANTA catalog to: %s", catalog_file)
+
+            # Create an ANTA catalog from all tests
+            from anta.catalog import AntaCatalog
+            combined_catalog = AntaCatalog(tests=all_tests)
+
+            # Use ANTA's dump method to get AntaCatalogFile, then serialize to YAML
+            catalog_file_obj = combined_catalog.dump()
             with open(catalog_file, "w", encoding="utf-8") as f:
-                import yaml
-                catalog_dict = [{"name": test.test.name, "inputs": test.inputs} for test in all_tests]
-                yaml.dump(catalog_dict, f, default_flow_style=False, sort_keys=False)
+                f.write(catalog_file_obj.yaml())
 
         except (ImportError, AttributeError) as e:
             # Fall back to basic ANTA catalog generation if dependencies are missing

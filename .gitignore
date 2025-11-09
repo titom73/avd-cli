@@ -61,6 +61,7 @@ dmypy.json
 *.swo
 *~
 .DS_Store
+**/.DS_Store
 
 # Pre-commit
 .pre-commit-config.yaml.swp

@@ -40,20 +40,22 @@ pip install git+https://github.com/titom73/avd-cli.git
 
 ```bash
 # Generate all outputs (configs, documentation, ANTA tests)
-avd-cli generate all --inventory-path ./examples/atd-inventory --output ./output
+# Default output: ./examples/atd-inventory/intended/
+avd-cli generate all --inventory-path ./examples/atd-inventory
 → Loading inventory...
 ✓ Loaded 10 devices
+ℹ Using default output path: examples/atd-inventory/intended
 → Generating configurations, documentation, and tests...
 
 ✓ Generation complete!
-                     Generated Files
-┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Category       ┃ Count ┃ Output Path                   ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Configurations │    10 │ examples/output/configs       │
-│ Documentation  │    10 │ examples/output/documentation │
-│ Tests          │     2 │ examples/output/tests         │
-└────────────────┴───────┴───────────────────────────────┘
+                          Generated Files
+┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Category       ┃ Count ┃ Output Path                                     ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Configurations │    10 │ examples/atd-inventory/intended/configs         │
+│ Documentation  │    10 │ examples/atd-inventory/intended/documentation   │
+│ Tests          │     2 │ examples/atd-inventory/intended/tests           │
+└────────────────┴───────┴─────────────────────────────────────────────────┘
 
 # View inventory information
 avd-cli info --inventory-path ./examples/atd-inventory

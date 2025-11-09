@@ -1,10 +1,10 @@
 ---
 title: AVD CLI Tool Architecture Specification
-version: 1.4
+version: 1.5
 date_created: 2025-11-06
-last_updated: 2025-11-07
+last_updated: 2025-11-09
 owner: AVD CLI Development Team
-tags: [tool, architecture, cli, python, avd, command-groups, environment-variables, workflow]
+tags: [tool, architecture, cli, python, avd, command-groups, environment-variables, workflow, default-output-path]
 ---
 
 # Introduction
@@ -64,6 +64,7 @@ Define the architectural components, design patterns, and technical constraints 
 - **REQ-005**: CLI shall support cli-config workflow (eos_cli_config_gen only with existing Ansible inventory)
 - **REQ-006**: CLI shall provide option to generate ANTA tests for anta_runner execution
 - **REQ-007**: CLI shall support configurable paths for inputs and outputs
+- **REQ-007.1**: CLI shall default output path to `<inventory_path>/intended` when not explicitly specified
 - **REQ-008**: CLI shall provide meaningful error messages for invalid operations
 - **REQ-009**: CLI shall display progress information for long-running operations
 - **REQ-010**: CLI shall validate AVD inventory structure before processing
@@ -144,6 +145,8 @@ Define the architectural components, design patterns, and technical constraints 
 - **GUD-009**: Provide graceful fallback for constants when py-avd is unavailable or during testing
 - **GUD-010**: Extract common functionality into utility functions to avoid code duplication
 - **GUD-011**: Maintain consistent user experience across all CLI commands with unified output formatting
+- **GUD-012**: Default output paths should follow AVD community best practices (use `intended/` subdirectory)
+- **GUD-013**: Always display informational messages when using default values to improve user awareness
 
 ### Design Patterns
 
@@ -195,16 +198,38 @@ All CLI options support corresponding environment variables following the naming
 2. Environment variables
 3. Default values (lowest priority)
 
+**Default Output Directory Behavior:**
+
+When the `--output-path` / `-o` option is not specified (either via CLI argument or environment variable), the CLI automatically creates an `intended` subdirectory within the inventory path for all generated outputs. This follows AVD best practices and aligns with the standard AVD directory structure.
+
+- **Default location**: `<inventory_path>/intended/`
+- **Structure within intended**:
+  - `configs/` - Device configurations
+  - `documentation/` - Fabric documentation
+  - `tests/` - ANTA test catalogs and inventories
+
+**Example default behavior**:
+
+```bash
+# With inventory at ./inventory/, outputs go to ./inventory/intended/
+$ avd-cli generate all -i ./inventory
+
+# Outputs:
+# - ./inventory/intended/configs/
+# - ./inventory/intended/documentation/
+# - ./inventory/intended/tests/
+```
+
 **Environment Variable Mapping:**
 
-| CLI Option | Environment Variable | Type | Example |
-|-----------|---------------------|------|---------|
-| `--inventory-path`, `-i` | `AVD_CLI_INVENTORY_PATH` | Path | `/path/to/inventory` |
-| `--output-path`, `-o` | `AVD_CLI_OUTPUT_PATH` | Path | `/path/to/output` |
-| `--limit-to-groups`, `-l` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `spine,leaf` |
-| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `eos-design` or `cli-config` |
-| `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `true`, `false`, `1`, `0` |
-| `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` or `robot` |
+| CLI Option | Environment Variable | Type | Default Value | Example |
+|-----------|---------------------|------|---------------|---------|
+| `--inventory-path`, `-i` | `AVD_CLI_INVENTORY_PATH` | Path | *(required)* | `/path/to/inventory` |
+| `--output-path`, `-o` | `AVD_CLI_OUTPUT_PATH` | Path | `<inventory_path>/intended` | `/path/to/output` |
+| `--limit-to-groups`, `-l` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | *(none)* | `spine,leaf` |
+| `--workflow` | `AVD_CLI_WORKFLOW` | Choice | `eos-design` | `eos-design` or `cli-config` |
+| `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | Boolean | `false` | `true`, `false`, `1`, `0` |
+| `--test-type` | `AVD_CLI_TEST_TYPE` | Choice | `anta` | `anta` or `robot` |
 
 **Help Text Display:**
 
@@ -220,7 +245,7 @@ Options:
   -i, --inventory-path PATH  Path to AVD inventory directory  [env var:
                              AVD_CLI_INVENTORY_PATH; required]
   -o, --output-path PATH     Output directory for generated files  [env var:
-                             AVD_CLI_OUTPUT_PATH; required]
+                             AVD_CLI_OUTPUT_PATH; default: <inventory_path>/intended]
   -l, --limit-to-groups TEXT Limit processing to specific groups (can be
                              used multiple times)  [env var:
                              AVD_CLI_LIMIT_TO_GROUPS]
@@ -249,17 +274,21 @@ def generate(ctx: click.Context) -> None:
 
     Examples
     --------
-    Generate all outputs:
+    Generate all outputs (uses default output path <inventory>/intended):
 
-        $ avd-cli generate all -i ./inventory -o ./output
+        $ avd-cli generate all -i ./inventory
+
+    Generate all outputs with custom output path:
+
+        $ avd-cli generate all -i ./inventory -o ./custom-output
 
     Generate only configurations:
 
-        $ avd-cli generate configs -i ./inventory -o ./output
+        $ avd-cli generate configs -i ./inventory
 
-    Generate only ANTA tests:
+    Generate only ANTA tests with custom output:
 
-        $ avd-cli generate tests -i ./inventory -o ./output/tests
+        $ avd-cli generate tests -i ./inventory -o ./custom-output
     """
     pass
 
@@ -282,10 +311,10 @@ def common_generate_options(func):
     func = click.option(
         '--output-path', '-o',
         type=click.Path(path_type=Path),
-        required=True,
+        default=None,
         envvar='AVD_CLI_OUTPUT_PATH',
         show_envvar=True,
-        help='Output directory for generated files'
+        help='Output directory for generated files (default: <inventory_path>/intended)'
     )(func)
     func = click.option(
         '--limit-to-groups', '-l',
@@ -345,7 +374,7 @@ def display_generation_summary(
 def generate_all(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple,
     workflow: str
 ) -> None:
@@ -354,9 +383,29 @@ def generate_all(
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
+    Parameters
+    ----------
+    inventory_path : Path
+        Path to AVD inventory directory
+    output_path : Optional[Path]
+        Output directory. If None, defaults to <inventory_path>/intended
+    limit_to_groups : tuple
+        Groups to limit processing to
+    workflow : str
+        Workflow type (eos-design or cli-config)
+
     Workflow Modes:
     - eos-design: Complete pipeline (fabric definitions -> structured configs -> CLI configs)
     - cli-config: Direct generation (existing structured configs -> CLI configs)
+
+    Implementation
+    --------------
+    ```python
+    # Apply default output path if not provided
+    if output_path is None:
+        output_path = inventory_path / "intended"
+        console.print(f"[blue]ℹ[/blue] Using default output path: {output_path}")
+    ```
     """
 
 #### Generate Configs Subcommand
@@ -374,7 +423,7 @@ def generate_all(
 def generate_configs(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple,
     workflow: str
 ) -> None:
@@ -382,6 +431,11 @@ def generate_configs(
 
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
+
+    Parameters
+    ----------
+    output_path : Optional[Path]
+        Output directory. If None, defaults to <inventory_path>/intended
 
     Workflow Modes:
     - eos-design: Complete pipeline (fabric definitions -> structured configs -> CLI configs)
@@ -395,13 +449,18 @@ def generate_configs(
 def generate_docs(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple
 ) -> None:
     """Generate documentation only.
 
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
+
+    Parameters
+    ----------
+    output_path : Optional[Path]
+        Output directory. If None, defaults to <inventory_path>/intended
     """
 
 #### Generate Tests Subcommand
@@ -419,7 +478,7 @@ def generate_docs(
 def generate_tests(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple,
     test_type: str
 ) -> None:
@@ -427,6 +486,11 @@ def generate_tests(
 
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
+
+    Parameters
+    ----------
+    output_path : Optional[Path]
+        Output directory. If None, defaults to <inventory_path>/intended
     """
 ```
 
@@ -510,7 +574,7 @@ inventory:
   validate_on_load: true
 
 output:
-  path: ./output
+  path: ./intended  # Optional, defaults to <inventory_path>/intended if not specified
   create_if_missing: true
 
 workflow:
@@ -529,10 +593,12 @@ limits:
 
 ### Core Functionality
 
-- **AC-001**: Given a valid AVD inventory path, When user runs `avd-cli generate all -i <path> -o <output>`, Then configurations, documentation, and tests are generated successfully
-- **AC-002**: Given the `configs` subcommand, When user runs `avd-cli generate configs -i <path> -o <output>`, Then only configurations are generated
-- **AC-003**: Given the `docs` subcommand, When user runs `avd-cli generate docs -i <path> -o <output>`, Then only documentation is generated
-- **AC-004**: Given the `tests` subcommand, When user runs `avd-cli generate tests -i <path> -o <output>`, Then only test files are generated
+- **AC-001**: Given a valid AVD inventory path, When user runs `avd-cli generate all -i <path>`, Then configurations, documentation, and tests are generated successfully in `<path>/intended/`
+- **AC-001.1**: Given a valid AVD inventory path and custom output, When user runs `avd-cli generate all -i <path> -o <output>`, Then configurations, documentation, and tests are generated successfully in `<output>/`
+- **AC-001.2**: Given a valid AVD inventory path without output option, When user runs any generate subcommand, Then output defaults to `<inventory_path>/intended/` and informational message is displayed
+- **AC-002**: Given the `configs` subcommand, When user runs `avd-cli generate configs -i <path>`, Then only configurations are generated in `<path>/intended/configs/`
+- **AC-003**: Given the `docs` subcommand, When user runs `avd-cli generate docs -i <path>`, Then only documentation is generated in `<path>/intended/documentation/`
+- **AC-004**: Given the `tests` subcommand, When user runs `avd-cli generate tests -i <path>`, Then only test files are generated in `<path>/intended/tests/`
 - **AC-005**: Given the `--limit-to-groups` option with valid group names, When user runs any generate subcommand, Then only specified groups are processed
 - **AC-006**: Given an invalid inventory path, When user runs any command, Then a clear error message is displayed with actionable guidance
 
@@ -686,6 +752,23 @@ High test coverage ensures:
 - **Regression Prevention**: Bugs are caught before production
 - **Maintainability**: Future refactoring is safer
 
+### Why Default Output to `<inventory_path>/intended`?
+
+The default output directory follows AVD community best practices and conventions:
+
+- **AVD Standard**: The `intended/` directory is the established convention in AVD repositories for storing generated artifacts
+- **Co-location**: Keeping generated files within the inventory directory maintains project cohesion and simplifies path management
+- **Git Integration**: Users can easily add `intended/` to `.gitignore` or commit it as needed, following standard AVD workflows
+- **Discoverability**: Generated files are located in a predictable location relative to the source inventory
+- **Simplicity**: Reduces the number of required CLI arguments for the most common use case (90%+ of users)
+- **Convention over Configuration**: Follows the principle of sensible defaults while allowing customization when needed
+- **Backwards Compatible**: Explicit `-o` / `--output-path` option still works for users who need custom output locations
+
+**Migration Path**: Users can override the default with:
+
+- CLI argument: `-o ./custom-output`
+- Environment variable: `export AVD_CLI_OUTPUT_PATH=./custom-output`
+
 ### Why Command Groups for CLI Structure?
 
 Using Click's command groups provides significant architectural benefits:
@@ -781,10 +864,51 @@ The CLI supports two distinct workflow modes to accommodate different use cases:
 
 ## 9. Examples & Edge Cases
 
-### Basic Configuration Generation
+### Default Output Directory Behavior
 
 ```bash
-# Generate everything (configs, docs, tests)
+# Generate everything using default output path (./inventory/intended/)
+avd-cli generate all -i ./inventory
+
+# Expected output:
+# → Loading inventory...
+# ✓ Loaded 10 devices
+# ℹ Using default output path: ./inventory/intended
+# → Generating configurations...
+# → Generating documentation...
+# → Generating ANTA tests...
+#
+# ✓ Generated 3 output types
+#
+#                 Generated Files
+# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃ Category       ┃ Count ┃ Output Path                   ┃
+# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+# │ Configurations │ 10    │ ./inventory/intended/configs  │
+# │ Documentation  │ 10    │ ./inventory/intended/documentation │
+# │ Tests          │ 2     │ ./inventory/intended/tests    │
+# └────────────────┴───────┴───────────────────────────────┘
+
+# Directory structure created:
+# inventory/
+# ├── inventory.yml
+# ├── group_vars/
+# ├── host_vars/
+# └── intended/              # Auto-created default output directory
+#     ├── configs/
+#     │   ├── device1.cfg
+#     │   └── device2.cfg
+#     ├── documentation/
+#     │   └── fabric-docs.md
+#     └── tests/
+#         ├── anta_catalog.yml
+#         └── anta_inventory.yml
+```
+
+### Basic Configuration Generation with Custom Output
+
+```bash
+# Generate everything with explicit output path
 avd-cli generate all -i ./inventory -o ./output
 
 # Expected output:
@@ -811,49 +935,62 @@ avd-cli generate all -i ./inventory -o ./output
 ### Generate Specific Output Types
 
 ```bash
-# Generate only configurations
-avd-cli generate configs -i ./inventory -o ./output
+# Generate only configurations (uses default output)
+avd-cli generate configs -i ./inventory
+
+# Or with custom output path:
+# avd-cli generate configs -i ./inventory -o ./output
 
 # Expected output:
 # → Loading inventory...
 # ✓ Loaded 10 devices
+# ℹ Using default output path: ./inventory/intended
 # → Generating configurations...
 #
 # ✓ Generated 10 configuration files
 #
 #                   Generated Files
-# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃ Category       ┃ Count ┃ Output Path           ┃
-# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
-# │ Configurations │ 10    │ ./output/configs      │
-# └────────────────┴───────┴───────────────────────┘
+# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃ Category       ┃ Count ┃ Output Path                   ┃
+# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+# │ Configurations │ 10    │ ./inventory/intended/configs  │
+# └────────────────┴───────┴───────────────────────────────┘
 
-# Generate only documentation
-avd-cli generate docs -i ./inventory -o ./output
+# Generate only documentation (uses default output)
+avd-cli generate docs -i ./inventory
 
 # Expected output:
 # → Loading inventory...
 # ✓ Loaded 10 devices
+# ℹ Using default output path: ./inventory/intended
 # → Generating documentation...
 #
 # ✓ Generated 10 documentation files
 #
 #                   Generated Files
-# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃ Category       ┃ Count ┃ Output Path               ┃
-# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-# │ Documentation  │ 10    │ ./output/documentation    │
-# └────────────────┴───────┴───────────────────────────┘
+# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃ Category       ┃ Count ┃ Output Path                          ┃
+# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+# │ Documentation  │ 10    │ ./inventory/intended/documentation   │
+# └────────────────┴───────┴──────────────────────────────────────┘
 
-# Generate only ANTA tests
-avd-cli generate tests -i ./inventory -o ./output/tests
+# Generate only ANTA tests (uses default output)
+avd-cli generate tests -i ./inventory
 
 # Expected output:
 # → Loading inventory...
 # ✓ Loaded 10 devices
+# ℹ Using default output path: ./inventory/intended
 # → Generating ANTA tests...
 #
-# ✓ Generated 1 test files
+# ✓ Generated 2 test files
+#
+#                   Generated Files
+# ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃ Category       ┃ Count ┃ Output Path                  ┃
+# ┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+# │ Tests          │ 2     │ ./inventory/intended/tests   │
+# └────────────────┴───────┴──────────────────────────────┘
 #
 #                   Generated Files
 # ┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓

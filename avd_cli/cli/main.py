@@ -8,6 +8,7 @@ This module defines the main CLI group and command structure using Click.
 
 import sys
 from pathlib import Path
+from typing import Optional
 from typing import Any, Callable
 
 import click
@@ -32,6 +33,27 @@ def suppress_pyavd_warnings(show_warnings: bool) -> None:
         import warnings
 
         warnings.filterwarnings("ignore", message=".*is deprecated.*", category=UserWarning)
+
+
+def resolve_output_path(inventory_path: Path, output_path: Optional[Path]) -> Path:
+    """Resolve the output path, applying default if needed.
+
+    Parameters
+    ----------
+    inventory_path : Path
+        Path to the inventory directory
+    output_path : Optional[Path]
+        User-provided output path, or None to use default
+
+    Returns
+    -------
+    Path
+        Resolved output path (defaults to <inventory_path>/intended)
+    """
+    if output_path is None:
+        output_path = inventory_path / "intended"
+        console.print(f"[blue]ℹ[/blue] Using default output path: {output_path}")
+    return output_path
 
 
 def display_generation_summary(category: str, count: int, output_path: Path, subcategory: str = "configs") -> None:
@@ -131,10 +153,10 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
         "--output-path",
         "-o",
         type=click.Path(path_type=Path),
-        required=True,
+        default=None,
         envvar="AVD_CLI_OUTPUT_PATH",
         show_envvar=True,
-        help="Output directory for generated files",
+        help="Output directory for generated files (default: <inventory_path>/intended)",
     )(func)
     func = click.option(
         "--limit-to-groups",
@@ -167,17 +189,21 @@ def generate(ctx: click.Context) -> None:
 
     Examples
     --------
-    Generate all outputs:
+    Generate all outputs (uses default output path ./inventory/intended):
 
-        $ avd-cli generate all -i ./inventory -o ./output
+        $ avd-cli generate all -i ./inventory
+
+    Generate all outputs with custom path:
+
+        $ avd-cli generate all -i ./inventory -o ./custom-output
 
     Generate only configurations:
 
-        $ avd-cli generate configs -i ./inventory -o ./output
+        $ avd-cli generate configs -i ./inventory
 
-    Generate only ANTA tests:
+    Generate only ANTA tests with custom output:
 
-        $ avd-cli generate tests -i ./inventory -o ./output
+        $ avd-cli generate tests -i ./inventory -o ./tests
     """
     pass
 
@@ -198,7 +224,7 @@ def generate(ctx: click.Context) -> None:
 def generate_all(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
@@ -210,30 +236,38 @@ def generate_all(
     - Documentation
     - ANTA test files
 
+    If --output-path is not specified, outputs are written to <inventory_path>/intended/
+
     All options can be provided via environment variables with AVD_CLI_ prefix.
     Command-line arguments take precedence over environment variables.
 
     Examples
     --------
-    Generate all outputs:
+    Generate all outputs (default output: ./inventory/intended):
 
-        $ avd-cli generate all -i ./inventory -o ./output
+        $ avd-cli generate all -i ./inventory
+
+    Generate with custom output path:
+
+        $ avd-cli generate all -i ./inventory -o ./custom-output
 
     Generate with specific workflow:
 
-        $ avd-cli generate all -i ./inventory -o ./output --workflow eos-design
+        $ avd-cli generate all -i ./inventory --workflow eos-design
 
     Using environment variables:
 
         $ export AVD_CLI_INVENTORY_PATH=./inventory
-        $ export AVD_CLI_OUTPUT_PATH=./output
         $ avd-cli generate all
 
     Limit to specific groups:
 
-        $ avd-cli generate all -i ./inventory -o ./output -l spine -l leaf
+        $ avd-cli generate all -i ./inventory -l spine -l leaf
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Resolve output path with default if needed
+    output_path = resolve_output_path(inventory_path, output_path)
 
     # Normalize workflow for backward compatibility
     from avd_cli.constants import normalize_workflow
@@ -313,7 +347,7 @@ def generate_all(
 def generate_configs(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
@@ -328,22 +362,28 @@ def generate_configs(
 
     Examples
     --------
-    Generate configurations:
+    Generate configurations (default output: ./inventory/intended):
+
+        $ avd-cli generate configs -i ./inventory
+
+    Generate with custom output path:
 
         $ avd-cli generate configs -i ./inventory -o ./output
 
     Generate with cli-config workflow:
 
-        $ avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
+        $ avd-cli generate configs -i ./inventory --workflow cli-config
 
     Using environment variables:
 
         $ export AVD_CLI_INVENTORY_PATH=./inventory
-        $ export AVD_CLI_OUTPUT_PATH=./output
         $ export AVD_CLI_WORKFLOW=cli-config
         $ avd-cli generate configs
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Resolve output path with default if needed
+    output_path = resolve_output_path(inventory_path, output_path)
 
     # Normalize workflow for backward compatibility
     from avd_cli.constants import normalize_workflow
@@ -399,7 +439,7 @@ def generate_configs(
 def generate_docs(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
 ) -> None:
@@ -413,17 +453,23 @@ def generate_docs(
 
     Examples
     --------
-    Generate documentation:
+    Generate documentation (default output: ./inventory/intended):
+
+        $ avd-cli generate docs -i ./inventory
+
+    Generate with custom output path:
 
         $ avd-cli generate docs -i ./inventory -o ./output
 
     Using environment variables:
 
         $ export AVD_CLI_INVENTORY_PATH=./inventory
-        $ export AVD_CLI_OUTPUT_PATH=./output
         $ avd-cli generate docs
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Resolve output path with default if needed
+    output_path = resolve_output_path(inventory_path, output_path)
 
     if verbose:
         console.print("[blue]ℹ[/blue] Generating documentation only")
@@ -473,7 +519,7 @@ def generate_docs(
 def generate_tests(
     ctx: click.Context,
     inventory_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     test_type: str,
@@ -488,22 +534,28 @@ def generate_tests(
 
     Examples
     --------
-    Generate ANTA tests:
+    Generate ANTA tests (default output: ./inventory/intended):
+
+        $ avd-cli generate tests -i ./inventory
+
+    Generate with custom output path:
 
         $ avd-cli generate tests -i ./inventory -o ./output
 
     Generate Robot Framework tests:
 
-        $ avd-cli generate tests -i ./inventory -o ./output --test-type robot
+        $ avd-cli generate tests -i ./inventory --test-type robot
 
     Using environment variables:
 
         $ export AVD_CLI_INVENTORY_PATH=./inventory
-        $ export AVD_CLI_OUTPUT_PATH=./output
         $ export AVD_CLI_TEST_TYPE=anta
         $ avd-cli generate tests
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Resolve output path with default if needed
+    output_path = resolve_output_path(inventory_path, output_path)
 
     if verbose:
         console.print(f"[blue]ℹ[/blue] Generating {test_type.upper()} tests only")

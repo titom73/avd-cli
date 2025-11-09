@@ -9,6 +9,11 @@ A command-line interface for processing Arista AVD inventories and generating co
 - **Validate inventory** structure and data
 - **Output ANTA tests** for network validation
 
+<div align="center">
+    <img src="./imgs/avd-cli-banner.jpg" alt="AVD CLI Banner" style="width:800px;"/>
+</div>
+
+
 ## Quick Start
 
 ```bash

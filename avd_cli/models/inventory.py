@@ -55,7 +55,7 @@ class DeviceDefinition:
     # Required fields
     hostname: str
     platform: str
-    mgmt_ip: Union[IPv4Address, IPv6Address]
+    mgmt_ip: Union[str, IPv4Address, IPv6Address]
     device_type: str
     fabric: str
 
@@ -65,7 +65,7 @@ class DeviceDefinition:
     rack: Optional[str] = None
 
     # Optional network fields
-    mgmt_gateway: Optional[Union[IPv4Address, IPv6Address]] = None
+    mgmt_gateway: Optional[Union[str, IPv4Address, IPv6Address]] = None
     serial_number: Optional[str] = None
     system_mac_address: Optional[str] = None
 

@@ -2,6 +2,14 @@
 
 A command-line interface for processing Arista AVD inventories and generating configurations, documentation, and tests.
 
+!!! warning "Personal Project Notice"
+    This project (`avd-cli`) is a **personal project** and is **not an official development** of the Arista AVD team or Arista Networks.
+
+    It is maintained independently and is not endorsed, supported, or affiliated with Arista Networks, Inc.
+
+    For official AVD tools and support, please visit [avd.arista.com](https://avd.arista.com/).
+
+
 ## What it does
 
 - **Generate configurations** from AVD inventory files
@@ -10,7 +18,7 @@ A command-line interface for processing Arista AVD inventories and generating co
 - **Output ANTA tests** for network validation
 
 <div align="center">
-    <img src="./imgs/avd-cli-banner.jpg" alt="AVD CLI Banner" style="width:800px;"/>
+    <img src="./imgs/avd-cli-banner.png" alt="AVD CLI Banner" style="width:1200px;"/>
 </div>
 
 

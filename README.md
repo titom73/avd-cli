@@ -15,6 +15,14 @@ A command-line interface for processing [Arista AVD](https://avd.arista.com/) in
 >
 > For official AVD tools and support, please visit [avd.arista.com](https://avd.arista.com/).
 
+## Key Features
+
+- **🔧 Configuration Generation**: Generate EOS device configurations using pyavd
+- **📚 Documentation Generation**: Create comprehensive network documentation in Markdown
+- **🧪 ANTA Test Generation**: Generate ANTA test catalogs for network validation
+- **⚡ Lightning fast generation**: Generate configurations, documentation and tests way faster than ansible (`1.28sec` for 10 hosts compare to `3sec` with Ansible)
+- **🌐 Multi-Fabric Support**: Process multiple network fabrics with variable inheritance
+- **🔧 Rich Terminal Experience**: Beautiful CLI with progress bars and formatted output
 
 ## Getting Started
 
@@ -81,14 +89,6 @@ avd-cli info --inventory-path ./examples/atd-inventory
 │ spine02        │ spine │ 7050X3   │ 192.168.0.13  │ campus_avd │
 └────────────────┴───────┴──────────┴───────────────┴────────────┘
 ```
-
-## Key Features
-
-- **🔧 Configuration Generation**: Generate EOS device configurations using pyavd
-- **📚 Documentation Generation**: Create comprehensive network documentation in Markdown
-- **🧪 ANTA Test Generation**: Generate ANTA test catalogs for network validation
-- **🌐 Multi-Fabric Support**: Process multiple network fabrics with variable inheritance
-- **⚡ Rich Terminal Experience**: Beautiful CLI with progress bars and formatted output
 
 ## Documentation
 

@@ -10,7 +10,7 @@ and convert them into structured data models.
 import logging
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Set, Union
 
 import yaml
 
@@ -427,11 +427,11 @@ class InventoryLoader:
                 self._extract_group_vars_recursive(value, result, key)
 
     def _build_group_hierarchy(self, inventory_path: Path) -> Dict[str, List[str]]:
-        """Build a map of group names to their ancestor groups (including self).
+        """Build a map of group names to ALL their ancestor groups (including self).
 
         This parses the inventory.yml structure to understand group parent-child
-        relationships, which is needed to resolve variables correctly according
-        to Ansible's variable precedence rules.
+        relationships. A group can have multiple parents in Ansible, so we collect
+        ALL ancestors, not just one path.
 
         Parameters
         ----------
@@ -441,8 +441,8 @@ class InventoryLoader:
         Returns
         -------
         Dict[str, List[str]]
-            Dictionary mapping each group name to list of its ancestors
-            (from root to self, e.g., {"IDF1": ["lab", "atd", "campus_avd", "campus_leaves", "IDF1"]})
+            Dictionary mapping each group name to sorted list of ALL its ancestor groups
+            (e.g., {"campus_leaves": ["atd", "campus_avd", "campus_leaves", "campus_ports", "campus_services", "lab"]})
         """
         inventory_yml = inventory_path / "inventory.yml"
         if not inventory_yml.exists():
@@ -457,10 +457,64 @@ class InventoryLoader:
             self.logger.warning("Failed to load inventory.yml for hierarchy: %s", e)
             return {}
 
-        hierarchy: Dict[str, List[str]] = {}
-        self._extract_hierarchy_recursive(inventory_data, hierarchy, [])
+        # First pass: build all paths
+        all_paths: Dict[str, List[List[str]]] = {}
+        self._extract_all_paths_recursive(inventory_data, all_paths, [])
+
+        # Second pass: flatten to sets of all ancestors, then convert to sorted lists
+        hierarchy_sets: Dict[str, Set[str]] = {}
+        for group_name, paths in all_paths.items():
+            ancestors = set()
+            for path in paths:
+                ancestors.update(path)
+            hierarchy_sets[group_name] = ancestors
+
+        # Convert sets to sorted lists for consistent ordering
+        hierarchy: Dict[str, List[str]] = {
+            group: sorted(ancestors) for group, ancestors in hierarchy_sets.items()
+        }
+
         self.logger.debug("Built hierarchy for %d groups", len(hierarchy))
         return hierarchy
+
+    def _extract_all_paths_recursive(
+        self,
+        data: Any,
+        result: Dict[str, List[List[str]]],
+        current_path: List[str],
+    ) -> None:
+        """Recursively extract ALL paths to each group (handles multiple parents).
+
+        Parameters
+        ----------
+        data : Any
+            Current level of inventory data
+        result : Dict[str, List[List[str]]]
+            Dictionary to populate with all paths to each group
+        current_path : List[str]
+            Current path from root to this level
+        """
+        if not isinstance(data, dict):
+            return
+
+        # Process children groups
+        if "children" in data and isinstance(data["children"], dict):
+            for child_name, child_data in data["children"].items():
+                # Add this path for the child
+                child_path = current_path + [child_name]
+                if child_name not in result:
+                    result[child_name] = []
+                result[child_name].append(child_path)
+                # Recurse into child
+                self._extract_all_paths_recursive(child_data, result, child_path)
+
+        # Also check top-level groups (like 'lab', 'all', etc.)
+        for key, value in data.items():
+            if key not in ["hosts", "children", "vars"] and isinstance(value, dict):
+                if key not in result:
+                    # This is a root-level group
+                    result[key] = [[key]]
+                self._extract_all_paths_recursive(value, result, [key])
 
     def _extract_hierarchy_recursive(
         self,
@@ -852,7 +906,7 @@ class InventoryLoader:
         host_vars : Dict[str, Dict[str, Any]]
             Host variables
         group_hierarchy : Dict[str, List[str]]
-            Map of group names to their full ancestor list
+            Map of group names to their full ancestor list (sorted, handles multiple parents)
         host_to_group : Dict[str, str]
             Map of hostnames to their immediate Ansible group
 
@@ -900,19 +954,37 @@ class InventoryLoader:
                     # (e.g., IDF1, IDF2) from the pre-built host-to-group map
                     host_group = host_to_group.get(device.hostname)
 
-                    # Add ALL ancestor groups to device.groups (for proper variable inheritance)
-                    # Use the host's actual group if found, otherwise fall back to topology group
+                    # Collect ALL ancestor groups for proper variable inheritance
+                    # A device can be in multiple group hierarchies (e.g., campus_avd AND campus_services)
+                    all_ancestors: Set[str] = set()
+
+                    # Start with the host's actual group if found, otherwise use topology group
                     effective_group = host_group if host_group and host_group in group_hierarchy else group_name
 
                     if effective_group in group_hierarchy:
-                        # Use full hierarchy (e.g., ["lab", "atd", "campus_avd", "campus_leaves", "IDF1"])
-                        for ancestor_group in group_hierarchy[effective_group]:
-                            if ancestor_group not in device.groups:
-                                device.groups.append(ancestor_group)
-                    else:
-                        # Fallback: just add the direct group if hierarchy not available
-                        if effective_group not in device.groups:
-                            device.groups.append(effective_group)
+                        # Add all ancestors of the effective group (already a list, so convert to set)
+                        initial_ancestors = group_hierarchy[effective_group]
+                        all_ancestors.update(initial_ancestors)
+
+                        # For each ancestor, also add ITS ancestors (to handle multiple parent paths)
+                        # Example: IDF1 has ancestor campus_leaves, which has ancestors campus_services AND campus_ports
+                        # We need to collect ALL of them transitively
+                        for ancestor in initial_ancestors:
+                            if ancestor in group_hierarchy:
+                                all_ancestors.update(group_hierarchy[ancestor])
+
+                    # Also add ancestors of ALL intermediate groups that might have been added
+                    # (e.g., if device is in IDF1, and IDF1 is under campus_leaves,
+                    # and campus_leaves is under BOTH campus_avd AND campus_services,
+                    # we need ancestors from both branches)
+                    for existing_group in list(device.groups):
+                        if existing_group in group_hierarchy:
+                            all_ancestors.update(group_hierarchy[existing_group])
+
+                    # Add all collected ancestors to device.groups (maintaining as list for compatibility)
+                    for ancestor_group in sorted(all_ancestors):
+                        if ancestor_group not in device.groups:
+                            device.groups.append(ancestor_group)
 
                     devices[i] = device
 

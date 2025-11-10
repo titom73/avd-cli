@@ -893,7 +893,6 @@ def deploy(ctx: click.Context) -> None:
     show_envvar=True,
     help="Path to configuration files directory (default: <inventory_path>/intended/configs)",
 )
-
 @click.option(
     "--dry-run",
     is_flag=True,
@@ -1016,7 +1015,7 @@ def deploy_eos(
     if verbose:
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Configs path: {configs_path}")
-        console.print(f"[blue]ℹ[/blue] Deployment mode: config sessions (with validation)")
+        console.print("[blue]ℹ[/blue] Deployment mode: config sessions (with validation)")
         console.print(f"[blue]ℹ[/blue] Dry run: {dry_run}")
         console.print(f"[blue]ℹ[/blue] Show diff: {show_diff}")
         console.print(f"[blue]ℹ[/blue] SSL verification: {verify_ssl}")

@@ -102,10 +102,17 @@ class ConfigurationGenerator:
 
             self.logger.info("Generating structured configurations")
             for hostname, inputs in all_inputs.items():
+                # Generate structured_config from eos_designs schema
                 structured_config = self.pyavd.get_device_structured_config(
                     hostname=hostname, inputs=inputs, avd_facts=avd_facts
                 )
-                structured_configs[hostname] = structured_config
+
+                # Merge with eos_cli_config_gen variables (aliases, ntp, snmp, logging, aaa, etc.)
+                # The inputs contain ALL variables from group_vars/host_vars, including those
+                # that are specific to eos_cli_config_gen schema (not part of eos_designs)
+                # We deep merge to ensure structured_config from eos_designs takes precedence
+                # but eos_cli_config_gen variables are added where not present
+                structured_configs[hostname] = self._deep_merge(inputs, structured_config)
         else:
             # Config-only workflow (cli-config)
             self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")

@@ -12,7 +12,7 @@ import logging
 import ssl
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import aiohttp
 
@@ -292,8 +292,8 @@ class EapiClient:
             # Always use config session for atomic commit with validation
             # Get diff from session if requested (works in both dry_run and normal mode)
             diff = await self._apply_config_session(
-                intended_config, 
-                dry_run=dry_run, 
+                intended_config,
+                dry_run=dry_run,
                 show_diff=show_diff
             )
 
@@ -310,7 +310,9 @@ class EapiClient:
                 f"Configuration validation failed: {error_msg}"
             ) from e
 
-    async def _apply_config_session(self, config: str, dry_run: bool = False, show_diff: bool = False) -> str | None:
+    async def _apply_config_session(  # noqa: C901
+        self, config: str, dry_run: bool = False, show_diff: bool = False
+    ) -> Optional[str]:
         """Apply configuration using config session with validation and full replacement.
 
         This method uses EOS config sessions with 'rollback clean-config' to perform
@@ -362,15 +364,15 @@ class EapiClient:
             # 2. Re-enter session and commit
             # This is because after sending many config lines, the session context
             # is lost, and "commit" as the last command in the same request fails.
-            
+
             # REPLACE mode: 'rollback clean-config' removes ALL existing configuration
             # before applying the new config. This ensures deletions are properly
             # reflected. The provided configuration MUST be complete including
             # management sections (users, api, aaa) to maintain device access.
-            
+
             # Step 1: Enter session, apply rollback clean-config for TRUE REPLACE, then apply all config lines
             cmds_config = ["enable", f"configure session {session_name}", "rollback clean-config"]
-            
+
             # Add each config line, filtering out empty lines and standalone keywords
             # that require arguments (common AVD generation issues)
             if config:
@@ -378,13 +380,13 @@ class EapiClient:
                     # Skip empty lines
                     if not line.strip():
                         continue
-                    
+
                     # Skip lines that are just "hostname", "description", etc without values
                     # These are invalid and will cause session failures
                     stripped = line.strip()
                     if stripped in ['hostname', 'description', 'name']:
                         continue
-                    
+
                     cmds_config.append(line)
 
             # Apply config to session
@@ -455,7 +457,7 @@ class EapiClient:
             # Step 2: Re-enter session and commit (or abort if dry_run)
             final_action = "abort" if dry_run else "commit"
             cmds_commit = ["enable", f"configure session {session_name}", final_action]
-            
+
             payload_commit = {
                 "jsonrpc": "2.0",
                 "method": "runCmds",

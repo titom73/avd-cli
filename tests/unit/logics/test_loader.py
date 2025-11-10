@@ -686,3 +686,345 @@ l3leaf:
         leaf_names = [d.hostname for d in fabric.leaf_devices]
         assert "leaf1" in leaf_names
         assert "leaf2" in leaf_names
+
+
+class TestGroupHierarchy:
+    """Tests for Ansible group hierarchy resolution.
+
+    These tests validate the fix for the bug where devices were not
+    inheriting variables from all parent groups in the Ansible inventory
+    hierarchy. This is critical for proper AVD configuration generation.
+    """
+
+    @pytest.fixture
+    def loader(self):
+        """Create a loader instance."""
+        return InventoryLoader()
+
+    @pytest.fixture
+    def hierarchical_inventory(self, tmp_path):
+        """Create an inventory with nested group hierarchy like the real eos-design-complex example.
+
+        Structure:
+        lab (root)
+          └─ atd
+              └─ campus_avd
+                  └─ campus_leaves
+                      └─ IDF1
+                          ├─ leaf-1a
+                          └─ leaf-1b
+        """
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+
+        # Create inventory.yml with nested group structure
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+lab:
+  vars:
+    global_setting: from_lab
+    ansible_user: testuser
+  children:
+    atd:
+      vars:
+        atd_setting: from_atd
+      children:
+        campus_avd:
+          vars:
+            fabric_name: CAMPUS_FABRIC
+            avd_setting: from_campus_avd
+          children:
+            campus_leaves:
+              vars:
+                leaf_setting: from_campus_leaves
+                poc_platform: test_platform
+              children:
+                IDF1:
+                  hosts:
+                    leaf-1a:
+                      ansible_host: 192.168.0.14
+                    leaf-1b:
+                      ansible_host: 192.168.0.15
+"""
+        )
+
+        # Create group_vars
+        group_vars_dir = inventory_dir / "group_vars"
+        group_vars_dir.mkdir()
+
+        # group_vars/atd/basics.yml - should be inherited by leaf-1a
+        atd_dir = group_vars_dir / "atd"
+        atd_dir.mkdir()
+        (atd_dir / "basics.yml").write_text(
+            """---
+router_bfd:
+  multihop:
+    interval: 1200
+    min_rx: 1200
+    multiplier: 3
+"""
+        )
+
+        # group_vars/campus_avd/topology.yml - defines the device topology
+        campus_avd_dir = group_vars_dir / "campus_avd"
+        campus_avd_dir.mkdir()
+        (campus_avd_dir / "topology.yml").write_text(
+            """---
+fabric_name: CAMPUS_FABRIC
+type: l3leaf
+l3leaf:
+  defaults:
+    platform: vEOS
+    spanning_tree_mode: mstp
+  node_groups:
+    - group: IDF1_NODES
+      nodes:
+        - name: leaf-1a
+          id: 1
+          mgmt_ip: 192.168.0.14
+        - name: leaf-1b
+          id: 2
+          mgmt_ip: 192.168.0.15
+"""
+        )
+
+        # group_vars/campus_leaves/features.yml - should be inherited by leaf-1a
+        campus_leaves_dir = group_vars_dir / "campus_leaves"
+        campus_leaves_dir.mkdir()
+        (campus_leaves_dir / "features.yml").write_text(
+            """---
+interface_profiles:
+  - name: test_profile
+    commands:
+      - description "Test Interface Profile"
+      - switchport mode access
+"""
+        )
+
+        return inventory_dir
+
+    def test_device_inherits_all_parent_groups(self, loader, hierarchical_inventory):
+        """Test that a device has all ancestor groups in its groups list.
+
+        This is the core fix: leaf-1a defined in IDF1 should have groups:
+        ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
+
+        Previously, it only had the topology group (campus_leaves) and missed
+        parent groups, causing variables from those groups to not be applied.
+        """
+        inventory = loader.load(hierarchical_inventory)
+
+        # Find leaf-1a
+        leaf_1a = None
+        for fabric in inventory.fabrics:
+            for device in fabric.get_all_devices():
+                if device.hostname == "leaf-1a":
+                    leaf_1a = device
+                    break
+            if leaf_1a:
+                break
+
+        assert leaf_1a is not None, "leaf-1a should be found in inventory"
+
+        # CRITICAL: Device should have ALL ancestor groups, not just the topology group
+        expected_groups = ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
+        assert leaf_1a.groups == expected_groups, (
+            f"Device should inherit full group hierarchy. "
+            f"Expected {expected_groups}, got {leaf_1a.groups}"
+        )
+
+    def test_device_inherits_variables_from_all_groups(self, loader, hierarchical_inventory):
+        """Test that variables from all ancestor groups are available for config generation.
+
+        This validates that the group hierarchy fix enables proper variable inheritance.
+        Variables defined in parent groups (atd, campus_leaves) should be accessible
+        when building pyavd inputs for the device.
+        """
+        from avd_cli.logics.generator import ConfigurationGenerator
+
+        inventory = loader.load(hierarchical_inventory)
+
+        # Get all devices and build pyavd inputs
+        gen = ConfigurationGenerator()
+        devices = inventory.get_all_devices()
+        inputs = gen._build_pyavd_inputs_from_inventory(inventory, devices)
+
+        # Check that leaf-1a has variables from ALL parent groups
+        assert 'leaf-1a' in inputs, "leaf-1a should be in pyavd inputs"
+        leaf_vars = inputs['leaf-1a']
+
+        # From group_vars/atd/basics.yml
+        assert 'router_bfd' in leaf_vars, "Should inherit router_bfd from 'atd' group"
+        assert leaf_vars['router_bfd']['multihop']['interval'] == 1200
+
+        # From group_vars/campus_leaves/features.yml
+        assert 'interface_profiles' in leaf_vars, "Should inherit interface_profiles from 'campus_leaves' group"
+        assert len(leaf_vars['interface_profiles']) == 1
+        assert leaf_vars['interface_profiles'][0]['name'] == 'test_profile'
+
+        # From inventory.yml group vars
+        assert leaf_vars.get('atd_setting') == 'from_atd', "Should inherit vars from atd group in inventory.yml"
+        assert leaf_vars.get('leaf_setting') == 'from_campus_leaves', "Should inherit vars from campus_leaves group"
+        assert leaf_vars.get('avd_setting') == 'from_campus_avd', "Should inherit vars from campus_avd group"
+
+    def test_group_hierarchy_map_construction(self, loader, hierarchical_inventory):
+        """Test that the group hierarchy map is correctly built from inventory.yml.
+
+        The _build_group_hierarchy method should parse the inventory structure
+        and create a complete ancestry list for each group.
+        """
+        hierarchy = loader._build_group_hierarchy(hierarchical_inventory)
+
+        # Check that IDF1 has full ancestry
+        assert 'IDF1' in hierarchy, "IDF1 group should be in hierarchy"
+        assert hierarchy['IDF1'] == ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1'], (
+            "IDF1 should have complete ancestry from root to self"
+        )
+
+        # Check intermediate groups
+        assert hierarchy['campus_leaves'] == ['lab', 'atd', 'campus_avd', 'campus_leaves']
+        assert hierarchy['campus_avd'] == ['lab', 'atd', 'campus_avd']
+        assert hierarchy['atd'] == ['lab', 'atd']
+        assert hierarchy['lab'] == ['lab']
+
+    def test_host_to_group_mapping(self, loader, hierarchical_inventory):
+        """Test that the host-to-group map correctly identifies where each host is defined.
+
+        The _build_host_to_group_map method should find the immediate Ansible group
+        for each host (e.g., leaf-1a -> IDF1, not campus_leaves).
+        """
+        host_map = loader._build_host_to_group_map(hierarchical_inventory)
+
+        # Hosts are defined in IDF1 group, not in campus_leaves
+        assert 'leaf-1a' in host_map, "leaf-1a should be in host map"
+        assert host_map['leaf-1a'] == 'IDF1', (
+            "leaf-1a should map to IDF1 (where it's defined), not to topology group"
+        )
+
+        assert 'leaf-1b' in host_map
+        assert host_map['leaf-1b'] == 'IDF1'
+
+    def test_multiple_children_in_hierarchy(self, loader, tmp_path):
+        """Test group hierarchy with multiple children at same level (siblings).
+
+        Structure:
+        root
+          ├─ group_a
+          │   └─ subgroup_a1
+          │       └─ host1
+          └─ group_b
+              └─ subgroup_b1
+                  └─ host2
+        """
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+root:
+  children:
+    group_a:
+      children:
+        subgroup_a1:
+          hosts:
+            host1:
+              ansible_host: 192.168.1.1
+    group_b:
+      children:
+        subgroup_b1:
+          hosts:
+            host2:
+              ansible_host: 192.168.1.2
+"""
+        )
+
+        # Create minimal group_vars for topology
+        group_vars_dir = inventory_dir / "group_vars"
+        group_vars_dir.mkdir()
+        (group_vars_dir / "subgroup_a1.yml").write_text(
+            """---
+fabric_name: FABRIC_A
+type: spine
+nodes:
+  - name: host1
+    id: 1
+    mgmt_ip: 192.168.1.1
+"""
+        )
+        (group_vars_dir / "subgroup_b1.yml").write_text(
+            """---
+fabric_name: FABRIC_B
+type: spine
+nodes:
+  - name: host2
+    id: 1
+    mgmt_ip: 192.168.1.2
+"""
+        )
+
+        hierarchy = loader._build_group_hierarchy(inventory_dir)
+
+        # Both branches should have correct ancestry
+        assert hierarchy['subgroup_a1'] == ['root', 'group_a', 'subgroup_a1']
+        assert hierarchy['subgroup_b1'] == ['root', 'group_b', 'subgroup_b1']
+        assert hierarchy['group_a'] == ['root', 'group_a']
+        assert hierarchy['group_b'] == ['root', 'group_b']
+
+    def test_variable_precedence_in_hierarchy(self, loader, tmp_path):
+        """Test that variable precedence follows Ansible rules: more specific beats less specific.
+
+        When the same variable is defined at multiple levels:
+        - Host vars (most specific) > Group vars > Global vars (least specific)
+        - Child group vars > Parent group vars
+        """
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+root:
+  vars:
+    test_var: from_root
+    root_only: root_value
+  children:
+    child_group:
+      vars:
+        test_var: from_child
+        child_only: child_value
+      hosts:
+        testhost:
+          ansible_host: 192.168.0.1
+          test_var: from_host
+          host_only: host_value
+"""
+        )
+
+        group_vars_dir = inventory_dir / "group_vars"
+        group_vars_dir.mkdir()
+        (group_vars_dir / "child_group.yml").write_text(
+            """---
+fabric_name: TEST
+type: spine
+nodes:
+  - name: testhost
+    id: 1
+    mgmt_ip: 192.168.0.1
+"""
+        )
+
+        from avd_cli.logics.generator import ConfigurationGenerator
+
+        inventory = loader.load(inventory_dir)
+        gen = ConfigurationGenerator()
+        devices = inventory.get_all_devices()
+        inputs = gen._build_pyavd_inputs_from_inventory(inventory, devices)
+
+        host_vars = inputs['testhost']
+
+        # Host var should win (most specific)
+        assert host_vars['test_var'] == 'from_host'
+
+        # Variables from all levels should be present
+        assert host_vars['root_only'] == 'root_value'
+        assert host_vars['child_only'] == 'child_value'
+        assert host_vars['host_only'] == 'host_value'

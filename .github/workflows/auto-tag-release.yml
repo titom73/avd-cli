@@ -55,6 +55,10 @@ jobs:
             echo "❌ Error: Version mismatch!"
             echo "Branch name suggests version $BRANCH_VERSION"
             echo "But pyproject.toml contains version $PYPROJECT_VERSION"
+            echo "To fix this:"
+            echo "  1. Update pyproject.toml version to match the branch name, or"
+            echo "  2. Recreate the release branch with the correct version"
+            echo "  3. See: .github/workflows/prepare-release.yml for automated version management"
             exit 1
           fi
 

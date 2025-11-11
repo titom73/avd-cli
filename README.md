@@ -31,10 +31,10 @@ A command-line interface for processing [Arista AVD](https://avd.arista.com/) in
 
 ```bash
 # Using pipx (recommended)
-pipx install git+https://github.com/titom73/avd-cli.git
+pipx install avd-cli
 
 # Or using pip
-pip install git+https://github.com/titom73/avd-cli.git
+pip install avd-cli
 ```
 
 ### Basic Usage

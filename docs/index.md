@@ -27,7 +27,7 @@ A command-line interface for processing Arista AVD inventories and generating co
 
 ```bash
 # Install avd-cli
-pipx install git+https://github.com/titom73/avd-cli.git
+pipx install adv-cli
 
 # Generate all outputs (configs, docs, tests)
 avd-cli generate all \

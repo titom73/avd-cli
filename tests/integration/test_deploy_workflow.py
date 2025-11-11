@@ -76,7 +76,7 @@ class TestDeploymentWorkflow:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "- old config\n+ new config",
+                "diff": "- old config\n+ new config\n+ another line",
                 "changes_applied": False,
             }
             mock_client_class.return_value = mock_client
@@ -87,6 +87,9 @@ class TestDeploymentWorkflow:
             assert len(results) == 3
             assert all(r.status == DeploymentStatus.SUCCESS for r in results)
             assert all(r.changes_applied is False for r in results)
+            # Verify diff stats
+            assert all(r.diff_lines_added == 2 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)
 
     async def test_full_deployment_live(
         self, integration_inventory: Path
@@ -106,7 +109,7 @@ class TestDeploymentWorkflow:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "config applied",
+                "diff": "+config line 1\n+config line 2\n-old line",
                 "changes_applied": True,
             }
             mock_client_class.return_value = mock_client
@@ -116,6 +119,10 @@ class TestDeploymentWorkflow:
             assert len(results) == 3
             assert all(r.status == DeploymentStatus.SUCCESS for r in results)
             assert all(r.changes_applied is True for r in results)
+            # Verify diff stats with show_diff=True, diff should be stored
+            assert all(r.diff is not None for r in results)
+            assert all(r.diff_lines_added == 2 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)
 
     async def test_deployment_with_partial_failures(
         self, integration_inventory: Path
@@ -140,7 +147,7 @@ class TestDeploymentWorkflow:
                 raise ConnectionError("Connection timeout")
             return {
                 "success": True,
-                "diff": "",
+                "diff": "+new config",
                 "changes_applied": True,
             }
 
@@ -160,6 +167,16 @@ class TestDeploymentWorkflow:
             assert len(results) == 3
             assert success_count == 2
             assert failed_count == 1
+
+            # Verify diff stats for successful deployments
+            successful_results = [r for r in results if r.status == DeploymentStatus.SUCCESS]
+            assert all(r.diff_lines_added == 1 for r in successful_results)
+            assert all(r.diff_lines_removed == 0 for r in successful_results)
+
+            # Failed deployments should have 0 diff stats
+            failed_results = [r for r in results if r.status == DeploymentStatus.FAILED]
+            assert all(r.diff_lines_added == 0 for r in failed_results)
+            assert all(r.diff_lines_removed == 0 for r in failed_results)
 
     async def test_concurrent_deployment_ordering(
         self, integration_inventory: Path
@@ -247,7 +264,7 @@ class TestDeploymentWorkflow:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "",
+                "diff": "+hostname device-1",
                 "changes_applied": False,
             }
             mock_client_class.return_value = mock_client
@@ -261,6 +278,14 @@ class TestDeploymentWorkflow:
             assert len(results) == 2
             assert success_count == 1
             assert skipped_count == 1
+
+            # Verify diff stats
+            successful_results = [r for r in results if r.status == DeploymentStatus.SUCCESS]
+            assert all(r.diff_lines_added == 1 for r in successful_results)
+
+            skipped_results = [r for r in results if r.status == DeploymentStatus.SKIPPED]
+            assert all(r.diff_lines_added == 0 for r in skipped_results)
+            assert all(r.diff_lines_removed == 0 for r in skipped_results)
 
     async def test_deployment_with_group_filtering(
         self, tmp_path: Path
@@ -320,7 +345,7 @@ class TestDeploymentWorkflow:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "",
+                "diff": "+interface Ethernet1\n-interface Loopback0",
                 "changes_applied": False,
             }
             mock_client_class.return_value = mock_client
@@ -331,6 +356,10 @@ class TestDeploymentWorkflow:
             assert len(results) == 2
             hostnames = {r.hostname for r in results}
             assert hostnames == {"spine-1", "spine-2"}
+
+            # Verify diff stats
+            assert all(r.diff_lines_added == 1 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)
 
     async def test_deployment_timeout_handling(
         self, integration_inventory: Path
@@ -357,3 +386,7 @@ class TestDeploymentWorkflow:
             assert len(results) == 3
             assert all(r.status == DeploymentStatus.FAILED for r in results)
             assert all("timeout" in r.error.lower() for r in results if r.error)
+
+            # Failed deployments should have 0 diff stats
+            assert all(r.diff_lines_added == 0 for r in results)
+            assert all(r.diff_lines_removed == 0 for r in results)

@@ -17,8 +17,68 @@ from avd_cli.logics.deployer import (
     DeploymentStatus,
     DeploymentTarget,
     DeviceCredentials,
+    parse_diff_stats,
 )
 from avd_cli.utils.eapi_client import DeploymentMode
+
+
+class TestParseDiffStats:
+    """Test parse_diff_stats function."""
+
+    def test_parse_unified_diff(self) -> None:
+        """Test parsing of unified diff output."""
+        diff_text = """--- running-config
++++ intended-config
+@@ -1,5 +1,7 @@
+ hostname spine-1
+ !
++interface Ethernet1
++   description uplink
+ !
+-interface Loopback0
+-   ip address 10.0.0.1/32
++interface Loopback0
++   ip address 10.0.0.2/32
+"""
+        added, removed = parse_diff_stats(diff_text)
+        assert added == 4  # +interface Ethernet1, +description, +interface Loopback0, +ip address
+        assert removed == 2  # -interface Loopback0, -ip address
+
+    def test_parse_empty_diff(self) -> None:
+        """Test parsing of empty diff."""
+        added, removed = parse_diff_stats(None)
+        assert added == 0
+        assert removed == 0
+
+        added, removed = parse_diff_stats("")
+        assert added == 0
+        assert removed == 0
+
+    def test_parse_additions_only(self) -> None:
+        """Test parsing diff with only additions."""
+        diff_text = """--- running-config
++++ intended-config
+@@ -1,3 +1,5 @@
+ hostname spine-1
++interface Ethernet1
++   description new
+"""
+        added, removed = parse_diff_stats(diff_text)
+        assert added == 2
+        assert removed == 0
+
+    def test_parse_removals_only(self) -> None:
+        """Test parsing diff with only removals."""
+        diff_text = """--- running-config
++++ intended-config
+@@ -1,5 +1,3 @@
+ hostname spine-1
+-interface Ethernet1
+-   description old
+"""
+        added, removed = parse_diff_stats(diff_text)
+        assert added == 0
+        assert removed == 2
 
 
 class TestDeviceCredentials:
@@ -416,9 +476,15 @@ class TestDeployer:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
+                diff_content = (
+                    "--- running-config\n+++ intended-config\n"
+                    "@@ -1,3 +1,5 @@\n hostname spine-1\n"
+                    "+interface Ethernet1\n+   description test\n"
+                    "-interface Loopback0"
+                )
                 mock_client.apply_config.return_value = {
                     "success": True,
-                    "diff": "config diff",
+                    "diff": diff_content,
                     "changes_applied": False,
                 }
                 mock_client_class.return_value = mock_client
@@ -427,8 +493,10 @@ class TestDeployer:
 
                 assert result.status == DeploymentStatus.SUCCESS
                 assert result.hostname == "spine-1"
-                assert result.diff == "config diff"
+                assert result.diff is None  # Not shown when show_diff=False
                 assert result.changes_applied is False
+                assert result.diff_lines_added == 2  # +interface Ethernet1, +description
+                assert result.diff_lines_removed == 1  # -interface Loopback0
 
     @pytest.mark.asyncio
     async def test_deploy_to_device_missing_config(
@@ -456,7 +524,10 @@ class TestDeployer:
 
             assert result.status == DeploymentStatus.SKIPPED
             assert result.hostname == "missing-device"
+            assert result.error is not None
             assert "No configuration file" in result.error
+            assert result.diff_lines_added == 0
+            assert result.diff_lines_removed == 0
 
     @pytest.mark.asyncio
     async def test_deploy_all_devices(
@@ -475,7 +546,7 @@ class TestDeployer:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "",
+                "diff": "--- running-config\n+++ intended-config\n+new line\n-old line",
                 "changes_applied": False,
             }
             mock_client_class.return_value = mock_client
@@ -484,6 +555,9 @@ class TestDeployer:
 
             assert len(results) == 4
             assert all(r.status == DeploymentStatus.SUCCESS for r in results)
+            # Verify diff stats are populated
+            assert all(r.diff_lines_added == 1 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)
 
     @pytest.mark.asyncio
     async def test_deploy_with_group_limit(
@@ -503,7 +577,7 @@ class TestDeployer:
             mock_client.__aexit__.return_value = None
             mock_client.apply_config.return_value = {
                 "success": True,
-                "diff": "",
+                "diff": "+added line",
                 "changes_applied": False,
             }
             mock_client_class.return_value = mock_client
@@ -514,3 +588,166 @@ class TestDeployer:
             assert len(results) == 2
             hostnames = {r.hostname for r in results}
             assert hostnames == {"leaf-1", "leaf-2"}
+            # Verify diff stats
+            assert all(r.diff_lines_added == 1 for r in results)
+            assert all(r.diff_lines_removed == 0 for r in results)
+
+    def test_display_results_with_diff_stats(
+        self, sample_inventory: Path, sample_configs: Path
+    ) -> None:
+        """Test that _display_results shows diff statistics."""
+        from io import StringIO
+        from rich.console import Console
+
+        # Create a console that captures output
+        output_buffer = StringIO()
+        console = Console(file=output_buffer, force_terminal=True)
+
+        deployer = Deployer(
+            inventory_path=sample_inventory,
+            configs_path=sample_configs,
+            console=console,
+        )
+
+        # Create mock results with diff stats
+        deployer._results = [
+            DeploymentResult(
+                hostname="spine-1",
+                status=DeploymentStatus.SUCCESS,
+                diff_lines_added=15,
+                diff_lines_removed=3,
+                duration=2.5,
+            ),
+            DeploymentResult(
+                hostname="spine-2",
+                status=DeploymentStatus.SUCCESS,
+                diff_lines_added=0,
+                diff_lines_removed=0,
+                duration=1.2,
+            ),
+            DeploymentResult(
+                hostname="leaf-1",
+                status=DeploymentStatus.FAILED,
+                error="Connection timeout",
+                duration=30.0,
+            ),
+        ]
+
+        deployer._display_results()
+
+        output = output_buffer.getvalue()
+
+        # Verify table title
+        assert "Deployment Status" in output
+
+        # Verify column headers
+        assert "Hostname" in output
+        assert "Status" in output
+        assert "Duration" in output
+        assert "Diff (+/-)" in output
+
+        # Verify data rows (hostnames)
+        assert "spine-1" in output
+        assert "spine-2" in output
+        assert "leaf-1" in output
+
+        # Verify diff stats appear (the exact format might vary with Rich rendering)
+        assert "15" in output  # Added lines for spine-1
+        assert "3" in output   # Removed lines for spine-1
+
+    def test_display_results_no_changes(
+        self, sample_inventory: Path, sample_configs: Path
+    ) -> None:
+        """Test display when there are no changes."""
+        from io import StringIO
+        from rich.console import Console
+
+        output_buffer = StringIO()
+        console = Console(file=output_buffer, force_terminal=True)
+
+        deployer = Deployer(
+            inventory_path=sample_inventory,
+            configs_path=sample_configs,
+            console=console,
+        )
+
+        deployer._results = [
+            DeploymentResult(
+                hostname="device-1",
+                status=DeploymentStatus.SUCCESS,
+                diff_lines_added=0,
+                diff_lines_removed=0,
+                duration=1.0,
+            ),
+        ]
+
+        deployer._display_results()
+
+        output = output_buffer.getvalue()
+
+        # Should show "No changes" for devices with 0/0 diff
+        assert "No changes" in output or "0" in output
+
+    @pytest.mark.asyncio
+    async def test_show_diff_stores_full_diff(
+        self, sample_inventory: Path, sample_configs: Path
+    ) -> None:
+        """Test that show_diff=True stores the full diff text."""
+        deployer = Deployer(
+            inventory_path=sample_inventory,
+            configs_path=sample_configs,
+            show_diff=True,  # Enable diff storage
+            dry_run=True,
+        )
+
+        diff_text = "--- running\n+++ intended\n+new line\n-old line"
+
+        with patch("avd_cli.logics.deployer.EapiClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.apply_config.return_value = {
+                "success": True,
+                "diff": diff_text,
+                "changes_applied": False,
+            }
+            mock_client_class.return_value = mock_client
+
+            results = await deployer.deploy()
+
+            # Verify diff is stored when show_diff=True
+            assert all(r.diff == diff_text for r in results)
+            assert all(r.diff_lines_added == 1 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)
+
+    @pytest.mark.asyncio
+    async def test_show_diff_false_no_storage(
+        self, sample_inventory: Path, sample_configs: Path
+    ) -> None:
+        """Test that show_diff=False does not store the full diff."""
+        deployer = Deployer(
+            inventory_path=sample_inventory,
+            configs_path=sample_configs,
+            show_diff=False,  # Disable diff storage
+            dry_run=True,
+        )
+
+        diff_text = "--- running\n+++ intended\n+new line\n-old line"
+
+        with patch("avd_cli.logics.deployer.EapiClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.apply_config.return_value = {
+                "success": True,
+                "diff": diff_text,
+                "changes_applied": False,
+            }
+            mock_client_class.return_value = mock_client
+
+            results = await deployer.deploy()
+
+            # Verify diff is NOT stored when show_diff=False, but stats are
+            assert all(r.diff is None for r in results)
+            assert all(r.diff_lines_added == 1 for r in results)
+            assert all(r.diff_lines_removed == 1 for r in results)

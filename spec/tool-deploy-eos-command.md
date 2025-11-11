@@ -1,8 +1,8 @@
 ---
 title: AVD CLI Deploy EOS Command Specification
-version: 1.0
+version: 1.1
 date_created: 2025-11-10
-last_updated: 2025-11-10
+last_updated: 2025-11-11
 owner: AVD CLI Development Team
 tags: [tool, deploy, eos, eapi, configuration-management, network-automation]
 ---
@@ -145,8 +145,17 @@ Define the functional requirements, technical architecture, and implementation p
 - **PAT-002**: Implement retry logic with exponential backoff for transient failures
 - **PAT-003**: Use semaphore to limit concurrent device connections
 - **PAT-004**: Implement graceful degradation if async library unavailable
-- **PAT-005**: Use Rich Live display for real-time progress updates
+- **PAT-005**: Use Rich table display for deployment summary without per-device loading bars
 - **PAT-006**: Follow existing CLI command structure and option naming conventions
+
+### User Experience Requirements
+
+- **UXR-001**: CLI output shall use Rich library for formatted tables without per-device progress bars
+- **UXR-002**: Deployment status shall update in real-time showing current device being processed
+- **UXR-003**: Status indicators shall use consistent symbols (✓ success, ✗ failure, ℹ info)
+- **UXR-004**: Deployment summary shall be displayed in table format with clear metrics including diff statistics
+- **UXR-005**: Diff statistics in summary table shall be color-coded: green for additions (+), red for deletions (-)
+- **UXR-006**: Summary table shall include columns: Hostname, Status, Duration, Diff (+/-)
 
 ## 4. Interfaces & Data Contracts
 
@@ -399,6 +408,8 @@ class DeploymentResult:
     error: Optional[str] = None
     duration: float = 0.0
     changes_applied: bool = False
+    diff_lines_added: int = 0  # Number of lines added in diff
+    diff_lines_removed: int = 0  # Number of lines removed in diff
 
 
 @dataclass
@@ -593,9 +604,11 @@ def extract_device_credentials(
 
 ### Progress and Status Reporting
 
-- **AC-010**: Given multiple devices, When deployment starts, Then global progress bar is displayed showing completion percentage
-- **AC-011**: Given deployment in progress, When each device completes, Then per-device status is displayed (success/failed/pending)
-- **AC-012**: Given deployment complete, When all devices finish, Then summary table displays statistics (total, success, failed, duration)
+- **AC-010**: Given multiple devices, When deployment completes, Then summary table displays statistics (total, success, failed, duration) without per-device progress bars
+- **AC-011**: Given deployment in progress, When each device completes, Then per-device status is displayed in real-time (success/failed/pending)
+- **AC-012**: Given deployment complete with diff output, When summary table is displayed, Then diff statistics show additions (+) and deletions (-) counts per device
+- **AC-012.1**: Given diff output with additions, When displayed in summary, Then addition count is shown in green color
+- **AC-012.2**: Given diff output with deletions, When displayed in summary, Then deletion count is shown in red color
 - **AC-013**: Given verbose mode, When deployment runs, Then detailed connection and deployment logs are displayed
 
 ### Authentication and Security
@@ -724,6 +737,36 @@ Unlimited concurrent connections could overwhelm devices or network infrastructu
 - Management plane load balancing
 - Organizational change control policies
 
+### Why Remove Per-Device Progress Bars? (v1.1 Update)
+
+**Previous Behavior**: Individual progress bars were displayed for each device during deployment, creating visual clutter with multiple concurrent deployments.
+
+**New Behavior**: Summary table with deployment status replaces per-device progress bars, providing cleaner output and better readability.
+
+**Rationale**:
+- **Reduced Visual Clutter**: With 10-50+ devices deploying concurrently, multiple progress bars create confusing, hard-to-read output
+- **Better Information Density**: Summary table provides more actionable information (status, duration, diff stats) in less vertical space
+- **Improved Scanning**: Table format allows users to quickly identify failures or anomalies
+- **Real-time Updates**: Status table updates in real-time as devices complete, maintaining visibility without progress bar noise
+- **Professional Appearance**: Clean table output aligns with enterprise automation tool expectations
+
+### Why Add Diff Statistics to Summary Table? (v1.1 Update)
+
+**New Feature**: Summary table now includes columns showing the number of lines added (+) and removed (-) in green and red respectively.
+
+**Rationale**:
+- **Change Impact Visibility**: Operators can quickly assess the scope of changes per device at a glance
+- **Anomaly Detection**: Devices with unexpectedly high diff counts (e.g., +500 / -200) stand out immediately, indicating potential issues
+- **Audit Trail**: Diff statistics provide quantitative change metrics for documentation and compliance
+- **Color Coding**: Green (+) and red (-) colors provide intuitive visual cues matching standard diff conventions
+- **Deployment Confidence**: Seeing expected diff counts (e.g., +3 / -0 for a minor change) increases operator confidence before applying changes
+- **Post-Deployment Review**: Statistics remain visible in the summary for review and logging purposes
+
+**Example Use Cases**:
+- **Sanity Check**: "I expect to add 5 VLAN lines, why does this show +50?"
+- **Comparison**: "Spine01 shows +12 / -2, but Spine02 shows +45 / -30 - investigate Spine02"
+- **Documentation**: "Deployment added 120 lines and removed 15 lines across 24 devices"
+
 ## 8. Dependencies & External Integrations
 
 ### External Systems
@@ -801,19 +844,20 @@ avd-cli deploy eos -i ./inventory
 # ✓ Found 24 configuration files
 # → Deploying configurations in replace mode...
 #
-# Deployment Progress
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 24/24 devices
+# Deployment Status
+# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+# ┃ Hostname    ┃ Status    ┃ Duration  ┃ Diff (+/-)      ┃
+# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+# │ spine01     │ ✓ Success │ 2.3s      │ +15 / -3        │
+# │ spine02     │ ✓ Success │ 2.1s      │ +12 / -2        │
+# │ leaf01      │ ✓ Success │ 3.2s      │ +45 / -10       │
+# │ leaf02      │ ✓ Success │ 2.9s      │ +42 / -8        │
+# │ leaf03      │ ✓ Success │ 2.8s      │ +38 / -7        │
+# │ leaf04      │ ✓ Success │ 3.1s      │ +40 / -9        │
+# │ ...         │ ...       │ ...       │ ...             │
+# └─────────────┴───────────┴───────────┴─────────────────┘
 #
-# Device Status
-# ┏━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━┓
-# ┃ Hostname    ┃ Status  ┃ Duration  ┃
-# ┡━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━┩
-# │ spine01     │ ✓ Success │ 2.3s    │
-# │ spine02     │ ✓ Success │ 2.1s    │
-# │ leaf01      │ ✓ Success │ 3.2s    │
-# │ leaf02      │ ✓ Success │ 2.9s    │
-# │ ...         │ ...       │ ...     │
-# └─────────────┴───────────┴─────────┘
+# Note: +15 indicates additions (shown in green), -3 indicates deletions (shown in red)
 #
 # Deployment Summary
 # ┏━━━━━━━━━━━━━━━┳━━━━━━━┓
@@ -891,6 +935,19 @@ avd-cli deploy eos -i ./inventory --merge --diff
 #
 # [Similar output for other devices...]
 #
+# Deployment Status
+# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+# ┃ Hostname    ┃ Status    ┃ Duration  ┃ Diff (+/-)      ┃
+# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+# │ spine01     │ ✓ Success │ 2.1s      │ +3 / -0         │
+# │ spine02     │ ✓ Success │ 2.0s      │ +3 / -0         │
+# │ leaf01      │ ✓ Success │ 2.3s      │ +8 / -2         │
+# │ leaf02      │ ✓ Success │ 2.2s      │ +7 / -1         │
+# │ ...         │ ...       │ ...       │ ...             │
+# └─────────────┴───────────┴───────────┴─────────────────┘
+#
+# Note: Numbers in green (+) indicate additions, in red (-) indicate deletions
+#
 # Deployment Summary
 # ┏━━━━━━━━━━━━━━━┳━━━━━━━┓
 # ┃ Metric        ┃ Count ┃
@@ -917,16 +974,13 @@ avd-cli deploy eos -i ./inventory -l SPINES
 # → Loading configurations from ./inventory/intended/configs
 # → Deploying configurations in replace mode...
 #
-# Deployment Progress
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 2/2 devices
-#
-# Device Status
-# ┏━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━┓
-# ┃ Hostname    ┃ Status  ┃ Duration  ┃
-# ┡━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━┩
-# │ spine01     │ ✓ Success │ 2.3s    │
-# │ spine02     │ ✓ Success │ 2.1s    │
-# └─────────────┴───────────┴─────────┘
+# Deployment Status
+# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+# ┃ Hostname    ┃ Status    ┃ Duration  ┃ Diff (+/-)      ┃
+# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+# │ spine01     │ ✓ Success │ 2.3s      │ +15 / -3        │
+# │ spine02     │ ✓ Success │ 2.1s      │ +12 / -2        │
+# └─────────────┴───────────┴───────────┴─────────────────┘
 ```
 
 ### SSL Certificate Verification Examples
@@ -1020,14 +1074,14 @@ avd-cli deploy eos -i ./inventory
 # ✓ Loaded 10 devices
 # → Deploying configurations...
 #
-# Device Status
-# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
-# ┃ Hostname    ┃ Status                     ┃ Duration  ┃
-# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
-# │ spine01     │ ✗ Authentication failed    │ 1.2s      │
-# │ spine02     │ ✓ Success                  │ 2.1s      │
-# │ leaf01      │ ✓ Success                  │ 3.2s      │
-# └─────────────┴────────────────────────────┴───────────┘
+# Deployment Status
+# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+# ┃ Hostname    ┃ Status                     ┃ Duration  ┃ Diff (+/-)      ┃
+# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+# │ spine01     │ ✗ Authentication failed    │ 1.2s      │ -               │
+# │ spine02     │ ✓ Success                  │ 2.1s      │ +12 / -2        │
+# │ leaf01      │ ✓ Success                  │ 3.2s      │ +45 / -10       │
+# └─────────────┴────────────────────────────┴───────────┴─────────────────┘
 #
 # Deployment Summary
 # ┏━━━━━━━━━━━━━━━┳━━━━━━━┓
@@ -1053,13 +1107,13 @@ avd-cli deploy eos -i ./inventory --timeout 10
 # ✓ Loaded 5 devices
 # → Deploying configurations...
 #
-# Device Status
-# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
-# ┃ Hostname    ┃ Status                          ┃ Duration  ┃
-# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
-# │ spine01     │ ✗ Connection timeout (10s)      │ 10.1s     │
-# │ spine02     │ ✓ Success                       │ 2.3s      │
-# └─────────────┴─────────────────────────────────┴───────────┘
+# Deployment Status
+# ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+# ┃ Hostname    ┃ Status                          ┃ Duration  ┃ Diff (+/-)      ┃
+# ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+# │ spine01     │ ✗ Connection timeout (10s)      │ 10.1s     │ -               │
+# │ spine02     │ ✓ Success                       │ 2.3s      │ +12 / -2        │
+# └─────────────┴─────────────────────────────────┴───────────┴─────────────────┘
 #
 # Failed Devices:
 # • spine01: Connection timeout after 10 seconds
@@ -1154,8 +1208,10 @@ avd-cli info -i ./inventory -f table
 
 - **VAL-020**: Error messages must include device context (hostname, IP)
 - **VAL-021**: Error messages must provide actionable remediation steps
-- **VAL-022**: Progress indicators must clearly show current operation and overall progress
-- **VAL-023**: Summary output must provide sufficient detail for audit purposes
+- **VAL-022**: Summary table must clearly show deployment results without per-device loading bars
+- **VAL-023**: Summary output must provide sufficient detail for audit purposes including diff statistics
+- **VAL-024**: Diff statistics in summary must use color coding (green for additions, red for deletions)
+- **VAL-025**: Summary table must include columns for device status, duration, and diff line counts
 
 ## 11. Related Specifications / Further Reading
 

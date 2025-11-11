@@ -17,12 +17,10 @@ from typing import Any, Dict, List, Optional
 import yaml
 from rich.console import Console
 from rich.progress import (
-    BarColumn,
     Progress,
     SpinnerColumn,
     TaskID,
     TextColumn,
-    TimeElapsedColumn,
 )
 from rich.table import Table
 
@@ -36,6 +34,38 @@ from avd_cli.exceptions import (
 from avd_cli.utils.eapi_client import DeploymentMode, EapiClient, EapiConfig
 
 logger = logging.getLogger(__name__)
+
+
+def parse_diff_stats(diff_text: Optional[str]) -> tuple[int, int]:
+    """Parse diff output and count added/removed lines.
+
+    Parameters
+    ----------
+    diff_text : Optional[str]
+        Diff output text (unified diff format)
+
+    Returns
+    -------
+    tuple[int, int]
+        Tuple of (lines_added, lines_removed)
+    """
+    if not diff_text:
+        return (0, 0)
+
+    lines_added = 0
+    lines_removed = 0
+
+    for line in diff_text.split('\n'):
+        # Skip metadata lines (--- +++ @@ etc)
+        if line.startswith('+++') or line.startswith('---') or line.startswith('@@'):
+            continue
+        # Count additions and removals
+        if line.startswith('+'):
+            lines_added += 1
+        elif line.startswith('-'):
+            lines_removed += 1
+
+    return (lines_added, lines_removed)
 
 
 class DeploymentStatus(Enum):
@@ -77,6 +107,8 @@ class DeploymentResult:
     error: Optional[str] = None
     changes_applied: bool = False
     duration: float = 0.0
+    diff_lines_added: int = 0
+    diff_lines_removed: int = 0
 
 
 class Deployer:
@@ -436,8 +468,12 @@ class Deployer:
                         intended_config=intended_config,
                         mode=self.mode,
                         dry_run=self.dry_run,
-                        show_diff=self.show_diff,
+                        show_diff=True,  # Always get diff for statistics
                     )
+
+                    # Parse diff statistics
+                    diff_text = result.get("diff")
+                    lines_added, lines_removed = parse_diff_stats(diff_text)
 
                     # Update progress
                     status_text = "Validated" if self.dry_run else "Deployed"
@@ -449,9 +485,11 @@ class Deployer:
                     return DeploymentResult(
                         hostname=target.hostname,
                         status=DeploymentStatus.SUCCESS,
-                        diff=result.get("diff"),
+                        diff=diff_text if self.show_diff else None,
                         changes_applied=result.get("changes_applied", False),
                         duration=time.time() - start_time,
+                        diff_lines_added=lines_added,
+                        diff_lines_removed=lines_removed,
                     )
 
         except AuthenticationError as e:
@@ -538,21 +576,22 @@ class Deployer:
         else:
             self.console.print()
 
-        # Create progress bars
+        # Create a simple spinner for overall progress (no per-device bars)
         with Progress(
             SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
+            TextColumn("[cyan]{task.description}"),
             console=self.console,
         ) as progress:
-            # Create tasks for each device
+            overall_task = progress.add_task(
+                f"Deploying to {len(self._targets)} devices...", total=None
+            )
+
+            # Create deployment tasks (no individual progress tracking)
             tasks = []
             for target in self._targets:
-                task_id = progress.add_task(
-                    f"[dim]{target.hostname}[/dim] - Pending...", total=1
-                )
+                # Create a dummy task just for the method signature
+                # We won't update it since we removed per-device bars
+                task_id = progress.add_task("", visible=False, total=1)
                 tasks.append(
                     self._deploy_to_device(target, progress, task_id)
                 )
@@ -560,9 +599,8 @@ class Deployer:
             # Execute deployments concurrently
             self._results = await asyncio.gather(*tasks, return_exceptions=False)
 
-            # Mark all tasks as complete
-            for task_id in progress.task_ids:
-                progress.update(task_id, completed=1)
+            # Mark overall progress as complete
+            progress.update(overall_task, completed=1)
 
         # Display results summary
         self._display_results()
@@ -586,11 +624,12 @@ class Deployer:
             1 for r in self._results if r.status == DeploymentStatus.SKIPPED
         )
 
-        # Create results table
-        table = Table(title="\nDeployment Results", show_header=True)
+        # Create results table with Diff column
+        table = Table(title="\nDeployment Status", show_header=True)
         table.add_column("Hostname", style="cyan")
         table.add_column("Status", style="bold")
         table.add_column("Duration", justify="right")
+        table.add_column("Diff (+/-)", justify="right")
         table.add_column("Error", style="red")
 
         for result in self._results:
@@ -600,10 +639,25 @@ class Deployer:
                 DeploymentStatus.SKIPPED: "yellow",
             }.get(result.status, "white")
 
+            # Format diff statistics with color coding
+            diff_display = ""
+            if result.status == DeploymentStatus.SUCCESS:
+                if result.diff_lines_added > 0 or result.diff_lines_removed > 0:
+                    diff_display = (
+                        f"[green]+{result.diff_lines_added}[/green] / "
+                        f"[red]-{result.diff_lines_removed}[/red]"
+                    )
+                else:
+                    diff_display = "[dim]No changes[/dim]"
+            else:
+                # For failed or skipped deployments
+                diff_display = "[dim]-[/dim]"
+
             table.add_row(
                 result.hostname,
                 f"[{status_color}]{result.status.value}[/{status_color}]",
                 f"{result.duration:.2f}s",
+                diff_display,
                 result.error or "",
             )
 

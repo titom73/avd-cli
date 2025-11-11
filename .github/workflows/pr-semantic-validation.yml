@@ -37,6 +37,7 @@ jobs:
             revert
             make
             chore
+            release
           # Configure which scopes are allowed.
           scopes: |
             avd-cli

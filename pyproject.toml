@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "avd-cli"
-version = "v0.1.0"
+version = "0.1.0"
 description = "CLI tool for processing Arista AVD inventories and generating configurations"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -280,7 +280,7 @@ tag = false  # Tags are created manually after PR merge
 push = false  # Push manually after PR review
 
 [tool.bumpver.file_patterns]
-"pyproject.toml" = ['current_version = "{version}"', 'version = "v{version}"']
+"pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "avd_cli/__init__.py" = [
     "__version__ = \"{version}\"",
 ]

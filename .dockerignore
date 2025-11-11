@@ -1,0 +1,30 @@
+# Ignore everything
+*
+
+# Allow files and directories
+!/avd_cli/
+!/pyproject.toml
+!/uv.lock
+!/LICENSE
+!/README.md
+
+# Ignore unnecessary files inside allowed directories
+# This should go after the allowed directories
+**/*~
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+
+# Ignore UV cache directory
+.uv/
+**/.uv/
+
+# Ignore Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environments
+.venv/
+**/.venv/

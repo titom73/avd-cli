@@ -20,6 +20,7 @@ A command-line interface for processing [Arista AVD](https://avd.arista.com/) in
 - **🔧 Configuration Generation**: Generate EOS device configurations using pyavd
 - **📚 Documentation Generation**: Create comprehensive network documentation in Markdown
 - **🧪 ANTA Test Generation**: Generate ANTA test catalogs for network validation
+- **🚀 Configuration Deployment**: Deploy configurations to EOS devices via eAPI with diff statistics
 - **⚡ Lightning fast generation**: Generate configurations, documentation and tests way faster than ansible (`1.28sec` for 10 hosts compare to `3sec` with Ansible)
 - **🌐 Multi-Fabric Support**: Process multiple network fabrics with variable inheritance
 - **🔧 Rich Terminal Experience**: Beautiful CLI with progress bars and formatted output
@@ -57,39 +58,25 @@ avd-cli generate all --inventory-path ./examples/atd-inventory
 │ Tests          │     2 │ examples/atd-inventory/intended/tests           │
 └────────────────┴───────┴─────────────────────────────────────────────────┘
 
-# View inventory information
-avd-cli info --inventory-path ./examples/atd-inventory
-→ Loading inventory...
-✓ Loaded 10 devices
+# Deploy configurations to EOS devices
+avd-cli deploy eos --inventory-path ./examples/atd-inventory --dry-run --diff
 
-           Inventory Summary
-┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ Metric                  ┃ Value     ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ Total Devices           │ 10        │
-│ Total Fabrics           │ 1         │
-│ Fabric: campus_avd      │           │
-│   - Design Type         │ l3ls-evpn │
-│   - Spine Devices       │ 2         │
-│   - Leaf Devices        │ 8         │
-│   - Border Leaf Devices │ 0         │
-└─────────────────────────┴───────────┘
+Deployment Plan (dry-run)
+  Mode: replace
+  Targets: 10 devices
+  Concurrency: 10 devices
 
-                             Devices
-┏━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
-┃ Hostname       ┃ Type  ┃ Platform ┃ Management IP ┃ Fabric     ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-│ leaf-1a        │ leaf  │ 722XP    │ 192.168.0.14  │ campus_avd │
-│ leaf-1b        │ leaf  │ 722XP    │ 192.168.0.15  │ campus_avd │
-│ leaf-2a        │ leaf  │ 722XP    │ 192.168.0.16  │ campus_avd │
-│ leaf-3a        │ leaf  │ 720XP    │ 192.168.0.17  │ campus_avd │
-│ leaf-3b        │ leaf  │ 720XP    │ 192.168.0.18  │ campus_avd │
-│ member-leaf-3c │ leaf  │ 720XP    │ 192.168.0.19  │ campus_avd │
-│ member-leaf-3d │ leaf  │ 720XP    │ 192.168.0.20  │ campus_avd │
-│ member-leaf-3e │ leaf  │ 720XP    │ 192.168.0.21  │ campus_avd │
-│ spine01        │ spine │ 7050X3   │ 192.168.0.12  │ campus_avd │
-│ spine02        │ spine │ 7050X3   │ 192.168.0.13  │ campus_avd │
-└────────────────┴───────┴──────────┴───────────────┴────────────┘
+⠼ Deploying to 10 devices...
+
+                      Deployment Status
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓
+┃ Hostname       ┃ Status  ┃ Duration ┃ Diff (+/-) ┃ Error ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩
+│ spine01        │ success │ 2.34s    │ +127 / -5  │       │
+│ spine02        │ success │ 1.89s    │ +127 / -5  │       │
+│ leaf-1a        │ success │ 3.12s    │ +245 / -12 │       │
+│ ...            │ ...     │ ...      │ ...        │       │
+└────────────────┴─────────┴──────────┴────────────┴───────┘
 ```
 
 ## Documentation

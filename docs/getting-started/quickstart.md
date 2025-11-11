@@ -226,13 +226,80 @@ avd-cli info --inventory-path .
 
 ---
 
+## Step 5: Deploy Configurations (Optional)
+
+Once you've generated configurations, you can deploy them to your EOS devices using the `deploy` command.
+
+!!! warning "Prerequisites"
+    - Devices must be reachable on the network
+    - eAPI must be enabled on devices
+    - Valid credentials in inventory (`ansible_user`, `ansible_password`)
+
+### Dry-Run Deployment
+
+First, validate your configurations with a dry-run:
+
+```bash
+avd-cli deploy eos --inventory-path . --dry-run --diff
+```
+
+**Output:**
+
+```
+Deployment Plan (dry-run)
+  Mode: replace
+  Targets: 4 devices
+  Concurrency: 10 devices
+  Credentials: admin / ********
+
+⠼ Deploying to 4 devices...
+
+                      Deployment Status
+┏━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓
+┃ Hostname ┃ Status  ┃ Duration ┃ Diff (+/-) ┃ Error ┃
+┡━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩
+│ spine1   │ success │ 2.34s    │ +127 / -5  │       │
+│ spine2   │ success │ 1.89s    │ +127 / -5  │       │
+│ leaf1    │ success │ 3.12s    │ +245 / -12 │       │
+│ leaf2    │ success │ 2.87s    │ +245 / -12 │       │
+└──────────┴─────────┴──────────┴────────────┴───────┘
+
+Summary:
+  ✓ Success: 4
+  ✗ Failed: 0
+  ○ Skipped: 0
+```
+
+The **Diff (+/-)** column shows:
+- **Green numbers** (+127): Lines added to the configuration
+- **Red numbers** (-5): Lines removed from the configuration
+
+### Live Deployment
+
+After validating, deploy to live devices:
+
+```bash
+avd-cli deploy eos --inventory-path .
+```
+
+!!! tip "Deployment Best Practices"
+    - Always run `--dry-run` first to validate changes
+    - Use `--diff` to review configuration changes
+    - Deploy to groups incrementally: `-l SPINES`, then `-l LEAFS`
+    - Enable SSL verification in production: `--verify-ssl`
+
+For more information, see the [Deploy Command Guide](../user-guide/commands/deploy.md).
+
+---
+
 ## Next Steps
 
-Congratulations! You've successfully generated your first network configuration with AVD CLI. 🎉
+Congratulations! You've successfully generated and optionally deployed your first network configuration with AVD CLI. 🎉
 
 ### Learn More
 
 - **[Basic Usage](basic-usage.md)** - Learn about all available commands
+- **[Deploy Command](../user-guide/commands/deploy.md)** - Complete deployment guide
 - **[User Guide](../user-guide/commands/overview.md)** - Comprehensive command reference
 - **[Inventory Structure](../user-guide/inventory-structure.md)** - Deep dive into inventory organization
 - **[Examples](../examples/basic.md)** - More complex examples
@@ -259,6 +326,12 @@ avd-cli generate configs -i . -o output
 
 # Generate only documentation
 avd-cli generate docs -i . -o output
+
+# Deploy configurations with dry-run
+avd-cli deploy eos -i . --dry-run --diff
+
+# Deploy to specific groups
+avd-cli deploy eos -i . -l SPINES
 
 # Validate inventory before generating
 avd-cli validate -i .

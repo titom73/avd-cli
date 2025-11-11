@@ -167,10 +167,11 @@ nav:
   - Basic Usage: getting-started/basic-usage.md
 - User Guide:
   - Commands Overview: user-guide/commands/overview.md
-  - generate: user-guide/commands/generate.md
-  - validate: user-guide/commands/validate.md
-  - info: user-guide/commands/info.md
   - Inventory Structure: user-guide/inventory-structure.md
+  - Get inventory information: user-guide/commands/info.md
+  - Validate inventory: user-guide/commands/validate.md
+  - Build Configuration: user-guide/commands/generate.md
+  - Deploy Configurations: user-guide/commands/deploy.md
   - Environment Variables: user-guide/environment-variables.md
   - Workflows: user-guide/workflows.md
   - Configuration: user-guide/configuration.md

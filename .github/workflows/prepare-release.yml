@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Load UV version
         id: versions
@@ -76,7 +76,7 @@ jobs:
         id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           base: main
           branch: release/v${{ steps.bump.outputs.version }}
           title: "release: avd-cli v${{ steps.bump.outputs.version }}"
@@ -89,7 +89,6 @@ jobs:
 
             - [x] Version bumped in `pyproject.toml`
             - [x] Version bumped in `avd_cli/__init__.py`
-            - [ ] `RELEASE_NOTES.md` updated with actual changes
             - [ ] All tests passing
             - [ ] Documentation updated (if needed)
 
@@ -122,7 +121,7 @@ jobs:
             **Previous version**: `v${{ steps.current-version.outputs.version }}`
             **New version**: `v${{ steps.bump.outputs.version }}`
           labels: |
-            release
+            kind:release
             automated
           assignees: ${{ github.actor }}
 

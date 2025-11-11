@@ -26,13 +26,20 @@ python3 -m pip install --user pipx
 python3 -m pipx ensurepath
 
 # Install avd-cli
-pipx install git+https://github.com/titom73/avd-cli.git
+pipx install avd-cli
 ```
 
 !!! tip "Why pipx?"
     pipx creates an isolated environment for each application, avoiding conflicts with other Python packages on your system.
 
-### Method 2: Using pip
+### Method 2.1: Using pip and Github repository
+
+```bash
+# Install from GitHub
+pipx install git+https://github.com/titom73/avd-cli.git
+```
+
+### Method 2.2: Using pip and Github repository
 
 ```bash
 # Install from GitHub

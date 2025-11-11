@@ -165,6 +165,7 @@ nav:
   - Installation: getting-started/installation.md
   - Quick Start: getting-started/quickstart.md
   - Basic Usage: getting-started/basic-usage.md
+  - Docker Usage: getting-started/docker.md
 - User Guide:
   - Commands Overview: user-guide/commands/overview.md
   - Inventory Structure: user-guide/inventory-structure.md

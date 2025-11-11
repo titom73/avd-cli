@@ -84,7 +84,7 @@ jobs:
     needs: [verify-version, create-release]
     environment:
       name: pypi
-      url: https://pypi.org/p/eos-downloader
+      url: https://pypi.org/p/avd-cli
     permissions:
       contents: read
       id-token: write # Required for OIDC authentication with PyPI

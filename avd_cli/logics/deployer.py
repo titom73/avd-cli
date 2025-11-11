@@ -181,7 +181,7 @@ class Deployer:
                             f"No inventory.yml or inventory.yaml found in {self.inventory_path}"
                         )
 
-            with open(inventory_file) as f:
+            with open(inventory_file, encoding='utf-8') as f:
                 inventory: Any = yaml.safe_load(f)
 
             if not inventory:
@@ -289,7 +289,7 @@ class Deployer:
                     ansible_host = host_data.get("ansible_host")
                     if not ansible_host:
                         self.logger.warning(
-                            f"Skipping {hostname}: missing ansible_host in inventory"
+                            "Skipping %s: missing ansible_host in inventory", hostname
                         )
                         continue
 
@@ -302,7 +302,7 @@ class Deployer:
                         config_file: Optional[Path]
                         if not config_file_path.exists():
                             self.logger.warning(
-                                f"Configuration file not found for {hostname}: {config_file_path}"
+                                "Configuration file not found for %s: %s", hostname, config_file_path
                             )
                             config_file = None
                         else:
@@ -319,7 +319,7 @@ class Deployer:
                         )
 
                     except CredentialError as e:
-                        self.logger.error(f"Skipping {hostname}: {e}")
+                        self.logger.error("Skipping %s: %s", hostname, e)
                         continue
 
         # Recursively process children groups

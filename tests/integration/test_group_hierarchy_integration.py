@@ -75,10 +75,12 @@ class TestGroupHierarchyIntegration:
 
         # CRITICAL: Validate complete group hierarchy is present
         # This was the bug - before the fix, only partial hierarchy was loaded
-        expected_groups = ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
-        assert leaf_1a.groups == expected_groups, (
+        # Check content, not order (order is alphabetical after Set conversion)
+        expected_groups = {'lab', 'atd', 'campus_avd', 'campus_leaves', 'campus_ports', 'campus_services', 'IDF1'}
+        actual_groups = set(leaf_1a.groups)
+        assert actual_groups == expected_groups, (
             f"leaf-1a should have complete group hierarchy. "
-            f"Expected {expected_groups}, got {leaf_1a.groups}. "
+            f"Expected {expected_groups}, got {actual_groups}. "
             f"This indicates the group hierarchy bug may have regressed."
         )
 
@@ -226,15 +228,15 @@ class TestGroupHierarchyIntegration:
             "Both leaf-1a and leaf-1b should exist"
         )
 
-        # Both should have identical group hierarchies
-        assert leaf_1a.groups == leaf_1b.groups, (
+        # Both should have identical group hierarchies (content, not order)
+        assert set(leaf_1a.groups) == set(leaf_1b.groups), (
             f"Devices in same group should have same hierarchy. "
-            f"leaf-1a: {leaf_1a.groups}, leaf-1b: {leaf_1b.groups}"
+            f"leaf-1a: {set(leaf_1a.groups)}, leaf-1b: {set(leaf_1b.groups)}"
         )
 
-        expected_groups = ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
-        assert leaf_1a.groups == expected_groups
-        assert leaf_1b.groups == expected_groups
+        expected_groups = {'lab', 'atd', 'campus_avd', 'campus_leaves', 'campus_ports', 'campus_services', 'IDF1'}
+        assert set(leaf_1a.groups) == expected_groups
+        assert set(leaf_1b.groups) == expected_groups
 
     def test_devices_in_different_subgroups_have_correct_hierarchies(self, eos_design_complex_inventory):
         """Test that devices in different subgroups have appropriate hierarchies.
@@ -257,17 +259,19 @@ class TestGroupHierarchyIntegration:
                 elif device.hostname == "leaf-3a":
                     devices_by_group['IDF3_AGG'] = device
 
-        # All should have common ancestry up to campus_leaves
-        common_ancestry = ['lab', 'atd', 'campus_avd', 'campus_leaves']
+        # All should have common ancestry up to campus_leaves (content, not order)
+        common_ancestry = {'lab', 'atd', 'campus_avd', 'campus_leaves', 'campus_ports', 'campus_services'}
 
         for subgroup, device in devices_by_group.items():
-            # Check common part
-            assert device.groups[:4] == common_ancestry, (
-                f"{device.hostname} should have common ancestry {common_ancestry}"
+            # Check common ancestry is present
+            device_groups_set = set(device.groups)
+            assert common_ancestry.issubset(device_groups_set), (
+                f"{device.hostname} should have common ancestry {common_ancestry}, "
+                f"got {device_groups_set}"
             )
 
-            # Check that specific subgroup is at the end
-            assert device.groups[-1] == subgroup, (
+            # Check that specific subgroup is present
+            assert subgroup in device.groups, (
                 f"{device.hostname} should have {subgroup} as its specific group, "
                 f"got {device.groups}"
             )

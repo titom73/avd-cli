@@ -35,7 +35,7 @@ def integration_inventory(tmp_path: Path) -> Path:
     }
 
     inventory_file = tmp_path / "inventory.yml"
-    with open(inventory_file, "w") as f:
+    with open(inventory_file, "w", encoding='utf-8') as f:
         yaml.dump(inventory_data, f)
 
     # Create config files
@@ -225,7 +225,7 @@ class TestDeploymentWorkflow:
         }
 
         inventory_file = tmp_path / "inventory.yml"
-        with open(inventory_file, "w") as f:
+        with open(inventory_file, "w", encoding='utf-8') as f:
             yaml.dump(inventory_data, f)
 
         # Create only one config file
@@ -294,7 +294,7 @@ class TestDeploymentWorkflow:
         }
 
         inventory_file = tmp_path / "inventory.yml"
-        with open(inventory_file, "w") as f:
+        with open(inventory_file, "w", encoding='utf-8') as f:
             yaml.dump(inventory_data, f)
 
         # Create config files

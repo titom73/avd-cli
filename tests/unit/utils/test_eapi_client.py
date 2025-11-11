@@ -315,14 +315,44 @@ interface Ethernet1
                 f"{config.protocol}://{config.host}:{config.port}/command-api",
                 payload={"jsonrpc": "2.0", "result": [{"output": "version"}], "id": "1"},
             )
-            # Mock running config for diff with enable command
+            # Mock config session apply (step 1: enter session + rollback clean-config + apply config)
             m.post(
                 f"{config.protocol}://{config.host}:{config.port}/command-api",
                 payload={
                     "jsonrpc": "2.0",
                     "result": [
-                        {"output": ""},  # enable command result
-                        {"output": "hostname old-device\n"},  # show running-config result
+                        {"output": ""},  # enable
+                        {"output": ""},  # configure session
+                        {"output": ""},  # rollback clean-config
+                        {"output": ""},  # config lines
+                    ],
+                    "id": "1",
+                },
+            )
+            # Mock diff retrieval (optional, for show_diff)
+            m.post(
+                f"{config.protocol}://{config.host}:{config.port}/command-api",
+                payload={
+                    "jsonrpc": "2.0",
+                    "result": [
+                        {"output": ""},  # enable
+                        {"output": ""},  # configure session
+                        {
+                            "output": "--- old\n+++ new\n@@ -1 +1 @@\n-hostname old-device\n+hostname test-device\n"
+                        },  # show session-config diffs
+                    ],
+                    "id": "1",
+                },
+            )
+            # Mock session commit/abort (step 2: re-enter session + abort for dry_run)
+            m.post(
+                f"{config.protocol}://{config.host}:{config.port}/command-api",
+                payload={
+                    "jsonrpc": "2.0",
+                    "result": [
+                        {"output": ""},  # enable
+                        {"output": ""},  # configure session
+                        {"output": ""},  # abort (dry_run)
                     ],
                     "id": "1",
                 },
@@ -330,12 +360,13 @@ interface Ethernet1
 
             async with EapiClient(config) as client:
                 result = await client.apply_config(
-                    intended_config, mode=DeploymentMode.REPLACE, dry_run=True
+                    intended_config, mode=DeploymentMode.REPLACE, dry_run=True, show_diff=True
                 )
 
                 assert result["success"] is True
                 assert result["changes_applied"] is False
                 assert result["diff"] is not None
+                assert "hostname" in result["diff"]  # Check diff contains expected content
                 assert result["error"] is None
 
     async def test_apply_config_replace_mode(self, config: EapiConfig) -> None:

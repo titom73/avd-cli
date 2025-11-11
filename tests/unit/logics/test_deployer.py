@@ -139,7 +139,7 @@ def sample_inventory(tmp_path: Path) -> Path:
     }
 
     inventory_file = tmp_path / "inventory.yml"
-    with open(inventory_file, "w") as f:
+    with open(inventory_file, "w", encoding='utf-8') as f:
         yaml.dump(inventory_data, f)
 
     return inventory_file
@@ -244,7 +244,7 @@ class TestDeployer:
         }
 
         inventory_file = inventory_dir / "inventory.yml"
-        with open(inventory_file, "w") as f:
+        with open(inventory_file, "w", encoding='utf-8') as f:
             yaml.dump(inventory_data, f)
 
         deployer = Deployer(inventory_path=inventory_dir)
@@ -272,7 +272,7 @@ class TestDeployer:
 
         # Use .yaml extension instead of .yml
         inventory_file = inventory_dir / "inventory.yaml"
-        with open(inventory_file, "w") as f:
+        with open(inventory_file, "w", encoding='utf-8') as f:
             yaml.dump(inventory_data, f)
 
         deployer = Deployer(inventory_path=inventory_dir)

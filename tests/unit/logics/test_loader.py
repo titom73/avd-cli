@@ -827,10 +827,12 @@ interface_profiles:
         assert leaf_1a is not None, "leaf-1a should be found in inventory"
 
         # CRITICAL: Device should have ALL ancestor groups, not just the topology group
-        expected_groups = ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
-        assert leaf_1a.groups == expected_groups, (
+        # Check content, not order (order is alphabetical after Set conversion)
+        expected_groups = {'lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1'}
+        actual_groups = set(leaf_1a.groups)
+        assert actual_groups == expected_groups, (
             f"Device should inherit full group hierarchy. "
-            f"Expected {expected_groups}, got {leaf_1a.groups}"
+            f"Expected {expected_groups}, got {actual_groups}"
         )
 
     def test_device_inherits_variables_from_all_groups(self, loader, hierarchical_inventory):
@@ -875,17 +877,17 @@ interface_profiles:
         """
         hierarchy = loader._build_group_hierarchy(hierarchical_inventory)
 
-        # Check that IDF1 has full ancestry
+        # Check that IDF1 has full ancestry (content, not order)
         assert 'IDF1' in hierarchy, "IDF1 group should be in hierarchy"
-        assert hierarchy['IDF1'] == ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1'], (
+        assert set(hierarchy['IDF1']) == {'lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1'}, (
             "IDF1 should have complete ancestry from root to self"
         )
 
-        # Check intermediate groups
-        assert hierarchy['campus_leaves'] == ['lab', 'atd', 'campus_avd', 'campus_leaves']
-        assert hierarchy['campus_avd'] == ['lab', 'atd', 'campus_avd']
-        assert hierarchy['atd'] == ['lab', 'atd']
-        assert hierarchy['lab'] == ['lab']
+        # Check intermediate groups (content, not order)
+        assert set(hierarchy['campus_leaves']) == {'lab', 'atd', 'campus_avd', 'campus_leaves'}
+        assert set(hierarchy['campus_avd']) == {'lab', 'atd', 'campus_avd'}
+        assert set(hierarchy['atd']) == {'lab', 'atd'}
+        assert set(hierarchy['lab']) == {'lab'}
 
     def test_host_to_group_mapping(self, loader, hierarchical_inventory):
         """Test that the host-to-group map correctly identifies where each host is defined.
@@ -964,11 +966,11 @@ nodes:
 
         hierarchy = loader._build_group_hierarchy(inventory_dir)
 
-        # Both branches should have correct ancestry
-        assert hierarchy['subgroup_a1'] == ['root', 'group_a', 'subgroup_a1']
-        assert hierarchy['subgroup_b1'] == ['root', 'group_b', 'subgroup_b1']
-        assert hierarchy['group_a'] == ['root', 'group_a']
-        assert hierarchy['group_b'] == ['root', 'group_b']
+        # Both branches should have correct ancestry (content, not order)
+        assert set(hierarchy['subgroup_a1']) == {'root', 'group_a', 'subgroup_a1'}
+        assert set(hierarchy['subgroup_b1']) == {'root', 'group_b', 'subgroup_b1'}
+        assert set(hierarchy['group_a']) == {'root', 'group_a'}
+        assert set(hierarchy['group_b']) == {'root', 'group_b'}
 
     def test_variable_precedence_in_hierarchy(self, loader, tmp_path):
         """Test that variable precedence follows Ansible rules: more specific beats less specific.

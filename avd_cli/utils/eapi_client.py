@@ -106,7 +106,7 @@ class EapiClient:
 
             # Test connection with show version
             await self._execute_commands(["show version"])
-            self.logger.debug(f"Connected to {self.config.host}")
+            self.logger.debug("Connected to %s", self.config.host)
 
         except aiohttp.ClientResponseError as e:
             if e.status == 401:
@@ -131,7 +131,7 @@ class EapiClient:
         if self._device:
             await self._device.close()
             self._device = None
-            self.logger.debug(f"Disconnected from {self.config.host}")
+            self.logger.debug("Disconnected from %s", self.config.host)
 
     async def _execute_commands(self, commands: list[str]) -> list[Dict[str, Any]]:
         """Execute commands via eAPI.

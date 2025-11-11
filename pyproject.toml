@@ -229,6 +229,7 @@ disable = [
     "W0611",  # unused-import (false positives with conditional imports)
     "R0902",  # too-many-instance-attributes (data models need them)
     "W0613",  # unused-argument (required by interface/signature)
+    "R0913",  # too-many-arguments (CLI/deployer functions need many params)
     "R0917",  # too-many-positional-arguments (CLI commands need them)
     "R0914",  # too-many-locals (complex logic needs local vars)
     "W0718",  # broad-exception-caught (CLI error handling)

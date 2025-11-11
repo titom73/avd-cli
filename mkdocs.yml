@@ -72,7 +72,7 @@ plugins:
     handlers:
       python:
         paths: [ avd_cli ]
-        import:
+        inventories:
         - https://docs.python.org/3/objects.inv
         - https://mkdocstrings.github.io/objects.inv
         - https://mkdocstrings.github.io/griffe/objects.inv

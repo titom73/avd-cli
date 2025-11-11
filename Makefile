@@ -125,15 +125,24 @@ docs-deploy-dev: ## Deploy development documentation (main)
 	@echo "✓ Development documentation deployed"
 
 .PHONY: docs-deploy-stable
-docs-deploy-stable: ## Deploy stable documentation (requires VERSION var)
+docs-deploy-stable: ## Deploy stable documentation (requires VERSION var, optional: FORCE=true)
 ifndef VERSION
 	@echo "Error: VERSION variable is required"
 	@echo "Usage: make docs-deploy-stable VERSION=v0.1.0"
+	@echo "       make docs-deploy-stable VERSION=v0.1.0 FORCE=true  # Force push if diverged"
 	@exit 1
 endif
 	@echo "Deploying stable documentation for $(VERSION)..."
+ifdef FORCE
+	@echo "⚠️  Force mode enabled - will overwrite remote gh-pages"
+	uv run mike deploy --ignore-remote-status $(VERSION) stable
+	uv run mike set-default --ignore-remote-status stable
+	@echo "Pushing to gh-pages with force..."
+	git push origin gh-pages --force
+else
 	uv run mike deploy --push $(VERSION) stable
 	uv run mike set-default --push stable
+endif
 	@echo "✓ Stable documentation deployed for $(VERSION)"
 
 .PHONY: docs-delete

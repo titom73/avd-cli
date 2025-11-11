@@ -16,7 +16,7 @@
         <link rel="next" href="../basic-usage/">
       
       
-      <link rel="icon" href="../../assets/favicon.ico">
+      <link rel="icon" href="../../imgs/avd-cli-favicon.jpg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
@@ -305,6 +305,8 @@
       
         
       
+        
+      
     
     
     
@@ -521,6 +523,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#step-5-deploy-configurations-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Deploy Configurations (Optional)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 5: Deploy Configurations (Optional)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dry-run-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dry-Run Deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live Deployment
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       Next Steps
@@ -599,6 +634,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -614,6 +672,8 @@
   
     
     
+      
+        
       
         
       
@@ -692,35 +752,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/generate/" class="md-nav__link">
+      <a href="../../user-guide/inventory-structure/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    generate
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user-guide/commands/validate/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    validate
+    Inventory Structure
     
   </span>
   
@@ -743,7 +780,7 @@
   
   
   <span class="md-ellipsis">
-    info
+    Get inventory information
     
   </span>
   
@@ -761,12 +798,58 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/inventory-structure/" class="md-nav__link">
+      <a href="../../user-guide/commands/validate/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Inventory Structure
+    Validate inventory
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/commands/generate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Build Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/commands/deploy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Deploy Configurations
     
   </span>
   
@@ -1328,6 +1411,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#step-5-deploy-configurations-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Deploy Configurations (Optional)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 5: Deploy Configurations (Optional)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dry-run-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dry-Run Deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live Deployment
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       Next Steps
@@ -1579,11 +1695,68 @@
 </span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>└──────────┴───────┴───────────┴───────────────┴───────────┘
 </span></code></pre></div>
 <hr>
+<h3 id="step-5-deploy-configurations-optional">Step 5: Deploy Configurations (Optional)<a class="headerlink" href="#step-5-deploy-configurations-optional" title="Permanent link">¶</a></h3>
+<p>Once you’ve generated configurations, you can deploy them to your EOS devices using the <code>deploy</code> command.</p>
+<div class="admonition warning">
+<p class="admonition-title">Prerequisites</p>
+<ul>
+<li>Devices must be reachable on the network</li>
+<li>eAPI must be enabled on devices</li>
+<li>Valid credentials in inventory (<code>ansible_user</code>, <code>ansible_password</code>)</li>
+</ul>
+</div>
+<h4 id="dry-run-deployment">Dry-Run Deployment<a class="headerlink" href="#dry-run-deployment" title="Permanent link">¶</a></h4>
+<p>First, validate your configurations with a dry-run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>avd-cli<span class="w"> </span>deploy<span class="w"> </span>eos<span class="w"> </span>--inventory-path<span class="w"> </span>.<span class="w"> </span>--dry-run<span class="w"> </span>--diff
+</span></code></pre></div>
+<p><strong>Output:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Deployment Plan (dry-run)
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  Mode: replace
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>  Targets: 4 devices
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>  Concurrency: 10 devices
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>  Credentials: admin / ********
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>⠼ Deploying to 4 devices...
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>                      Deployment Status
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>┏━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>┃ Hostname ┃ Status  ┃ Duration ┃ Diff (+/-) ┃ Error ┃
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>┡━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>│ spine1   │ success │ 2.34s    │ +127 / -5  │       │
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>│ spine2   │ success │ 1.89s    │ +127 / -5  │       │
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>│ leaf1    │ success │ 3.12s    │ +245 / -12 │       │
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>│ leaf2    │ success │ 2.87s    │ +245 / -12 │       │
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>└──────────┴─────────┴──────────┴────────────┴───────┘
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>Summary:
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>  ✓ Success: 4
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>  ✗ Failed: 0
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>  ○ Skipped: 0
+</span></code></pre></div>
+<p>The <strong>Diff (±)</strong> column shows:
+- <strong>Green numbers</strong> (+127): Lines added to the configuration
+- <strong>Red numbers</strong> (-5): Lines removed from the configuration</p>
+<h4 id="live-deployment">Live Deployment<a class="headerlink" href="#live-deployment" title="Permanent link">¶</a></h4>
+<p>After validating, deploy to live devices:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>avd-cli<span class="w"> </span>deploy<span class="w"> </span>eos<span class="w"> </span>--inventory-path<span class="w"> </span>.
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Deployment Best Practices</p>
+<ul>
+<li>Always run <code>--dry-run</code> first to validate changes</li>
+<li>Use <code>--diff</code> to review configuration changes</li>
+<li>Deploy to groups incrementally: <code>-l SPINES</code>, then <code>-l LEAFS</code></li>
+<li>Enable SSL verification in production: <code>--verify-ssl</code></li>
+</ul>
+</div>
+<p>For more information, see the <a href="../../user-guide/commands/deploy/">Deploy Command Guide</a>.</p>
+<hr>
 <h3 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">¶</a></h3>
-<p>Congratulations! You’ve successfully generated your first network configuration with AVD CLI. 🎉</p>
+<p>Congratulations! You’ve successfully generated and optionally deployed your first network configuration with AVD CLI. 🎉</p>
 <h4 id="learn-more">Learn More<a class="headerlink" href="#learn-more" title="Permanent link">¶</a></h4>
 <ul>
 <li><strong><a href="../basic-usage/">Basic Usage</a></strong> - Learn about all available commands</li>
+<li><strong><a href="../../user-guide/commands/deploy/">Deploy Command</a></strong> - Complete deployment guide</li>
 <li><strong><a href="../../user-guide/commands/overview/">User Guide</a></strong> - Comprehensive command reference</li>
 <li><strong><a href="../../user-guide/inventory-structure/">Inventory Structure</a></strong> - Deep dive into inventory organization</li>
 <li><strong><a href="../../examples/basic/">Examples</a></strong> - More complex examples</li>
@@ -1600,17 +1773,23 @@
 <p>Refer to the <a href="https://avd.arista.com/">Arista AVD documentation</a> for detailed configuration options.</p>
 <hr>
 <h3 id="common-next-commands">Common Next Commands<a class="headerlink" href="#common-next-commands" title="Permanent link">¶</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Generate only configurations</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>configs<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Generate only documentation</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>docs<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Validate inventory before generating</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>avd-cli<span class="w"> </span>validate<span class="w"> </span>-i<span class="w"> </span>.
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Use different workflow (for existing structured configs)</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>all<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output<span class="w"> </span>--workflow<span class="w"> </span>cli-config
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Generate only configurations</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>configs<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Generate only documentation</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>docs<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Deploy configurations with dry-run</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>avd-cli<span class="w"> </span>deploy<span class="w"> </span>eos<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>--dry-run<span class="w"> </span>--diff
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Deploy to specific groups</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>avd-cli<span class="w"> </span>deploy<span class="w"> </span>eos<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-l<span class="w"> </span>SPINES
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># Validate inventory before generating</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>avd-cli<span class="w"> </span>validate<span class="w"> </span>-i<span class="w"> </span>.
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Use different workflow (for existing structured configs)</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>avd-cli<span class="w"> </span>generate<span class="w"> </span>all<span class="w"> </span>-i<span class="w"> </span>.<span class="w"> </span>-o<span class="w"> </span>output<span class="w"> </span>--workflow<span class="w"> </span>cli-config
 </span></code></pre></div>
 <hr>
 <div class="admonition question">
@@ -1641,7 +1820,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 7, 2025 14:18:01 UTC">November 7, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 11, 2025 10:07:49 UTC">November 11, 2025</span>
   </span>
 
     

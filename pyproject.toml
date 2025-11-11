@@ -9,7 +9,7 @@ description = "CLI tool for processing Arista AVD inventories and generating con
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "AVD CLI Development Team", email = "avd-cli@example.com" }
+    { name = "TiTom73", email = "avd-cli@inetsix.net" }
 ]
 keywords = [
     "arista",
@@ -78,10 +78,10 @@ doc = [
 avd-cli = "avd_cli.cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/aristanetworks/avd-cli"
-Documentation = "https://avd-cli.readthedocs.io"
-Repository = "https://github.com/aristanetworks/avd-cli"
-"Bug Tracker" = "https://github.com/aristanetworks/avd-cli/issues"
+Homepage = "https://titom73.github.io/avd-cli/latest/"
+Documentation = "https://titom73.github.io/avd-cli/latest/"
+Repository = "https://github.com/titom73/avd-cli"
+"Bug Tracker" = "https://github.com/titom73/avd-cli/issues"
 
 [dependency-groups]
 dev = [

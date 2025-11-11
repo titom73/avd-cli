@@ -8,8 +8,14 @@ on:
     branches:
       - main
 
+# Prevent race conditions if multiple release PRs are merged rapidly
+concurrency:
+  group: release-tag-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+# Default permissions (least privilege)
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   auto-tag:
@@ -19,6 +25,11 @@ jobs:
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'release/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create and push tags
+    outputs:
+      tag: ${{ steps.extract-version.outputs.version }}
+      tag_created: ${{ steps.check-tag.outputs.exists == 'false' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -34,6 +45,13 @@ jobs:
           BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
           # Extract version from branch name (release/v1.2.3 -> v1.2.3)
           VERSION="${BRANCH_NAME#release/}"
+          
+          # Validate version format (must match vX.Y.Z)
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Error: Invalid version format '$VERSION'. Expected format: vX.Y.Z"
+            exit 1
+          fi
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
@@ -56,6 +74,7 @@ jobs:
             echo "❌ Error: Version mismatch!"
             echo "Branch name suggests version $BRANCH_VERSION"
             echo "But pyproject.toml contains version $PYPROJECT_VERSION"
+            echo ""
             echo "To fix this:"
             echo "  1. Update pyproject.toml version to match the branch name, or"
             echo "  2. Recreate the release branch with the correct version"
@@ -96,6 +115,7 @@ jobs:
           echo "✅ Tag $TAG created and pushed successfully"
 
       - name: Create workflow summary
+        if: steps.check-tag.outputs.exists == 'false'
         run: |
           TAG="${{ steps.extract-version.outputs.version }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
@@ -129,5 +149,3 @@ jobs:
           echo "If you need to recreate the release, you must:" >> $GITHUB_STEP_SUMMARY
           echo "1. Delete the existing tag: \`git tag -d $TAG && git push --delete origin $TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "2. Re-run this workflow or manually create the tag" >> $GITHUB_STEP_SUMMARY
-
-          exit 0

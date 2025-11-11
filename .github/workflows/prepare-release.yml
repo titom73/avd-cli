@@ -1,0 +1,156 @@
+---
+name: "Release: Prepare Version"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+
+# Permissions required
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Prepare release PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load UV version
+        id: versions
+        run: |
+          UV_VERSION=$(cat .github/python-versions.json | jq -r '.uv_version')
+          echo "uv-version=$UV_VERSION" >> $GITHUB_OUTPUT
+          echo "Using UV version: $UV_VERSION"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ steps.versions.outputs.uv-version }}
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get current version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Bump version with bumpver
+        id: bump
+        run: |
+          uv run bumpver update --${{ inputs.version_bump }} --no-fetch
+          NEW_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Create release branch
+        id: branch
+        run: |
+          BRANCH_NAME="release/v${{ steps.bump.outputs.version }}"
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "Created branch: $BRANCH_NAME"
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/v${{ steps.bump.outputs.version }}
+          title: "release: avd-cli v${{ steps.bump.outputs.version }}"
+          body: |
+            ## 🚀 Release Preparation: v${{ steps.bump.outputs.version }}
+
+            This PR prepares the release of **avd-cli v${{ steps.bump.outputs.version }}** (${{ inputs.version_bump }} bump from v${{ steps.current-version.outputs.version }}).
+
+            ### 📋 Checklist
+
+            - [x] Version bumped in `pyproject.toml`
+            - [x] Version bumped in `avd_cli/__init__.py`
+            - [ ] `RELEASE_NOTES.md` updated with actual changes
+            - [ ] All tests passing
+            - [ ] Documentation updated (if needed)
+
+            ### 🎯 Next Steps
+
+            1. **Review** this PR and update `RELEASE_NOTES.md` with actual changes
+            2. **Ensure all tests pass** in the PR checks
+            3. **Merge** this PR to `main`
+            4. **Create and push the tag** to trigger the release:
+               ```bash
+               git checkout main
+               git pull origin main
+               git tag v${{ steps.bump.outputs.version }}
+               git push origin v${{ steps.bump.outputs.version }}
+               ```
+            5. The [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml) will automatically:
+               - ✅ Verify tag matches version in `pyproject.toml`
+               - 📦 Build package with `uv build`
+               - 🚀 Publish to PyPI
+               - 🐳 Build and push Docker images
+               - 📚 Deploy documentation
+
+            ### 📝 Release Notes
+
+            A template has been created in `RELEASE_NOTES.md`. Please update it with the actual changes before merging.
+
+            ---
+
+            **Version bump type**: `${{ inputs.version_bump }}`
+            **Previous version**: `v${{ steps.current-version.outputs.version }}`
+            **New version**: `v${{ steps.bump.outputs.version }}`
+          labels: |
+            release
+            automated
+          assignees: ${{ github.actor }}
+
+      - name: Summary
+        run: |
+          echo "## 🚀 Release Preparation Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version bump**: ${{ inputs.version_bump }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous version**: v${{ steps.current-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**New version**: v${{ steps.bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Next steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the PR: ${{ steps.create-pr.outputs.pull-request-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "2. Update RELEASE_NOTES.md with actual changes" >> $GITHUB_STEP_SUMMARY
+          echo "3. Merge the PR after tests pass" >> $GITHUB_STEP_SUMMARY
+          echo "4. Create and push the release tag:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "git checkout main && git pull" >> $GITHUB_STEP_SUMMARY
+          echo "git tag v${{ steps.bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "git push origin v${{ steps.bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will be triggered automatically when you push the tag." >> $GITHUB_STEP_SUMMARY

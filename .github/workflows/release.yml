@@ -1,152 +1,176 @@
-# ---
-# name: "Tag & Release management"
-# on:
-#   push:
-#     tags:
-#     - 'v*.*.*'
+---
+name: "Release: Publish Package"
+on:
+  push:
+    tags:
+    - 'v*.*.*'
 
-# # Default permissions for all jobs (least privilege)
-# permissions:
-#   contents: read
+# Default permissions for all jobs (least privilege)
+permissions:
+  contents: read
 
-# jobs:
-#   pypi:
-#     name: Publish Python 🐍 distribution 📦 to PyPI
-#     runs-on: ubuntu-latest
-#     environment:
-#       name: pypi
-#       url: https://pypi.org/p/eos-downloader
-#     permissions:
-#       contents: read
-#       id-token: write # Required for OIDC authentication with PyPI
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v5
+jobs:
+  verify-version:
+    name: Verify tag matches version in pyproject.toml
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      tag: ${{ steps.get-tag.outputs.tag }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
 
-#     - name: Load UV version
-#       id: versions
-#       run: |
-#         UV_VERSION=$(cat .github/python-versions.json | jq -r '.uv_version')
-#         echo "uv-version=$UV_VERSION" >> $GITHUB_OUTPUT
-#         echo "Using UV version: $UV_VERSION"
+    - name: Get tag name
+      id: get-tag
+      run: |
+        TAG=${GITHUB_REF#refs/tags/}
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        echo "Tag: $TAG"
 
-#     - name: Install UV
-#       uses: astral-sh/setup-uv@v3
-#       with:
-#         version: ${{ steps.versions.outputs.uv-version }}
-#         enable-cache: true
+    - name: Get version from pyproject.toml
+      id: get-version
+      run: |
+        VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=v$VERSION" >> $GITHUB_OUTPUT
+        echo "Version from pyproject.toml: v$VERSION"
 
-#     - name: Build package
-#       run: |
-#         uv build
+    - name: Compare versions
+      run: |
+        TAG="${{ steps.get-tag.outputs.tag }}"
+        VERSION="${{ steps.get-version.outputs.version }}"
 
-#     - name: Publish distribution 📦 to PyPI
-#       uses: pypa/gh-action-pypi-publish@release/v1
-#       with:
-#         user: __token__
-#         password: ${{ secrets.PYPI_API_TOKEN }}
+        echo "Git tag: $TAG"
+        echo "pyproject.toml version: $VERSION"
 
-#   docker:
-#     name: Docker Image Build
-#     runs-on: ubuntu-latest
-#     needs: [ pypi ]
-#     permissions:
-#       contents: read
-#       packages: write # Required to push to GitHub Container Registry (ghcr.io)
-#     steps:
-#     - name: Checkout
-#       uses: actions/checkout@v5
+        if [ "$TAG" != "$VERSION" ]; then
+          echo "❌ Error: Git tag ($TAG) does not match version in pyproject.toml ($VERSION)"
+          echo ""
+          echo "Please ensure that:"
+          echo "  1. The version in pyproject.toml is updated to match the tag"
+          echo "  2. Or use the correct tag that matches the version in pyproject.toml"
+          exit 1
+        fi
 
-#     - name: Docker meta for TAG
-#       id: meta
-#       uses: docker/metadata-action@v5
-#       with:
-#         images: |
-#           ${{ secrets.DOCKER_IMAGE }}
-#           ghcr.io/${{ secrets.DOCKER_IMAGE }}
-#         tags: |
-#           type=semver,pattern={{raw}}
-#           type=raw,value=latest
+        echo "✅ Version verification successful: $TAG matches $VERSION"
 
-#     - name: Login to DockerHub
-#       uses: docker/login-action@v3
-#       with:
-#         username: ${{ secrets.DOCKERHUB_USERNAME }}
-#         password: ${{ secrets.DOCKER_PASSWORD }}
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [verify-version]
+    permissions:
+      contents: write # Required to create releases
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0 # Fetch all history for changelog generation
 
-#     - name: Login to GitHub Container Registry
-#       uses: docker/login-action@v3
-#       with:
-#         registry: ghcr.io
-#         username: ${{ github.repository_owner }}
-#         password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.verify-version.outputs.tag }}
+        name: Release ${{ needs.verify-version.outputs.tag }}
+        generate_release_notes: true # Uses .github/release.yml template
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#     - name: Build and push
-#       uses: docker/build-push-action@v6
-#       with:
-#         context: .
-#         file: Dockerfile
-#         platforms: linux/amd64,linux/arm64
-#         push: true
-#         tags: ${{ steps.meta.outputs.tags }}
-#         labels: ${{ steps.meta.outputs.labels }}
+  pypi:
+    name: Publish Python 🐍 distribution 📦 to PyPI
+    runs-on: ubuntu-latest
+    needs: [verify-version, create-release]
+    environment:
+      name: pypi
+      url: https://pypi.org/p/avd-cli
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication with PyPI
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
 
-#   docker_in_docker:
-#     name: Docker Image Build with Docker support
-#     runs-on: ubuntu-latest
-#     needs: [ docker ]
-#     permissions:
-#       contents: read
-#       packages: write # Required to push to GitHub Container Registry (ghcr.io)
-#     steps:
-#     - name: Checkout
-#       uses: actions/checkout@v5
+    - name: Load UV version
+      id: versions
+      run: |
+        UV_VERSION=$(cat .github/python-versions.json | jq -r '.uv_version')
+        echo "uv-version=$UV_VERSION" >> $GITHUB_OUTPUT
+        echo "Using UV version: $UV_VERSION"
 
-#     - name: Docker meta for TAG
-#       id: meta
-#       uses: docker/metadata-action@v5
-#       with:
-#         images: |
-#           ${{ secrets.DOCKER_IMAGE }}
-#           ghcr.io/${{ secrets.DOCKER_IMAGE }}
-#         tags: |
-#           type=semver,pattern={{raw}}-dind
-#           type=raw,value=latest-dind
+    - name: Install UV
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: ${{ steps.versions.outputs.uv-version }}
+        enable-cache: true
 
-#     - name: Login to DockerHub
-#       uses: docker/login-action@v3
-#       with:
-#         username: ${{ secrets.DOCKERHUB_USERNAME }}
-#         password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Build package
+      run: |
+        uv build
 
-#     - name: Login to GitHub Container Registry
-#       uses: docker/login-action@v3
-#       with:
-#         registry: ghcr.io
-#         username: ${{ github.repository_owner }}
-#         password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
 
-#     - name: Build and push
-#       uses: docker/build-push-action@v6
-#       with:
-#         context: .
-#         platforms: linux/amd64,linux/arm64
-#         file: Dockerfile.docker
-#         push: true
-#         tags: ${{ steps.meta.outputs.tags }}
-#         labels: ${{ steps.meta.outputs.labels }}
+  docker:
+    name: Docker Image Build
+    runs-on: ubuntu-latest
+    needs: [ pypi ]
+    permissions:
+      contents: read
+      packages: write # Required to push to GitHub Container Registry (ghcr.io)
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
 
-#   # Documentation deployment is now handled by the documentation.yml workflow
-#   # which is triggered automatically on tag push
-#   trigger-docs-deployment:
-#     name: "Trigger documentation deployment"
-#     runs-on: ubuntu-latest
-#     needs: [ docker_in_docker ]
-#     permissions:
-#       contents: read
-#     steps:
-#     - name: Documentation deployment info
-#       run: |
-#         echo "📚 Documentation deployment will be handled by the documentation.yml workflow"
-#         echo "🏷️  Tag: ${{ github.ref_name }}"
-#         echo "🔗 The documentation will be deployed automatically as version ${{ github.ref_name }} with alias 'stable'"
+    - name: Docker meta for TAG
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ secrets.DOCKER_IMAGE }}
+          ghcr.io/${{ secrets.DOCKER_IMAGE }}
+        tags: |
+          type=semver,pattern={{raw}}
+          type=raw,value=latest
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+  # Documentation deployment is now handled by the documentation.yml workflow
+  # which is triggered automatically on tag push
+  trigger-docs-deployment:
+    name: "Trigger documentation deployment"
+    runs-on: ubuntu-latest
+    needs: [ docker ]
+    permissions:
+      contents: read
+    steps:
+    - name: Documentation deployment info
+      run: |
+        echo "📚 Documentation deployment will be handled by the documentation.yml workflow"
+        echo "🏷️  Tag: ${{ github.ref_name }}"
+        echo "🔗 The documentation will be deployed automatically as version ${{ github.ref_name }} with alias 'stable'"

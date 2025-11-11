@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "avd-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "CLI tool for processing Arista AVD inventories and generating configurations"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -272,7 +272,7 @@ max-statements = 50
 
 # Bumpver configuration
 [tool.bumpver]
-current_version = "0.1.1"
+current_version = "0.1.2"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump: version {old_version} → {new_version}"
 commit = true

@@ -111,3 +111,73 @@ class TemplateError(AvdCliError):
     --------
     >>> raise TemplateError("Undefined variable 'platform' in template")
     """
+
+    pass
+
+
+class DeploymentError(AvdCliError):
+    """Raised when configuration deployment fails.
+
+    This exception is raised when the deployment process encounters
+    an error that prevents successful completion.
+
+    Examples
+    --------
+    >>> raise DeploymentError("Failed to deploy config to device: spine1")
+    """
+
+    pass
+
+
+class ConnectionError(AvdCliError):
+    """Raised when device connection fails.
+
+    This exception is raised when unable to establish connection
+    to target device via eAPI.
+
+    Examples
+    --------
+    >>> raise ConnectionError("Cannot connect to 192.168.0.10:443 - connection timeout")
+    """
+
+    pass
+
+
+class AuthenticationError(AvdCliError):
+    """Raised when device authentication fails.
+
+    This exception is raised when authentication to device
+    fails due to invalid credentials.
+
+    Examples
+    --------
+    >>> raise AuthenticationError("Authentication failed for device: spine1")
+    """
+
+    pass
+
+
+class ConfigurationError(AvdCliError):
+    """Raised when configuration syntax is invalid.
+
+    This exception is raised when device rejects configuration
+    due to syntax errors or invalid commands.
+
+    Examples
+    --------
+    >>> raise ConfigurationError("Invalid command at line 45: interface Ethernet1/1")
+    """
+
+    pass
+
+
+class CredentialError(AvdCliError):
+    """Raised when credentials are missing or invalid.
+
+    This exception is raised when required credentials
+    (ansible_user, ansible_password) are not found in inventory.
+
+    Examples
+    --------
+    >>> raise CredentialError("ansible_user not found for device: leaf01")
+    """

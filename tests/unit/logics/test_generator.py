@@ -966,3 +966,291 @@ class TestGenerateAll:
         assert all(isinstance(p, Path) for p in configs)
         assert all(isinstance(p, Path) for p in docs)
         assert all(isinstance(p, Path) for p in tests)
+
+
+class TestDeepMerge:
+    """Test deep merge functionality for dual schema support.
+
+    Bug Context
+    -----------
+    PyAVD has two schemas:
+    - eos_designs: High-level fabric topology
+    - eos_cli_config_gen: Low-level CLI configurations
+
+    The _deep_merge method ensures both schemas are properly merged,
+    with structured_config from eos_designs taking precedence over
+    inputs containing eos_cli_config_gen variables.
+    """
+
+    def test_deep_merge_simple_dicts(self):
+        """Test deep merge with simple non-overlapping dictionaries.
+
+        Given: Two simple dicts with different keys
+        When: Deep merging them
+        Then: Result contains all keys from both dicts
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"a": 1, "b": 2}
+        dict2 = {"c": 3, "d": 4}
+
+        result = gen._deep_merge(dict1, dict2)
+
+        assert result == {"a": 1, "b": 2, "c": 3, "d": 4}
+
+    def test_deep_merge_overlapping_simple_values(self):
+        """Test deep merge with overlapping simple values.
+
+        Given: Two dicts with same keys
+        When: Deep merging them
+        Then: Second dict values take precedence
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"a": 1, "b": 2}
+        dict2 = {"b": 20, "c": 3}
+
+        result = gen._deep_merge(dict1, dict2)
+
+        assert result == {"a": 1, "b": 20, "c": 3}
+
+    def test_deep_merge_nested_dicts(self):
+        """Test deep merge with nested dictionaries.
+
+        Given: Two dicts with nested structures
+        When: Deep merging them
+        Then: Nested dicts are merged recursively
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {
+            "level1": {
+                "level2": {
+                    "a": 1,
+                    "b": 2,
+                }
+            }
+        }
+
+        dict2 = {
+            "level1": {
+                "level2": {
+                    "b": 20,
+                    "c": 3,
+                }
+            }
+        }
+
+        result = gen._deep_merge(dict1, dict2)
+
+        expected = {
+            "level1": {
+                "level2": {
+                    "a": 1,
+                    "b": 20,
+                    "c": 3,
+                }
+            }
+        }
+
+        assert result == expected
+
+    def test_deep_merge_lists_are_replaced(self):
+        """Test that lists are replaced, not merged.
+
+        Given: Two dicts with list values for same key
+        When: Deep merging them
+        Then: Second list replaces first list entirely
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"items": [1, 2, 3]}
+        dict2 = {"items": [4, 5]}
+
+        result = gen._deep_merge(dict1, dict2)
+
+        assert result == {"items": [4, 5]}
+
+    def test_deep_merge_eos_cli_config_gen_with_eos_designs(self):
+        """Test merge of eos_cli_config_gen and eos_designs variables.
+
+        Bug Context
+        -----------
+        This simulates the actual bug fix scenario:
+        - inputs contain eos_cli_config_gen vars (aliases, ntp, aaa)
+        - structured_config from eos_designs contains topology (bgp, evpn)
+        - Both should be present in final result
+        - structured_config takes precedence for overlapping keys
+
+        Given: inputs (eos_cli_config_gen) and structured_config (eos_designs)
+        When: Deep merging them
+        Then: Both types of variables are present
+        """
+        gen = ConfigurationGenerator()
+
+        # Simulate eos_cli_config_gen variables from group_vars
+        inputs = {
+            "aliases": ["sib show ip bgp summary", "sir show ip route"],
+            "ntp": {
+                "local_interface": {"name": "Management1", "vrf": "MGMT"},
+                "servers": [
+                    {"name": "192.168.0.1", "burst": True, "iburst": True},
+                ]
+            },
+            "router_bfd": {
+                "multihop": {
+                    "interval": 1200,
+                    "min_rx": 1200,
+                    "multiplier": 3,
+                }
+            },
+            "aaa_authentication": {
+                "login": {"default": "local"},
+            },
+        }
+
+        # Simulate eos_designs output (structured_config from PyAVD)
+        structured_config = {
+            "router_bgp": {
+                "as": 65001,
+                "router_id": "10.0.0.1",
+            },
+            "vlan_interfaces": [
+                {"name": "Vlan100", "ip_address": "10.10.10.1/24"}
+            ],
+            # Overlapping key that should take precedence
+            "router_bfd": {
+                "multihop": {
+                    "interval": 1500,  # Different value from inputs
+                }
+            }
+        }
+
+        result = gen._deep_merge(inputs, structured_config)
+
+        # Verify eos_cli_config_gen variables are present
+        assert "aliases" in result
+        assert "ntp" in result
+        assert "aaa_authentication" in result
+
+        # Verify eos_designs variables are present
+        assert "router_bgp" in result
+        assert "vlan_interfaces" in result
+
+        # Verify structured_config took precedence for overlapping keys
+        assert result["router_bfd"]["multihop"]["interval"] == 1500
+
+    def test_deep_merge_preserves_none_values(self):
+        """Test that None values are preserved correctly.
+
+        Given: Dicts with None values
+        When: Deep merging them
+        Then: None values are not ignored
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"a": 1, "b": None}
+        dict2 = {"c": None, "d": 4}
+
+        result = gen._deep_merge(dict1, dict2)
+
+        assert result == {"a": 1, "b": None, "c": None, "d": 4}
+
+    def test_deep_merge_empty_dicts(self):
+        """Test merge with empty dictionaries.
+
+        Given: One or both dicts are empty
+        When: Deep merging them
+        Then: Non-empty dict is returned
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"a": 1}
+        dict2 = {}
+
+        result1 = gen._deep_merge(dict1, dict2)
+        result2 = gen._deep_merge(dict2, dict1)
+
+        assert result1 == {"a": 1}
+        assert result2 == {"a": 1}
+
+    def test_deep_merge_does_not_modify_originals(self):
+        """Test that original dicts are not modified.
+
+        Given: Two dicts
+        When: Deep merging them
+        Then: Original dicts remain unchanged
+        """
+        gen = ConfigurationGenerator()
+
+        dict1 = {"a": 1, "nested": {"x": 10}}
+        dict2 = {"b": 2, "nested": {"y": 20}}
+
+        gen._deep_merge(dict1, dict2)
+
+        # Verify originals are unchanged (shallow check)
+        assert "b" not in dict1
+        assert "a" not in dict2
+
+        # Note: Full deep immutability would require deep copy,
+        # but for our use case, top-level immutability is sufficient
+
+    def test_deep_merge_complex_avd_scenario(self):
+        """Test realistic AVD scenario with complex nested structures.
+
+        Given: Complex AVD variable structures
+        When: Deep merging them
+        Then: All variables are properly merged
+        """
+        gen = ConfigurationGenerator()
+
+        # Simulate complex eos_cli_config_gen from multiple group_vars
+        inputs = {
+            "vlans": [
+                {"id": 100, "name": "campus-users"},
+                {"id": 300, "name": "campus-voice"},
+            ],
+            "interface_profiles": [
+                {
+                    "profile": "CAMPUS_ACCESS",
+                    "parent_profile": "TENANT",
+                }
+            ],
+            "logging": {
+                "console": "critical",
+                "monitor": "disabled",
+            },
+            "spanning_tree": {
+                "mode": "mstp",
+            }
+        }
+
+        # Simulate eos_designs structured_config output
+        structured_config = {
+            "vlans": [
+                {"id": 4094, "name": "MLAG", "trunk_groups": ["MLAG"]},
+            ],
+            "vlan_interfaces": [
+                {"name": "Vlan4094", "ip_address": "10.255.255.1/31"}
+            ],
+            "spanning_tree": {
+                "mode": "rstp",  # eos_designs overrides
+                "priority": 4096,
+            }
+        }
+
+        result = gen._deep_merge(inputs, structured_config)
+
+        # Verify VLAN list was replaced (not merged)
+        assert len(result["vlans"]) == 1
+        assert result["vlans"][0]["id"] == 4094
+
+        # Verify interface_profiles preserved
+        assert "interface_profiles" in result
+
+        # Verify logging preserved
+        assert "logging" in result
+
+        # Verify spanning_tree merged with precedence
+        assert result["spanning_tree"]["mode"] == "rstp"  # From structured_config
+        assert result["spanning_tree"]["priority"] == 4096

@@ -96,7 +96,7 @@ tox-all: ## Run all tox environments
 docs-serve: ## Serve documentation locally (with live reload)
 	@echo "Starting MkDocs server..."
 	@echo "Access at: http://127.0.0.1:8000"
-	uv run mkdocs serve
+	uv run mkdocs serve --livereload
 
 .PHONY: docs-build
 docs-build: ## Build documentation (with strict mode)

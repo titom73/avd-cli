@@ -14,6 +14,7 @@ A command-line interface for processing Arista AVD inventories and generating co
 
 - **Generate configurations** from AVD inventory files
 - **Create documentation** automatically
+- **Deploy configurations** to EOS devices via eAPI
 - **Validate inventory** structure and data
 - **Output ANTA tests** for network validation
 
@@ -47,6 +48,29 @@ avd-cli generate all \
 │ Documentation  │    10 │ ./output/documentation         │
 │ Tests          │     1 │ ./output/tests                 │
 └────────────────┴───────┴────────────────────────────────┘
+
+# Deploy configurations to EOS devices
+avd-cli deploy eos --inventory-path ./inventory --dry-run --diff
+
+→ Loading inventory...
+✓ Loaded 10 devices
+
+Deployment Plan (dry-run)
+  Mode: replace
+  Targets: 10 devices
+  Concurrency: 10 devices
+
+⠼ Deploying to 10 devices...
+
+                      Deployment Status
+┏━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓
+┃ Hostname  ┃ Status  ┃ Duration ┃ Diff (+/-) ┃ Error ┃
+┡━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩
+│ spine-1   │ success │ 2.34s    │ +15 / -3   │       │
+│ spine-2   │ success │ 1.89s    │ +45 / -10  │       │
+│ leaf-1    │ success │ 3.12s    │ +12 / -2   │       │
+│ ...       │ ...     │ ...      │ ...        │       │
+└───────────┴─────────┴──────────┴────────────┴───────┘
 ```
 
 ---

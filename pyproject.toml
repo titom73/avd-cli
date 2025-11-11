@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "avd-cli"
-version = "0.1.0"
+version = "v0.1.0"
 description = "CLI tool for processing Arista AVD inventories and generating configurations"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -99,6 +99,7 @@ dev = [
     "tox>=4.0.0",
     "isort>=5.12.0",
     "types-jinja2>=2.11.9",
+    "bumpver>=2023.0.0",
 ]
 doc = [
     "mkdocs>=1.5.0",
@@ -268,3 +269,18 @@ max-statements = 50
 # Flake8 configuration (via setup.cfg or .flake8 file)
 # Note: flake8 doesn't support pyproject.toml natively
 # Create .flake8 file separately
+
+# Bumpver configuration
+[tool.bumpver]
+current_version = "0.1.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message = "bump: version {old_version} → {new_version}"
+commit = true
+tag = false  # Tags are created manually after PR merge
+push = false  # Push manually after PR review
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = ['current_version = "{version}"', 'version = "v{version}"']
+"avd_cli/__init__.py" = [
+    "__version__ = \"{version}\"",
+]

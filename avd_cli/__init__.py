@@ -7,7 +7,7 @@ This package provides a CLI tool for processing Arista Ansible AVD inventories
 and generating configurations, documentation, and ANTA tests using py-avd.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "AVD CLI Development Team"
 __license__ = "Apache-2.0"
 

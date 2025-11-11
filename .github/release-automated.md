@@ -12,6 +12,8 @@ The automated release process simplifies version management by:
 - ✅ Creating a release branch and Pull Request
 - ✅ Generating a release notes template
 - ✅ Running all quality checks before release
+- ✅ **Automatically creating and pushing the release tag when PR is merged**
+- ✅ Triggering the full release pipeline automatically
 - ✅ Providing clear next steps
 
 ---
@@ -79,25 +81,23 @@ gh pr merge --squash
 
 Or merge via GitHub web interface.
 
-### 5. Create the Release Tag
+### 5. Automatic Tag Creation and Release 🎉
 
-**Important:** The tag MUST match the version in `pyproject.toml`
+**✨ New: Fully Automated!**
 
-```bash
-# Switch to main and pull the merged changes
-git checkout main
-git pull origin main
+When you merge the PR, the [`auto-tag-release.yml`](https://github.com/titom73/avd-cli/actions/workflows/auto-tag-release.yml) workflow automatically:
 
-# Create the tag (e.g., v0.1.1)
-git tag vX.Y.Z
+1. ✅ Detects that a `release/v*` branch was merged to `main`
+2. ✅ Extracts the version from the branch name
+3. ✅ Verifies it matches the version in `pyproject.toml`
+4. ✅ Creates the git tag (e.g., `v0.1.1`)
+5. ✅ Pushes the tag to GitHub
 
-# Push the tag to trigger the release
-git push origin vX.Y.Z
-```
+**No manual tag creation needed!** The tag is created automatically within seconds of merging.
 
 ### 6. Automatic Release Publication
 
-Once the tag is pushed, the [release workflow](https://github.com/titom73/avd-cli/actions/workflows/release.yml) automatically:
+Once the tag is created, the [release workflow](https://github.com/titom73/avd-cli/actions/workflows/release.yml) automatically:
 
 1. ✅ Verifies tag matches `pyproject.toml` version
 2. 📦 Builds the package with `uv build`

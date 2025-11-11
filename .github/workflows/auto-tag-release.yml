@@ -1,0 +1,128 @@
+---
+name: "Release: Auto-tag on PR Merge"
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    name: Create and push release tag
+    # Only run if PR was merged (not just closed) and source branch matches release pattern
+    if: |
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from branch name
+        id: extract-version
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          # Extract version from branch name (release/v1.2.3 -> v1.2.3)
+          VERSION="${BRANCH_NAME#release/}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Get version from pyproject.toml
+        id: pyproject-version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/v\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version from pyproject.toml: $VERSION"
+
+      - name: Verify version consistency
+        run: |
+          BRANCH_VERSION="${{ steps.extract-version.outputs.version }}"
+          PYPROJECT_VERSION="${{ steps.pyproject-version.outputs.version }}"
+
+          echo "Branch version: $BRANCH_VERSION"
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+
+          if [ "$BRANCH_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "❌ Error: Version mismatch!"
+            echo "Branch name suggests version $BRANCH_VERSION"
+            echo "But pyproject.toml contains version $PYPROJECT_VERSION"
+            exit 1
+          fi
+
+          echo "✅ Version consistency verified: $BRANCH_VERSION"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          TAG="${{ steps.extract-version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Tag $TAG already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag $TAG does not exist, will create it"
+          fi
+
+      - name: Create and push tag
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.extract-version.outputs.version }}"
+
+          echo "Creating tag: $TAG"
+          git tag -a "$TAG" -m "Release $TAG"
+
+          echo "Pushing tag: $TAG"
+          git push origin "$TAG"
+
+          echo "✅ Tag $TAG created and pushed successfully"
+
+      - name: Create workflow summary
+        run: |
+          TAG="${{ steps.extract-version.outputs.version }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+
+          echo "## 🏷️ Release Tag Created!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag**: \`$TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "**PR**: #$PR_NUMBER - $PR_TITLE" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: \`${{ github.event.pull_request.head.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml) has been automatically triggered and will:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Verify tag matches version in \`pyproject.toml\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📝 Create GitHub Release with generated notes" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📦 Build package with \`uv build\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🚀 Publish to PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "5. 🐳 Build and push Docker images (multi-platform)" >> $GITHUB_STEP_SUMMARY
+          echo "6. 📚 Deploy documentation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Monitor the release workflow**: [View Actions](https://github.com/${{ github.repository }}/actions/workflows/release.yml)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skip tag creation (already exists)
+        if: steps.check-tag.outputs.exists == 'true'
+        run: |
+          TAG="${{ steps.extract-version.outputs.version }}"
+          echo "⚠️  Tag $TAG already exists. Skipping tag creation." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "If you need to recreate the release, you must:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Delete the existing tag: \`git tag -d $TAG && git push --delete origin $TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. Re-run this workflow or manually create the tag" >> $GITHUB_STEP_SUMMARY
+
+          exit 0

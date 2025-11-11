@@ -32,9 +32,66 @@ The release process is **fully automated** via GitHub Actions. When you push a t
 
 ## Step-by-Step Release Process
 
-### 1. Prepare the Release Branch
+### Method 1: Automated (Recommended) 🤖
 
-Create a dedicated branch for the version bump:
+Use the GitHub Actions workflow to automate the preparation:
+
+#### 1. Trigger the Prepare Release Workflow
+
+Go to **Actions** → **Release: Prepare Version** and click **Run workflow**:
+
+1. Select the branch: `main`
+2. Choose the version bump type:
+   - `patch` for bug fixes (0.1.0 → 0.1.1)
+   - `minor` for new features (0.1.0 → 0.2.0)
+   - `major` for breaking changes (0.1.0 → 1.0.0)
+
+**Or via GitHub CLI:**
+```bash
+gh workflow run prepare-release.yml -f version_bump=patch
+```
+
+The workflow will automatically:
+- ✅ Bump version in `pyproject.toml` and `avd_cli/__init__.py`
+- ✅ Create a release branch
+- ✅ Generate a release notes template
+- ✅ Create a Pull Request
+
+#### 2. Review and Update the PR
+
+1. Review the automatically created PR
+2. Update `RELEASE_NOTES.md` with actual changes
+3. Ensure all CI checks pass
+
+#### 3. Merge the PR
+
+After approval:
+```bash
+gh pr merge --squash
+```
+
+#### 4. Create and Push the Tag
+
+**The tag MUST match the version in `pyproject.toml` (with `v` prefix):**
+
+```bash
+git checkout main
+git pull origin main
+
+# The version is already bumped in the merged PR
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The release workflow will be triggered automatically! 🚀
+
+---
+
+### Method 2: Manual (Advanced) 🛠️
+
+If you prefer manual control:
+
+#### 1. Prepare the Release Branch
 
 ```bash
 git switch main
@@ -42,51 +99,44 @@ git pull origin main
 git switch -c release/vX.Y.Z
 ```
 
-### 2. Bump the Version
+#### 2. Bump the Version
 
-Use `bumpver` to update the version in `pyproject.toml`:
+Use `bumpver` to update the version:
 
-**For a patch release (X.Y.Z → X.Y.Z+1):**
+**For a patch release:**
 ```bash
-bumpver update --patch
+uv run bumpver update --patch
 ```
 
-**For a minor release (X.Y.Z → X.Y+1.0):**
+**For a minor release:**
 ```bash
-bumpver update --minor
+uv run bumpver update --minor
 ```
 
-**For a major release (X.Y.Z → X+1.0.0):**
+**For a major release:**
 ```bash
-bumpver update --major
+uv run bumpver update --major
 ```
 
-**Preview changes without applying (dry-run):**
+**Preview changes (dry-run):**
 ```bash
-bumpver update --minor --dry
+uv run bumpver update --minor --dry
 ```
 
-> [!TIP]
-> `bumpver` automatically updates the version in `pyproject.toml` and creates a Git commit with the version bump.
-
-### 3. Create a Pull Request
-
-Push the release branch and create a PR:
+#### 3. Create a Pull Request
 
 ```bash
 git push origin release/vX.Y.Z
 gh pr create --title "release: avd-cli vX.Y.Z" --body "Release version X.Y.Z"
 ```
 
-### 4. Review and Merge
-
-After PR review and approval:
+#### 4. Review and Merge
 
 ```bash
 gh pr merge --squash
 ```
 
-### 5. Create and Push the Git Tag
+#### 5. Create and Push the Git Tag
 
 **The tag MUST match the version in `pyproject.toml` (with `v` prefix):**
 

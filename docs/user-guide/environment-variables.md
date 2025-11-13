@@ -12,7 +12,7 @@ These variables apply across multiple commands:
 |-----------|---------------------|------|---------|
 | `-i, --inventory-path` | `AVD_CLI_INVENTORY_PATH` | Path | `./inventory` |
 | `-o, --output-path` | `AVD_CLI_OUTPUT_PATH` | Path | `./output` |
-| `-l, --limit-to-groups` | `AVD_CLI_LIMIT_TO_GROUPS` | Comma-separated | `SPINES,LEAFS` |
+| `-l, --limit` | `AVD_CLI_LIMIT` | Comma-separated | `spine*,LEAFS` |
 
 ---
 
@@ -112,8 +112,10 @@ avd-cli deploy eos --dry-run --diff
 !!! tip "Boolean Values"
     For boolean flags, use `true` or `false` (case-insensitive).
 
-!!! tip "Multiple Groups"
-    For `AVD_CLI_LIMIT_TO_GROUPS`, separate groups with commas: `SPINES,LEAFS,BORDER`
+!!! tip "Multiple Patterns"
+    For `AVD_CLI_LIMIT`, separate patterns with commas: `SPINES,leaf-*,spine-01`
+
+    Supports wildcards (`*`, `?`, `[...]`) for hostname patterns and exact group names.
 
 ---
 

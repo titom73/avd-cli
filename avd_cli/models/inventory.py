@@ -263,6 +263,59 @@ class InventoryData:
                 return device
         return None
 
+    def filter_devices(self, device_filter: Optional["DeviceFilter"]) -> None:  # type: ignore  # noqa: F821
+        """Filter devices in inventory based on patterns.
+
+        This method applies device filtering in-place, modifying the inventory
+        to contain only devices that match the filter patterns. Devices are
+        matched by hostname OR group membership (union logic).
+
+        Parameters
+        ----------
+        device_filter : Optional[DeviceFilter]
+            Filter to apply. If None, no filtering is performed.
+
+        Raises
+        ------
+        ValueError
+            If no devices match the filter patterns
+
+        Examples
+        --------
+        >>> from avd_cli.utils.device_filter import DeviceFilter
+        >>> filter = DeviceFilter(patterns=["leaf-*"])
+        >>> inventory.filter_devices(filter)
+        >>> # inventory now contains only devices matching "leaf-*"
+        """
+        if device_filter is None:
+            return
+
+        # Collect all devices that match the filter
+        filtered_devices = []
+        for fabric in self.fabrics:
+            # Filter each device list in the fabric
+            fabric.spine_devices = [
+                d for d in fabric.spine_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            fabric.leaf_devices = [
+                d for d in fabric.leaf_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            fabric.border_leaf_devices = [
+                d for d in fabric.border_leaf_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+
+            # Collect all filtered devices
+            filtered_devices.extend(fabric.get_all_devices())
+
+        # Validate at least one device matched
+        if not filtered_devices:
+            raise ValueError(
+                f"No devices matched the filter patterns: {device_filter.patterns}"
+            )
+
     def validate(self, skip_topology_validation: bool = False) -> List[str]:
         """Validate complete inventory structure.
 

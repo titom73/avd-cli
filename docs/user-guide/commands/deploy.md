@@ -21,7 +21,8 @@ avd-cli deploy eos [OPTIONS]
 | `--dry-run` | | Flag | `false` | Preview changes without applying them |
 | `--diff` | | Flag | `false` | Display full configuration differences |
 | `--verify-ssl` | | Flag | `false` | Enable SSL certificate verification |
-| `--limit-to-groups` | `-l` | Text | All | Deploy to specific groups only (repeatable) |
+| `--limit` | `-l` | Text | All | Filter devices by hostname or group patterns (repeatable, supports wildcards) |
+| `--limit-to-groups` | | Text | All | **Deprecated**. Use `--limit` instead. Deploy to specific groups |
 | `--verbose` | `-v` | Flag | `false` | Show detailed deployment progress |
 
 See [Environment Variables](../environment-variables.md) for configuration via environment variables.
@@ -213,19 +214,45 @@ all:
 
 ## Usage Examples
 
-### Incremental Group Deployment
+### Selective Deployment
 
-Deploy to groups separately for safer rollouts:
+The `--limit` option supports flexible device filtering for phased rollouts:
+
+- **Group names**: `SPINES`, `LEAFS`, `BORDER_LEAFS`
+- **Hostname patterns**: `spine*`, `leaf-[12]*`, `border-?`
+- **Exact hostnames**: `spine-01`, `leaf-1a`
+
+**Wildcard patterns:**
+
+- `*` - Matches any characters: `spine*` matches `spine-01`, `spine-02`, `spineA`
+- `?` - Matches single character: `leaf-?` matches `leaf-1`, `leaf-a`
+- `[...]` - Matches character set: `leaf-[12]a` matches `leaf-1a`, `leaf-2a`
+
+**Examples:**
 
 ```bash
-# Deploy spines first
+# Deploy to specific group
 avd-cli deploy eos -i ./inventory -l spines --dry-run
 avd-cli deploy eos -i ./inventory -l spines
 
-# Then deploy leafs
+# Deploy to devices matching pattern
+avd-cli deploy eos -i ./inventory -l "spine*"
+
+# Deploy to specific devices
+avd-cli deploy eos -i ./inventory -l spine-01 -l spine-02
+
+# Mix hostname and group filters
+avd-cli deploy eos -i ./inventory -l "spine*" -l BORDER_LEAFS
+
+# Phased rollout
+avd-cli deploy eos -i ./inventory -l spines --dry-run
+avd-cli deploy eos -i ./inventory -l spines
 avd-cli deploy eos -i ./inventory -l leafs --dry-run
 avd-cli deploy eos -i ./inventory -l leafs
 ```
+
+!!! warning "Deployment Filtering"
+    Unlike generation, deployment filtering affects which devices receive configuration pushes via eAPI. Only devices matching the filter patterns will be contacted.
 
 ### Custom Configuration Path
 
@@ -334,13 +361,19 @@ spine-1:
     ```
 
 !!! success "2. Incremental Deployment"
-    Deploy to groups separately:
+    Deploy to groups or patterns separately:
     ```bash
-    # Spines first
+    # Spines first (group name)
     avd-cli deploy eos -i ./inventory -l spines
+
+    # Or by pattern
+    avd-cli deploy eos -i ./inventory -l "spine*"
 
     # Then leafs
     avd-cli deploy eos -i ./inventory -l leafs
+
+    # Or specific devices
+    avd-cli deploy eos -i ./inventory -l leaf-01 -l leaf-02
     ```
 
 !!! success "3. Version Control"

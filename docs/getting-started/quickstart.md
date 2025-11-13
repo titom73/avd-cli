@@ -285,7 +285,7 @@ avd-cli deploy eos --inventory-path .
 !!! tip "Deployment Best Practices"
     - Always run `--dry-run` first to validate changes
     - Use `--diff` to review configuration changes
-    - Deploy to groups incrementally: `-l SPINES`, then `-l LEAFS`
+    - Deploy incrementally: `-l SPINES`, `-l "spine*"`, or `-l spine-01`
     - Enable SSL verification in production: `--verify-ssl`
 
 For more information, see the [Deploy Command Guide](../user-guide/commands/deploy.md).
@@ -330,8 +330,14 @@ avd-cli generate docs -i . -o output
 # Deploy configurations with dry-run
 avd-cli deploy eos -i . --dry-run --diff
 
-# Deploy to specific groups
+# Deploy to specific group
 avd-cli deploy eos -i . -l SPINES
+
+# Deploy to devices matching pattern
+avd-cli deploy eos -i . -l "spine*"
+
+# Deploy to specific devices
+avd-cli deploy eos -i . -l spine-01 -l spine-02
 
 # Validate inventory before generating
 avd-cli validate -i .

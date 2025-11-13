@@ -41,6 +41,8 @@ format: ## Format code with black and isort
 
 check: format lint type test ## Run all checks (format, lint, type, test)
 
+ci: ci-lint ci-type ci-test ## Run all CI checks
+
 ci-lint: ## Run linting for CI (no fixing)
 	uv run flake8 avd_cli tests
 	uv run pylint avd_cli tests --fail-under=9.0

@@ -65,7 +65,7 @@ avd-cli generate all -i ./my-network -o ./output
 | `--inventory-path` | `-i` | Path to AVD inventory | *Required* |
 | `--output-path` | `-o` | Output directory | *Required* |
 | `--workflow` | | Workflow type (`eos-design` or `cli-config`) | `eos-design` |
-| `--limit-to-groups` | `-l` | Limit to specific device groups | All groups |
+| `--limit` | `-l` | Filter by hostname or group patterns (wildcards supported) | All devices |
 | `--show-deprecation-warnings` | | Show pyavd deprecation warnings | `false` |
 
 ### Examples
@@ -74,8 +74,14 @@ avd-cli generate all -i ./my-network -o ./output
 # Generate with specific workflow
 avd-cli generate all -i ./inventory -o ./output --workflow eos-design
 
-# Generate for specific groups only
+# Filter by group names
 avd-cli generate all -i ./inventory -o ./output -l SPINES -l LEAFS
+
+# Filter by hostname patterns (wildcards supported)
+avd-cli generate all -i ./inventory -o ./output -l "spine*" -l "leaf-1*"
+
+# Filter specific devices
+avd-cli generate all -i ./inventory -o ./output -l spine-01 -l leaf-1a
 
 # Show deprecation warnings
 avd-cli generate configs -i ./inventory -o ./output --show-deprecation-warnings
@@ -194,8 +200,8 @@ export AVD_CLI_OUTPUT_PATH=./output
 # Set workflow
 export AVD_CLI_WORKFLOW=eos-design
 
-# Set device groups
-export AVD_CLI_LIMIT_TO_GROUPS=SPINES,LEAFS
+# Set device filter patterns
+export AVD_CLI_LIMIT="spine*,LEAFS"
 
 # Now run commands without repeating options
 avd-cli generate all
@@ -209,7 +215,7 @@ avd-cli info
 | `-i, --inventory-path` | `AVD_CLI_INVENTORY_PATH` | `./inventory` |
 | `-o, --output-path` | `AVD_CLI_OUTPUT_PATH` | `./output` |
 | `--workflow` | `AVD_CLI_WORKFLOW` | `eos-design` |
-| `-l, --limit-to-groups` | `AVD_CLI_LIMIT_TO_GROUPS` | `SPINES,LEAFS` |
+| `-l, --limit` | `AVD_CLI_LIMIT` | `spine*,LEAFS` |
 | `--format` | `AVD_CLI_FORMAT` | `json` |
 | `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | `true` |
 
@@ -276,13 +282,26 @@ avd-cli generate all
 
 ### Incremental Updates
 
+The `--limit` option supports flexible filtering using group names, hostname patterns, or exact hostnames:
+
 ```bash
-# Only process spine devices
+# Filter by group name
 avd-cli generate configs -i ./inventory -o ./output -l SPINES
 
-# Only process a specific rack
-avd-cli generate all -i ./inventory -o ./output -l RACK1
+# Filter by hostname pattern (wildcards: *, ?, [...])
+avd-cli generate all -i ./inventory -o ./output -l "spine*"
+
+# Filter specific devices
+avd-cli generate all -i ./inventory -o ./output -l spine-01 -l leaf-1a
+
+# Mix patterns and groups
+avd-cli generate all -i ./inventory -o ./output -l "spine*" -l RACK1
 ```
+
+!!! info "Wildcard Patterns"
+    - `*` matches any characters: `spine*` → `spine-01`, `spine-02`, `spineA`
+    - `?` matches single character: `leaf-?` → `leaf-1`, `leaf-a`
+    - `[...]` matches character set: `leaf-[12]a` → `leaf-1a`, `leaf-2a`
 
 ---
 

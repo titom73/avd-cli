@@ -21,6 +21,11 @@ from avd_cli.exceptions import (ConfigurationGenerationError,
                                 TestGenerationError)
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
 
+# Conditional import for DeviceFilter (used in type hints)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from avd_cli.utils.device_filter import DeviceFilter
+
 logger = logging.getLogger(__name__)
 console = Console()
 
@@ -66,16 +71,25 @@ class ConfigurationGenerator:
         configs_dir.mkdir(parents=True, exist_ok=True)
         return configs_dir
 
-    def _filter_devices(self, inventory: InventoryData, limit_to_groups: Optional[List[str]]) -> List[DeviceDefinition]:
-        """Filter devices by groups if specified."""
+    def _filter_devices(
+        self,
+        inventory: InventoryData,
+        device_filter: Optional["DeviceFilter"] = None
+    ) -> List[DeviceDefinition]:
+        """Filter devices using DeviceFilter if specified.
+
+        This method is used ONLY for determining which config files to write.
+        All devices are still included in avd_facts calculation for proper
+        topology context (BGP neighbors, links, etc.).
+        """
         devices = inventory.get_all_devices()
-        if limit_to_groups:
-            # Filter by fabric name OR by any group membership
+        if device_filter:
+            # Filter using DeviceFilter (hostname or group patterns)
             devices = [
                 d for d in devices
-                if d.fabric in limit_to_groups or any(g in limit_to_groups for g in d.groups)
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
             ]
-            self.logger.info("Limited to %d devices in groups: %s", len(devices), limit_to_groups)
+            self.logger.info("Will generate configs for %d filtered devices", len(devices))
         return devices
 
     def _generate_structured_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -121,12 +135,36 @@ class ConfigurationGenerator:
 
         return structured_configs
 
-    def _write_config_files(self, structured_configs: Dict[str, Dict[str, Any]], configs_dir: Path) -> List[Path]:
-        """Write configuration files to disk."""
+    def _write_config_files(
+        self,
+        structured_configs: Dict[str, Dict[str, Any]],
+        configs_dir: Path,
+        filtered_hostnames: Optional[List[str]] = None
+    ) -> List[Path]:
+        """Write configuration files to disk, optionally filtering by hostname.
+
+        Parameters
+        ----------
+        structured_configs : Dict[str, Dict[str, Any]]
+            All structured configs (needed for full validation)
+        configs_dir : Path
+            Directory to write config files to
+        filtered_hostnames : Optional[List[str]]
+            If provided, only write config files for these hostnames
+
+        Returns
+        -------
+        List[Path]
+            List of generated configuration file paths
+        """
         generated_files: List[Path] = []
 
-        # Validate structured configs
-        self.logger.info("Validating structured configurations")
+        # Determine which configs to write
+        hostnames_to_write = filtered_hostnames if filtered_hostnames else list(structured_configs.keys())
+
+        # Validate ALL structured configs (even if not writing all)
+        # This ensures consistency and catches errors early
+        self.logger.info("Validating structured configurations for %d devices", len(structured_configs))
         for hostname, structured_config in structured_configs.items():
             validation_result = self.pyavd.validate_structured_config(structured_config)
             if validation_result.failed:
@@ -135,9 +173,13 @@ class ConfigurationGenerator:
                     f"Structured config validation failed for {hostname}:\n{errors}"
                 )
 
-        # Generate EOS CLI configurations
-        self.logger.info("Generating EOS CLI configurations")
-        for hostname, structured_config in structured_configs.items():
+        # Generate EOS CLI configurations ONLY for filtered devices
+        self.logger.info("Generating EOS CLI configurations for %d devices", len(hostnames_to_write))
+        for hostname in hostnames_to_write:
+            if hostname not in structured_configs:
+                continue
+
+            structured_config = structured_configs[hostname]
             config_file = configs_dir / f"{hostname}.cfg"
             config_text = self.pyavd.get_device_config(structured_config)
 
@@ -150,18 +192,20 @@ class ConfigurationGenerator:
         return generated_files
 
     def generate(
-        self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
+        self, inventory: InventoryData, output_path: Path, device_filter: Optional["DeviceFilter"] = None
     ) -> List[Path]:
         """Generate device configurations.
 
         Parameters
         ----------
         inventory : InventoryData
-            Loaded inventory data
+            Loaded inventory data (should contain ALL devices for proper AVD context)
         output_path : Path
             Output directory for generated configs
-        limit_to_groups : Optional[List[str]], optional
-            Groups to limit generation to, by default None
+        device_filter : Optional[DeviceFilter], optional
+            Filter to determine which devices to generate configs for, by default None.
+            Note: All devices are used for avd_facts calculation, filter only affects
+            which config files are written.
 
         Returns
         -------
@@ -178,18 +222,25 @@ class ConfigurationGenerator:
         configs_dir = self._setup_generation(output_path)
 
         try:
-            devices = self._filter_devices(inventory, limit_to_groups)
+            # Get filtered device list (for determining which files to write)
+            filtered_devices = self._filter_devices(inventory, device_filter)
+            filtered_hostnames = [d.hostname for d in filtered_devices] if device_filter else None
 
-            # Build pyavd inputs from inventory
-            self.logger.info("Building pyavd inputs from resolved inventory")
-            all_inputs = self._build_pyavd_inputs_from_inventory(inventory, devices)
+            # Build pyavd inputs from ALL devices in inventory (for proper AVD context)
+            # This ensures avd_facts calculation has complete topology information
+            self.logger.info("Building pyavd inputs from resolved inventory (all devices for context)")
+            all_devices = inventory.get_all_devices()
+            all_inputs = self._build_pyavd_inputs_from_inventory(inventory, all_devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
                 return []
 
+            # Generate structured configs for ALL devices (needed for dependencies)
             structured_configs = self._generate_structured_configs(all_inputs)
-            generated_files = self._write_config_files(structured_configs, configs_dir)
+
+            # Write config files ONLY for filtered devices
+            generated_files = self._write_config_files(structured_configs, configs_dir, filtered_hostnames)
 
             self.logger.info("Generated %d configuration files", len(generated_files))
             return generated_files
@@ -522,18 +573,20 @@ class DocumentationGenerator:
             ) from e
 
     def generate(
-        self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
+        self, inventory: InventoryData, output_path: Path, device_filter: Optional["DeviceFilter"] = None
     ) -> List[Path]:
         """Generate device documentation.
 
         Parameters
         ----------
         inventory : InventoryData
-            Loaded inventory data
+            Loaded inventory data (should contain ALL devices for proper AVD context)
         output_path : Path
             Output directory for generated docs
-        limit_to_groups : Optional[List[str]], optional
-            Groups to limit generation to, by default None
+        device_filter : Optional[DeviceFilter], optional
+            Filter to determine which devices to generate docs for, by default None.
+            Note: All devices are used for avd_facts calculation, filter only affects
+            which doc files are written.
 
         Returns
         -------
@@ -557,23 +610,30 @@ class DocumentationGenerator:
             # Import pyavd
             pyavd = self._import_pyavd()
 
-            devices = inventory.get_all_devices()
-
-            # Filter by groups if specified
-            if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
-
             # Reuse the conversion logic from ConfigurationGenerator
             from avd_cli.logics.generator import ConfigurationGenerator
 
             config_gen = ConfigurationGenerator(workflow="eos-design")
-            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
+
+            # Determine which devices to generate docs for
+            if device_filter:
+                filtered_devices = [
+                    d for d in inventory.get_all_devices()
+                    if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+                ]
+                filtered_hostnames = {d.hostname for d in filtered_devices}
+            else:
+                filtered_hostnames = None
+
+            # Build inputs from ALL devices (for proper AVD context)
+            all_devices = inventory.get_all_devices()
+            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, all_devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
                 return generated_files
 
-            # Generate AVD facts and structured configs
+            # Generate AVD facts and structured configs for ALL devices
             self.logger.info("Generating AVD facts for documentation")
             avd_facts = pyavd.get_avd_facts(all_inputs)
 
@@ -584,9 +644,18 @@ class DocumentationGenerator:
                 )
                 structured_configs[hostname] = structured_config
 
-            # Generate device documentation
-            self.logger.info("Generating device documentation")
-            for hostname, structured_config in structured_configs.items():
+            # Generate device documentation ONLY for filtered devices
+            hostnames_to_document = (
+                filtered_hostnames if filtered_hostnames is not None
+                else set(structured_configs.keys())
+            )
+
+            self.logger.info("Generating device documentation for %d devices", len(hostnames_to_document))
+            for hostname in hostnames_to_document:
+                if hostname not in structured_configs:
+                    continue
+
+                structured_config = structured_configs[hostname]
                 doc_file = docs_dir / f"{hostname}.md"
                 doc_text = pyavd.get_device_doc(structured_config, add_md_toc=True)
 
@@ -856,18 +925,20 @@ class TestGenerator:
         return catalog_file
 
     def generate(
-        self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
+        self, inventory: InventoryData, output_path: Path, device_filter: Optional["DeviceFilter"] = None
     ) -> List[Path]:
         """Generate test files.
 
         Parameters
         ----------
         inventory : InventoryData
-            Loaded inventory data
+            Loaded inventory data (should contain ALL devices for proper AVD context)
         output_path : Path
             Output directory for generated tests
-        limit_to_groups : Optional[List[str]], optional
-            Groups to limit generation to, by default None
+        device_filter : Optional[DeviceFilter], optional
+            Filter to determine which devices to generate tests for, by default None.
+            Note: All devices are used for avd_facts calculation, filter only affects
+            which test files are written.
 
         Returns
         -------
@@ -896,15 +967,11 @@ class TestGenerator:
                     "pyavd library not installed. Install with: pip install pyavd"
                 ) from e
 
-            devices = inventory.get_all_devices()
-
-            # Filter by groups if specified
-            if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
-
             # Reuse the conversion logic from ConfigurationGenerator
             config_gen = ConfigurationGenerator(workflow="eos-design")
-            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
+            # Build inputs from ALL devices (for proper AVD context)
+            all_devices = inventory.get_all_devices()
+            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, all_devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
@@ -949,20 +1016,22 @@ def generate_all(
     inventory: InventoryData,
     output_path: Path,
     workflow: str = "eos-design",
-    limit_to_groups: Optional[List[str]] = None,
+    device_filter: Optional["DeviceFilter"] = None,
 ) -> Tuple[List[Path], List[Path], List[Path]]:
     """Generate all outputs: configurations, documentation, and tests.
 
     Parameters
     ----------
     inventory : InventoryData
-        Loaded inventory data
+        Loaded inventory data (should contain ALL devices for proper AVD context)
     output_path : Path
         Output directory for all generated files
     workflow : str, optional
         Workflow type, by default "eos-design"
-    limit_to_groups : Optional[List[str]], optional
-        Groups to limit generation to, by default None
+    device_filter : Optional[DeviceFilter], optional
+        Filter to determine which devices to generate outputs for, by default None.
+        Note: All devices are used for avd_facts calculation, filter only affects
+        which output files are written.
 
     Returns
     -------
@@ -973,8 +1042,8 @@ def generate_all(
     doc_gen = DocumentationGenerator()
     test_gen = TestGenerator()
 
-    configs = config_gen.generate(inventory, output_path, limit_to_groups)
-    docs = doc_gen.generate(inventory, output_path, limit_to_groups)
-    tests = test_gen.generate(inventory, output_path, limit_to_groups)
+    configs = config_gen.generate(inventory, output_path, device_filter)
+    docs = doc_gen.generate(inventory, output_path, device_filter)
+    tests = test_gen.generate(inventory, output_path, device_filter)
 
     return configs, docs, tests

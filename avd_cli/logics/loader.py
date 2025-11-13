@@ -10,7 +10,7 @@ and convert them into structured data models.
 import logging
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Set, Union
 
 import yaml
 
@@ -469,11 +469,72 @@ class InventoryLoader:
             if key not in ["hosts", "children", "vars"] and isinstance(value, dict):
                 self._extract_hosts_recursive(value, result, current_vars)
 
+    def _build_group_hierarchy_map(
+        self,
+        data: Any,
+        result: Dict[str, Set[str]],
+        parent_groups: Set[str],
+        current_group: Union[str, None] = None,
+    ) -> None:
+        """Build a complete map of group -> all ancestor groups.
+
+        This handles multiple parent groups by accumulating ALL paths through
+        the hierarchy for each group.
+
+        Parameters
+        ----------
+        data : Any
+            Current level of inventory data
+        result : Dict[str, set]
+            Dictionary mapping group name -> set of all ancestor groups
+        parent_groups : set
+            Set of parent group names (accumulated from root)
+        current_group : str, optional
+            Current group being processed
+        """
+        if not isinstance(data, dict):
+            return
+
+        # If we have a current group, record all its ancestors
+        if current_group:
+            if current_group not in result:
+                result[current_group] = set()
+            result[current_group].update(parent_groups)
+
+            # Build new parent set including current group for children
+            new_parents = parent_groups | {current_group}
+        else:
+            new_parents = parent_groups
+
+        # Recurse into children
+        if "children" in data and isinstance(data["children"], dict):
+            for child_name, child_data in data["children"].items():
+                # Handle both full child definitions and simple references
+                if child_data is None or child_data == {}:
+                    # Simple reference like "campus_leaves:" with no data
+                    # Still need to record this group relationship
+                    if child_name not in result:
+                        result[child_name] = set()
+                    result[child_name].update(new_parents)
+                else:
+                    # Full child definition, recurse into it
+                    self._build_group_hierarchy_map(child_data, result, new_parents, child_name)
+
+        # Also check any other dict values that might be groups
+        for key, value in data.items():
+            if key not in ["hosts", "children", "vars"] and isinstance(value, dict):
+                self._build_group_hierarchy_map(value, result, new_parents, key)
+
     def _load_hostname_groups_mapping(self, inventory_path: Path) -> Dict[str, List[str]]:
         """Extract hostname to groups mapping from inventory.yml.
 
         Traverses the inventory hierarchy and builds a mapping of which hosts
         belong to which groups, preserving the full group ancestry.
+
+        This handles multiple parent groups correctly by:
+        1. First building a complete group hierarchy (group -> all ancestors)
+        2. Then mapping each host to its immediate group
+        3. Finally expanding each host's groups to include all ancestors
 
         Parameters
         ----------
@@ -494,8 +555,23 @@ class InventoryLoader:
 
         try:
             inventory_data = self._load_yaml_file(inventory_yml)
+
+            # First pass: build complete group hierarchy (group -> all ancestors from all paths)
+            group_hierarchy: Dict[str, Set[str]] = {}
+            self._build_group_hierarchy_map(inventory_data, group_hierarchy, parent_groups=set())
+
+            # Second pass: extract hostname -> immediate groups
             hostname_groups: Dict[str, List[str]] = {}
             self._extract_hostname_groups_recursive(inventory_data, hostname_groups, parent_groups=[])
+
+            # Third pass: expand each hostname's groups to include all ancestors
+            for hostname, groups in hostname_groups.items():
+                all_groups = set(groups)
+                for group in groups:
+                    if group in group_hierarchy:
+                        all_groups.update(group_hierarchy[group])
+                hostname_groups[hostname] = sorted(list(all_groups))
+
             self.logger.debug("Extracted group membership for %d hosts from inventory.yml",
                               len(hostname_groups))
             return hostname_groups
@@ -908,6 +984,8 @@ class InventoryLoader:
         )
 
         # Parse from different AVD structures
+        # Note: Use separate 'if' statements (not elif) because a single group_vars file
+        # can contain multiple topology types (e.g., both 'spine' and 'l3leaf' in ATD_FABRIC.yml)
         if "l3spine" in group_data:
             devices.extend(
                 self._parse_node_groups(
@@ -918,7 +996,17 @@ class InventoryLoader:
                     hostname_groups_map
                 )
             )
-        elif "l2leaf" in group_data:
+        if "spine" in group_data:
+            devices.extend(
+                self._parse_node_groups(
+                    group_data["spine"],
+                    self._normalize_device_type("spine"),
+                    fabric_name,
+                    host_vars,
+                    hostname_groups_map
+                )
+            )
+        if "l2leaf" in group_data:
             devices.extend(
                 self._parse_node_groups(
                     group_data["l2leaf"],
@@ -928,20 +1016,34 @@ class InventoryLoader:
                     hostname_groups_map
                 )
             )
-        elif "node_groups" in group_data:
+        if "l3leaf" in group_data:
             devices.extend(
                 self._parse_node_groups(
-                    group_data, device_type, fabric_name, host_vars, hostname_groups_map
+                    group_data["l3leaf"],
+                    self._normalize_device_type("l3leaf"),
+                    fabric_name,
+                    host_vars,
+                    hostname_groups_map
                 )
             )
-        elif "nodes" in group_data:
-            # Direct node list
-            for node_data in group_data.get("nodes", []):
-                device = self._parse_device_node(
-                    node_data, device_type, fabric_name, host_vars, hostname_groups_map
+        if "node_groups" in group_data:
+            # Only process if we haven't already processed specific topology types above
+            if not any(key in group_data for key in ["l3spine", "spine", "l2leaf", "l3leaf"]):
+                devices.extend(
+                    self._parse_node_groups(
+                        group_data, device_type, fabric_name, host_vars, hostname_groups_map
+                    )
                 )
-                if device:
-                    devices.append(device)
+        if "nodes" in group_data:
+            # Only process direct nodes if we haven't already processed specific topology types
+            if not any(key in group_data for key in ["l3spine", "spine", "l2leaf", "l3leaf", "node_groups"]):
+                # Direct node list
+                for node_data in group_data.get("nodes", []):
+                    device = self._parse_device_node(
+                        node_data, device_type, fabric_name, host_vars, hostname_groups_map
+                    )
+                    if device:
+                        devices.append(device)
 
         return devices
 
@@ -975,10 +1077,17 @@ class InventoryLoader:
         """
         devices: List[DeviceDefinition] = []
 
-        # Get topology-level defaults (e.g., l3spine.defaults or l2leaf.defaults)
+        # Get topology-level defaults (e.g., l3spine.defaults or l2leaf.defaults or spine.defaults)
         topology_defaults = topology_data.get("defaults", {})
 
+        # Handle two structures:
+        # 1. topology_data has node_groups (campus/AVD structure)
+        # 2. topology_data has nodes directly (datacenter/classic AVD structure)
         node_groups = topology_data.get("node_groups", [])
+
+        # If no node_groups but has nodes directly, treat topology_data itself as a single node_group
+        if not node_groups and "nodes" in topology_data:
+            node_groups = [topology_data]
 
         for node_group in node_groups:
             # Extract explicit defaults from node_group.defaults

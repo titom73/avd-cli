@@ -1,10 +1,10 @@
 ---
 title: AVD Inventory Data Schema Specification
-version: 1.4
+version: 1.5
 date_created: 2025-11-06
-last_updated: 2025-11-06
+last_updated: 2025-11-13
 owner: AVD CLI Development Team
-tags: [data, schema, avd, inventory, validation, jinja2, templating]
+tags: [data, schema, avd, inventory, validation, jinja2, templating, group-hierarchy]
 ---
 
 # Introduction
@@ -84,6 +84,9 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 - **REQ-018**: Application shall support Jinja2 filters: `{{ variable | default(value) }}`, `{{ variable | lower }}`, etc.
 - **REQ-019**: Template resolution shall occur after all YAML files are loaded but before validation
 - **REQ-020**: Unresolved template variables shall be handled gracefully with clear error messages
+- **REQ-021**: Application shall support multiple parent groups per group in Ansible inventory hierarchy
+- **REQ-022**: Application shall collect ALL ancestor groups from ALL inheritance paths for each device
+- **REQ-023**: Group hierarchy resolution shall handle complex multi-parent scenarios (e.g., campus_leaves under campus_avd, campus_services, and campus_ports simultaneously)
 
 ### Validation Requirements
 
@@ -133,6 +136,7 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 - **PAT-006**: Schema Extension Pattern - Allow custom device types and platform settings via custom_structured_configuration
 - **PAT-007**: Template Resolution Pattern - Recursively walk data structures and resolve Jinja2 templates in string values
 - **PAT-008**: Context Building Pattern - Build Jinja2 context from global_vars, group_vars, and host_vars with proper precedence
+- **PAT-009**: Three-Pass Group Hierarchy Pattern - Build complete group hierarchy map, extract host-to-group mappings, then expand device groups to include all ancestors
 
 ### Device Type Mapping Requirements
 
@@ -161,6 +165,16 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 - **TPL-008**: Template resolution shall occur recursively on all string values in loaded YAML
 - **TPL-009**: Application shall preserve non-string types during template resolution
 - **TPL-010**: Template errors shall include source file path and variable name for debugging
+
+### Group Hierarchy Requirements
+
+- **GH-001**: Application shall build complete group hierarchy map capturing ALL ancestor groups from ALL inheritance paths
+- **GH-002**: Group hierarchy shall use Set internally to avoid duplicates when multiple paths exist to same ancestor
+- **GH-003**: Group hierarchy shall convert final Sets to sorted Lists for consistent ordering and API compatibility
+- **GH-004**: Application shall map each hostname to its immediate Ansible group (where host is defined in inventory.yml)
+- **GH-005**: Application shall expand each device's groups to include ALL ancestors from hierarchy map
+- **GH-006**: Group hierarchy resolution shall handle groups with multiple parents (e.g., campus_leaves under campus_avd AND campus_services)
+- **GH-007**: Application shall transitively resolve ancestors (e.g., if A→B→C, then A's ancestors include both B and C)
 
 ### Guidelines
 
@@ -815,6 +829,18 @@ class ValidationResult:
 - **AC-043**: Given template syntax error, When resolving, Then error includes file path and line information
 - **AC-044**: Given resolved template produces invalid type, When validating, Then type validation error is raised
 - **AC-045**: Given multiple templates in same string, When resolving, Then all templates are resolved correctly
+
+### Group Hierarchy (Three-Pass Algorithm)
+
+- **AC-046**: Given group with multiple parents, When building hierarchy, Then ALL ancestor groups from ALL paths are captured
+- **AC-047**: Given campus_leaves under campus_avd, campus_services, and campus_ports, When building hierarchy, Then campus_leaves ancestors include all three parents plus their ancestors
+- **AC-048**: Given device in IDF1 (child of campus_leaves), When loading device, Then device.groups includes ancestors from all parent branches
+- **AC-049**: Given group hierarchy map built, When examining values, Then no duplicate ancestors exist (Set behavior)
+- **AC-050**: Given group hierarchy final output, When checking type, Then values are sorted List[str] for API compatibility
+- **AC-051**: Given host defined in IDF1, When building host-to-group map, Then host maps to 'IDF1' (immediate group), not 'campus_leaves' (topology group)
+- **AC-052**: Given device with complete group hierarchy, When generating config, Then variables from ALL ancestor groups are available
+- **AC-053**: Given complex multi-level hierarchy (7+ levels), When building hierarchy, Then transitive resolution includes all levels
+- **AC-054**: Given device.groups list, When used for variable inheritance, Then group_vars from all listed groups are merged in correct order
 
 ## 6. Test Automation Strategy
 
@@ -1481,6 +1507,130 @@ custom_structured_platform_settings:
 
 This pattern is documented in the [AVD Custom Structured Configuration Guide](https://avd.arista.com/devel/ansible_collections/arista/avd/roles/eos_designs/docs/how-to/custom-structured-configuration.html) and is widely used in production AVD deployments.
 
+### Why Three-Pass Group Hierarchy Algorithm?
+
+The three-pass group hierarchy algorithm was implemented to solve a critical bug where devices did not inherit variables from all ancestor groups in complex Ansible inventory hierarchies.
+
+**Problem**: 
+
+In Ansible inventories, a group can have multiple parent groups. For example:
+
+```yaml
+all:
+  children:
+    lab:
+      children:
+        atd:
+          children:
+            campus_avd:
+              children:
+                campus_leaves:  # Child of campus_avd
+            campus_services:
+              children:
+                campus_leaves:  # ALSO child of campus_services (multiple parents!)
+            campus_ports:
+              children:
+                campus_leaves:  # ALSO child of campus_ports (multiple parents!)
+```
+
+Here, `campus_leaves` has **three parent groups**: `campus_avd`, `campus_services`, and `campus_ports`. A device in group `IDF1` (child of `campus_leaves`) should inherit variables from ALL ancestors: `lab`, `atd`, `campus_avd`, `campus_services`, `campus_ports`, `campus_leaves`, and `IDF1`.
+
+**Previous Approach (Bug)**:
+
+The old implementation used a single-pass traversal that only captured ONE path through the hierarchy:
+
+```python
+# BUGGY: Only records one path per group
+def _extract_hierarchy_recursive(data, result, ancestors):
+    if "children" in data:
+        for child_name, child_data in data["children"].items():
+            child_ancestors = ancestors + [child_name]
+            result[child_name] = child_ancestors  # Overwrites if seen again!
+            _extract_hierarchy_recursive(child_data, result, child_ancestors)
+```
+
+**Result**: `campus_leaves` would only have ancestors from ONE path (e.g., `['lab', 'atd', 'campus_avd', 'campus_leaves']`), missing `campus_services` and `campus_ports`.
+
+**New Approach (Three-Pass Algorithm)**:
+
+**Pass 1 - Build Complete Group Hierarchy Map**:
+
+Build a map of `group_name -> Set[all_ancestor_groups]` by traversing the inventory structure and accumulating ALL paths to each group:
+
+```python
+def _build_group_hierarchy_map(data, result, parent_groups, current_group=None):
+    """Build complete map capturing ALL ancestor groups from ALL paths."""
+    if current_group:
+        if current_group not in result:
+            result[current_group] = set()
+        result[current_group].update(parent_groups)  # Add all parents from this path
+        new_parents = parent_groups | {current_group}
+    else:
+        new_parents = parent_groups
+    
+    # Recurse into children
+    if "children" in data:
+        for child_name, child_data in data["children"].items():
+            _build_group_hierarchy_map(child_data, result, new_parents, child_name)
+```
+
+Using a `Set` ensures that even when `campus_leaves` is encountered three times (under different parents), ALL ancestor groups are collected without duplicates.
+
+**Pass 2 - Extract Hostname to Immediate Group Mapping**:
+
+Build a map of `hostname -> immediate_group_name` to identify WHERE each host is defined in the inventory structure:
+
+```python
+def _extract_host_groups_recursive(data, result, current_group):
+    """Find hosts and record their immediate group."""
+    if "hosts" in data:
+        for hostname in data["hosts"].keys():
+            result[hostname] = current_group  # Record immediate group
+    
+    if "children" in data:
+        for child_name, child_data in data["children"].items():
+            _extract_host_groups_recursive(child_data, result, child_name)
+```
+
+**Result**: `{'leaf-1a': 'IDF1', 'leaf-1b': 'IDF1', 'spine01': 'campus_spines'}` - maps each host to where it's actually defined.
+
+**Pass 3 - Expand Device Groups to Include All Ancestors**:
+
+During device creation, expand each device's group list to include ALL ancestors from the hierarchy map:
+
+```python
+# device initially has: device.groups = ['campus_leaves']  # topology group
+host_group = host_to_group.get('leaf-1a')  # -> 'IDF1'
+all_ancestors = set()
+
+if host_group and host_group in group_hierarchy:
+    all_ancestors.update(group_hierarchy[host_group])  # Add ALL ancestors of IDF1
+
+# Transitively add ancestors of ancestors
+for ancestor in list(all_ancestors):
+    if ancestor in group_hierarchy:
+        all_ancestors.update(group_hierarchy[ancestor])
+
+# Merge into device.groups
+for ancestor_group in sorted(all_ancestors):
+    if ancestor_group not in device.groups:
+        device.groups.append(ancestor_group)
+```
+
+**Final Result**: Device `leaf-1a` has complete group hierarchy:
+
+```python
+['atd', 'campus_avd', 'campus_leaves', 'campus_ports', 'campus_services', 'IDF1', 'lab']
+```
+
+**Benefits**:
+
+1. **Correctness**: Devices inherit variables from ALL ancestor groups, not just one path
+2. **Consistency**: Uses `Set` internally to avoid duplicates when multiple paths exist
+3. **Performance**: Three passes are still O(n) overall, very fast for typical inventories
+4. **Compatibility**: Final output is sorted `List[str]` matching existing API contracts
+5. **Maintainability**: Clear separation of concerns (hierarchy building, host mapping, expansion)
+
 ### Why Support Jinja2 Templates?
 
 Jinja2 template support is essential for AVD inventory compatibility and DRY principles:
@@ -1844,6 +1994,132 @@ if result.has_warnings:
     console.print("[yellow]Warnings:[/yellow]")
     for warning in result.warnings:
         console.print(f"  {warning}")
+```
+
+### Three-Pass Group Hierarchy Algorithm Example
+
+This example demonstrates how the three-pass algorithm handles complex multi-parent group hierarchies:
+
+```python
+from pathlib import Path
+from avd_cli.logics.loader import InventoryLoader
+
+# Given: Complex inventory structure with multiple parent groups
+# inventory/inventory.yml:
+"""
+all:
+  children:
+    lab:
+      children:
+        atd:
+          children:
+            campus_avd:
+              children:
+                campus_leaves:
+                  children:
+                    IDF1:
+                      hosts:
+                        leaf-1a:
+                        leaf-1b:
+            campus_services:
+              children:
+                campus_leaves:  # Second parent!
+            campus_ports:
+              children:
+                campus_leaves:  # Third parent!
+"""
+
+loader = InventoryLoader()
+
+# PASS 1: Build complete group hierarchy map
+# Result after Pass 1:
+group_hierarchy = {
+    'lab': {'lab'},
+    'atd': {'lab', 'atd'},
+    'campus_avd': {'lab', 'atd', 'campus_avd'},
+    'campus_services': {'lab', 'atd', 'campus_services'},
+    'campus_ports': {'lab', 'atd', 'campus_ports'},
+    'campus_leaves': {  # Collected from ALL three parent paths!
+        'lab', 'atd', 'campus_avd', 'campus_services', 'campus_ports', 'campus_leaves'
+    },
+    'IDF1': {  # Includes ALL ancestors of campus_leaves
+        'lab', 'atd', 'campus_avd', 'campus_services', 'campus_ports', 'campus_leaves', 'IDF1'
+    }
+}
+
+# PASS 2: Extract hostname to immediate group mapping
+# Result after Pass 2:
+host_to_group = {
+    'leaf-1a': 'IDF1',  # Defined in IDF1 group
+    'leaf-1b': 'IDF1',
+}
+
+# PASS 3: Expand device groups during device creation
+# For device 'leaf-1a':
+# 1. Initial state: device.groups = ['campus_leaves']  # topology group
+# 2. Find immediate group: host_group = 'IDF1'
+# 3. Add all ancestors of IDF1: {'lab', 'atd', 'campus_avd', 'campus_services', 
+#                                 'campus_ports', 'campus_leaves', 'IDF1'}
+# 4. Final state: device.groups = ['atd', 'campus_avd', 'campus_leaves', 
+#                                   'campus_ports', 'campus_services', 'IDF1', 'lab']
+
+# Load inventory and verify
+inventory = loader.load(Path("./inventory"))
+leaf_1a = inventory.get_device_by_hostname("leaf-1a")
+
+# Verify device has ALL ancestor groups
+assert set(leaf_1a.groups) == {
+    'lab', 'atd', 'campus_avd', 'campus_services', 'campus_ports', 'campus_leaves', 'IDF1'
+}
+
+# This enables proper variable inheritance in config generation:
+from avd_cli.logics.generator import ConfigurationGenerator
+
+gen = ConfigurationGenerator()
+devices = inventory.get_all_devices()
+inputs = gen._build_pyavd_inputs_from_inventory(inventory, devices)
+
+leaf_vars = inputs['leaf-1a']
+
+# Variables from ALL ancestor groups are now available:
+assert 'router_bfd' in leaf_vars  # from group_vars/atd/basics.yml
+assert 'interface_profiles' in leaf_vars  # from group_vars/campus_leaves/interface_profiles.yml
+assert 'dot1x' in leaf_vars  # from group_vars/campus_services/dot1x.yml
+assert 'port_profiles' in leaf_vars  # from group_vars/campus_ports/port_profiles.yml
+```
+
+**Key Insights**:
+
+1. **Multiple Paths Captured**: `campus_leaves` correctly has ancestors from three different paths
+2. **Transitive Resolution**: `IDF1` inherits ALL ancestors of `campus_leaves`, which includes ancestors from all three parent branches
+3. **No Duplicates**: Using `Set` internally ensures each ancestor appears only once
+4. **Sorted Output**: Final conversion to sorted `List[str]` provides consistent ordering
+
+**Before Fix (Bug)**:
+
+```python
+# Only one path captured:
+leaf_1a.groups = ['lab', 'atd', 'campus_avd', 'campus_leaves', 'IDF1']
+# MISSING: campus_services, campus_ports
+
+# Variables from campus_services and campus_ports NOT available:
+assert 'dot1x' not in leaf_vars  # ❌ BUG: Missing from campus_services
+assert 'port_profiles' not in leaf_vars  # ❌ BUG: Missing from campus_ports
+```
+
+**After Fix (Correct)**:
+
+```python
+# All paths captured:
+leaf_1a.groups = ['atd', 'campus_avd', 'campus_leaves', 'campus_ports', 
+                  'campus_services', 'IDF1', 'lab']
+# ✓ Includes ALL ancestors from ALL parent paths
+
+# Variables from ALL ancestor groups available:
+assert 'dot1x' in leaf_vars  # ✓ From campus_services
+assert 'port_profiles' in leaf_vars  # ✓ From campus_ports
+assert 'interface_profiles' in leaf_vars  # ✓ From campus_leaves
+assert 'router_bfd' in leaf_vars  # ✓ From atd
 ```
 
 ### Edge Cases

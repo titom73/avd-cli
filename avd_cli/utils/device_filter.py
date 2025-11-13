@@ -130,6 +130,53 @@ class DeviceFilter:
 
         return False
 
+    def _collect_matchable_values(self, devices: List[DeviceDefinition]) -> Set[str]:
+        """Collect all matchable values from devices."""
+        all_matchable_values: Set[str] = set()
+        for device in devices:
+            all_matchable_values.add(device.hostname)
+            all_matchable_values.update(device.groups)
+            all_matchable_values.add(device.fabric)
+        return all_matchable_values
+
+    def _find_unmatched_patterns(self, all_matchable_values: Set[str]) -> List[str]:
+        """Find patterns that didn't match any values."""
+        if not self.pattern_matcher or not self.pattern_matcher.inclusion_patterns:
+            return []
+
+        unmatched_patterns = []
+        for pattern in self.pattern_matcher.inclusion_patterns:
+            pattern_matcher = PatternMatcher([pattern])
+            matched_values = pattern_matcher.get_matched_values(list(all_matchable_values))
+            if not matched_values:
+                unmatched_patterns.append(pattern)
+        return unmatched_patterns
+
+    def _build_suggestions(self, devices: List[DeviceDefinition]) -> List[str]:
+        """Build suggestions for available devices."""
+        suggestions = []
+        available_hostnames = {device.hostname for device in devices}
+        available_groups: Set[str] = set()
+        available_fabrics = {device.fabric for device in devices}
+
+        for device in devices:
+            available_groups.update(device.groups)
+
+        if available_hostnames:
+            suggestions.append(f"  Available hostnames: {', '.join(sorted(available_hostnames)[:10])}")
+            if len(available_hostnames) > 10:
+                suggestions.append(f"    ... and {len(available_hostnames) - 10} more")
+
+        if available_groups:
+            suggestions.append(f"  Available groups: {', '.join(sorted(available_groups)[:10])}")
+            if len(available_groups) > 10:
+                suggestions.append(f"    ... and {len(available_groups) - 10} more")
+
+        if available_fabrics:
+            suggestions.append(f"  Available fabrics: {', '.join(sorted(available_fabrics))}")
+
+        return suggestions
+
     def _validate_patterns_matched(self, devices: List[DeviceDefinition]) -> None:
         """Validate that all patterns matched at least one device.
 
@@ -146,48 +193,12 @@ class DeviceFilter:
         if not self.pattern_matcher or not self.pattern_matcher.inclusion_patterns:
             return
 
-        # Collect all matchable values from devices
-        all_matchable_values: Set[str] = set()
-        for device in devices:
-            all_matchable_values.add(device.hostname)
-            all_matchable_values.update(device.groups)
-            all_matchable_values.add(device.fabric)
-
-        # Check each inclusion pattern
-        unmatched_patterns = []
-        for pattern in self.pattern_matcher.inclusion_patterns:
-            # Create a matcher for just this pattern
-            pattern_matcher = PatternMatcher([pattern])
-            matched_values = pattern_matcher.get_matched_values(list(all_matchable_values))
-
-            if not matched_values:
-                unmatched_patterns.append(pattern)
+        all_matchable_values = self._collect_matchable_values(devices)
+        unmatched_patterns = self._find_unmatched_patterns(all_matchable_values)
 
         if unmatched_patterns:
-            # Build helpful error message
             error_msg = f"The following limit pattern(s) did not match any devices: {', '.join(unmatched_patterns)}"
-
-            # Add suggestions
-            suggestions = []
-            available_hostnames = {device.hostname for device in devices}
-            available_groups: Set[str] = set()
-            available_fabrics = {device.fabric for device in devices}
-
-            for device in devices:
-                available_groups.update(device.groups)
-
-            if available_hostnames:
-                suggestions.append(f"  Available hostnames: {', '.join(sorted(available_hostnames)[:10])}")
-                if len(available_hostnames) > 10:
-                    suggestions.append(f"    ... and {len(available_hostnames) - 10} more")
-
-            if available_groups:
-                suggestions.append(f"  Available groups: {', '.join(sorted(available_groups)[:10])}")
-                if len(available_groups) > 10:
-                    suggestions.append(f"    ... and {len(available_groups) - 10} more")
-
-            if available_fabrics:
-                suggestions.append(f"  Available fabrics: {', '.join(sorted(available_fabrics))}")
+            suggestions = self._build_suggestions(devices)
 
             if suggestions:
                 error_msg += "\n\n" + "\n".join(suggestions)

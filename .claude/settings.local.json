@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest:*)",
+      "Bash(git add avd_cli/cli/main.py avd_cli/logics/loader.py avd_cli/logics/generator.py avd_cli/logics/deployer.py avd_cli/logics/anta_generator.py)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

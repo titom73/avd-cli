@@ -189,7 +189,7 @@ class TestGenerateAllCommand:
                 )
 
         assert result.exit_code == 0
-        assert "Limited to groups: spine, leaf" in result.output
+        assert "Limited to patterns: spine, leaf" in result.output
 
     def test_generate_all_with_workflow(self, tmp_path: Path) -> None:
         """Test generate all with workflow option.

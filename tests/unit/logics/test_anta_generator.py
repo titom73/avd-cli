@@ -126,17 +126,18 @@ class TestAntaCatalogGenerator:
             assert catalog["anta.tests.connectivity"] == []
 
     def test_generate_catalog_with_limit_to_groups(self):
-        """Test catalog generation with group filtering."""
+        """Test catalog generation with group filtering.
+
+        When strict validation is enabled, non-existent groups should raise an error.
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_path = Path(tmp_dir)
 
-            files = self.generator.generate_catalog(
-                self.inventory, self.structured_configs, output_path, limit_to_groups=["NONEXISTENT_FABRIC"]
-            )
-
-            # Should create empty catalog when no devices match
-            assert len(files) == 1
-            assert files[0].name == "anta_catalog.yaml"
+            # With strict validation, non-existent fabric names should raise an error
+            with pytest.raises(TestGenerationError, match="Failed to generate ANTA catalog.*NONEXISTENT_FABRIC"):
+                self.generator.generate_catalog(
+                    self.inventory, self.structured_configs, output_path, limit_to_groups=["NONEXISTENT_FABRIC"]
+                )
 
     def test_generate_catalog_io_error(self):
         """Test catalog generation with I/O error."""
@@ -497,12 +498,29 @@ class TestAntaCatalogGenerator:
 
     def test_device_filtering_integration(self):
         """Test complete device filtering workflow when generating catalogs."""
+        # Create devices with correct fabric names for filtering
+        spine_fabric1 = DeviceDefinition(
+            hostname="spine01",
+            mgmt_ip=IPv4Address("192.168.0.11"),
+            platform="7050X3",
+            device_type="spine",
+            fabric="FABRIC1",
+        )
+
+        leaf_fabric2 = DeviceDefinition(
+            hostname="leaf01",
+            mgmt_ip=IPv4Address("192.168.0.21"),
+            platform="7280R3",
+            device_type="leaf",
+            fabric="FABRIC2",
+        )
+
         # Create inventory with multiple fabrics for filtering test
         fabric1 = FabricDefinition(name="FABRIC1", design_type="l3ls-evpn")
-        fabric1.spine_devices = [self.spine_device]
+        fabric1.spine_devices = [spine_fabric1]
 
         fabric2 = FabricDefinition(name="FABRIC2", design_type="l3ls-evpn")
-        fabric2.leaf_devices = [self.leaf_device]
+        fabric2.leaf_devices = [leaf_fabric2]
 
         multi_fabric_inventory = InventoryData(
             root_path=Path("/tmp/test"),

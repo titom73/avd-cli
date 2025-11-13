@@ -368,7 +368,7 @@ class DeviceDefinition:
 @dataclass
 class FabricDefinition:
     """Fabric topology definition.
-    
+
     Uses flexible device dictionary to support any AVD design type.
     """
 
@@ -432,7 +432,7 @@ class InventoryData:
 
     def validate(self, skip_topology_validation: bool = False) -> List[str]:
         """Validate complete inventory structure.
-        
+
         Parameters
         ----------
         skip_topology_validation : bool
@@ -459,7 +459,7 @@ class InventoryData:
                 # Only validate spine presence for L3LS-EVPN design
                 if fabric.design_type == "l3ls-evpn" and not fabric.spine_devices:
                     errors.append(f"Fabric {fabric.name} (l3ls-evpn) has no spine devices")
-                
+
                 # For MPLS, validate P or PE routers exist
                 if fabric.design_type == "mpls":
                     all_devices = fabric.get_all_devices()
@@ -1754,7 +1754,7 @@ def test_mpls_validation_no_spine_required():
 
     # Validate with topology validation enabled
     errors = inventory.validate(skip_topology_validation=False)
-    
+
     # Should NOT error about missing spines for MPLS design
     assert not any("spine devices" in err for err in errors)
     assert len(errors) == 0
@@ -1985,45 +1985,45 @@ The inventory loader shall dynamically discover node type keys from group_vars w
 ```python
 def _discover_node_type_keys(self, group_vars: Dict[str, Dict[str, Any]]) -> Set[str]:
     """Discover all node type keys defined in group_vars.
-    
+
     Scans group_vars for keys that look like AVD node type definitions.
     These typically have "defaults" and "nodes" or "node_groups" sub-keys.
-    
+
     Examples of node type keys:
     - Standard L3LS-EVPN: "spine", "l3spine", "leaf", "l3leaf", "l2leaf"
     - MPLS: "p", "pe"
     - Custom: "wan_edge", "core_router", etc.
-    
+
     Parameters
     ----------
     group_vars : Dict[str, Dict[str, Any]]
         All group variables
-    
+
     Returns
     -------
     Set[str]
         Set of discovered node type keys
     """
     node_type_keys = set()
-    
+
     for group_name, group_data in group_vars.items():
         if not isinstance(group_data, dict):
             continue
-            
+
         # Check each key in group_data
         for key, value in group_data.items():
             if not isinstance(value, dict):
                 continue
-            
+
             # Heuristic: node type keys have "defaults", "nodes", or "node_groups"
             has_defaults = "defaults" in value
             has_nodes = "nodes" in value
             has_node_groups = "node_groups" in value
-            
+
             if has_defaults or has_nodes or has_node_groups:
                 self.logger.debug("Discovered node type key: %s (in group %s)", key, group_name)
                 node_type_keys.add(key)
-    
+
     return node_type_keys
 
 # Usage in _parse_fabrics:
@@ -2038,19 +2038,19 @@ def _parse_fabrics(
     """Parse loaded YAML data into fabric and device structures."""
     fabrics: List[FabricDefinition] = []
     devices_by_fabric: Dict[str, Dict[str, List[DeviceDefinition]]] = {}
-    
+
     # Discover node type keys dynamically (e.g., "p", "pe", "spine", "leaf")
     node_type_keys = self._discover_node_type_keys(group_vars)
     self.logger.info("Discovered node types: %s", sorted(node_type_keys))
-    
+
     # Parse devices from group variables
     for group_name, group_data in group_vars.items():
         # Determine fabric_name
         fabric_name = self._resolve_fabric_name(group_data, group_vars, global_vars)
-        
+
         if fabric_name not in devices_by_fabric:
             devices_by_fabric[fabric_name] = {}
-        
+
         # Check each discovered node type key
         for node_type_key in node_type_keys:
             if node_type_key in group_data:
@@ -2061,12 +2061,12 @@ def _parse_fabrics(
                     fabric_name,
                     host_vars
                 )
-                
+
                 # Add to devices_by_fabric
                 if node_type_key not in devices_by_fabric[fabric_name]:
                     devices_by_fabric[fabric_name][node_type_key] = []
                 devices_by_fabric[fabric_name][node_type_key].extend(devices)
-    
+
     # Create fabric definitions with flexible devices_by_type
     for fabric_name, devices_dict in devices_by_fabric.items():
         fabric = FabricDefinition(
@@ -2075,7 +2075,7 @@ def _parse_fabrics(
             devices_by_type=devices_dict  # {"p": [...], "pe": [...]} or {"spine": [...], "leaf": [...]}
         )
         fabrics.append(fabric)
-    
+
     return fabrics
 
 def _detect_design_type(
@@ -2084,9 +2084,9 @@ def _detect_design_type(
     global_vars: Dict[str, Any]
 ) -> str:
     """Detect design type from inventory variables.
-    
+
     Checks for design.type key or infers from routing protocols.
-    
+
     Returns
     -------
     str
@@ -2096,7 +2096,7 @@ def _detect_design_type(
     for group_data in group_vars.values():
         if "design" in group_data and "type" in group_data["design"]:
             return group_data["design"]["type"]
-    
+
     # Infer from underlay_routing_protocol
     for group_data in group_vars.values():
         underlay = group_data.get("underlay_routing_protocol", "")
@@ -2104,7 +2104,7 @@ def _detect_design_type(
             return "mpls"
         if "ebgp" in underlay or "bgp" in underlay:
             return "l3ls-evpn"
-    
+
     return "unknown"
 ```
 

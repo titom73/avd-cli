@@ -199,7 +199,7 @@ class ConfigurationGenerator:
         except Exception as e:
             raise ConfigurationGenerationError(f"Failed to generate configurations: {e}") from e
 
-    def _convert_numeric_strings(self, data: Any) -> Any:
+    def _convert_numeric_strings(self, data: Any) -> Any:  # noqa: C901 pylint: disable=too-many-return-statements
         """Recursively convert string representations of numbers to actual numbers.
 
         This handles cases where Jinja2 templates resolve to string numbers
@@ -239,7 +239,10 @@ class ConfigurationGenerator:
                         if parts[1].startswith("0") and len(parts[1]) > 1:
                             return data
                         # Only convert if both parts are numeric (with optional leading minus)
-                        if (parts[0].isdigit() or (parts[0].startswith("-") and parts[0][1:].isdigit())) and parts[1].isdigit():
+                        if (
+                            parts[0].isdigit()
+                            or (parts[0].startswith("-") and parts[0][1:].isdigit())
+                        ) and parts[1].isdigit():
                             return float(data)
             except ValueError:
                 pass
@@ -384,7 +387,7 @@ class ConfigurationGenerator:
             )
             return None
 
-    def _determine_device_type(self, device_vars: Dict[str, Any], hostname: str) -> Union[str, None]:
+    def _determine_device_type(self, device_vars: Dict[str, Any], hostname: str) -> Union[str, None]:  # noqa: C901
         """Determine device type from AVD topology structure.
 
         Parameters
@@ -403,7 +406,7 @@ class ConfigurationGenerator:
         # This supports L3LS-EVPN (spine, leaf), MPLS (p, pe), and custom node types
         topology_keys = [
             key for key in device_vars.keys()
-            if isinstance(device_vars.get(key), dict) and 
+            if isinstance(device_vars.get(key), dict) and
             any(subkey in device_vars[key] for subkey in ["defaults", "nodes", "node_groups"])
         ]
 
@@ -483,7 +486,7 @@ class ConfigurationGenerator:
         # This supports L3LS-EVPN (spine, leaf), MPLS (p, pe), and custom node types
         topology_keys = [
             key for key in device_vars.keys()
-            if isinstance(device_vars.get(key), dict) and 
+            if isinstance(device_vars.get(key), dict) and
             any(subkey in device_vars[key] for subkey in ["defaults", "nodes", "node_groups"])
         ]
 

@@ -816,7 +816,7 @@ class InventoryLoader:
         # Check for explicit design type in group_vars
         for group_data in group_vars.values():
             if "design" in group_data and "type" in group_data["design"]:
-                design_type = group_data["design"]["type"]
+                design_type = str(group_data["design"]["type"])
                 self.logger.info("Detected design type from group_vars: %s", design_type)
                 return design_type
 

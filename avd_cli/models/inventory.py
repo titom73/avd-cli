@@ -121,7 +121,7 @@ class DeviceDefinition:
 
         Device type list is dynamically loaded from py-avd schema where possible.
         Falls back to hardcoded list if py-avd is unavailable.
-        
+
         Note: For multi-design support (MPLS, custom designs), we accept any device type
         that is alphanumeric. Standard L3LS-EVPN types are still validated against the schema.
 
@@ -133,13 +133,13 @@ class DeviceDefinition:
         # Basic validation: must be non-empty and alphanumeric (with underscores)
         if not self.device_type:
             raise ValueError("Device type cannot be empty")
-        
+
         if not self.device_type.replace("_", "").isalnum():
             raise ValueError(
                 f"Invalid device type format: {self.device_type}. "
                 f"Device type must contain only alphanumeric characters and underscores."
             )
-        
+
         # For standard L3LS-EVPN types, log a warning if not in known types
         # but don't fail - allows MPLS (p, pe) and custom types
         valid_types = get_supported_device_types()

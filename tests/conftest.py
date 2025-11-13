@@ -275,6 +275,47 @@ def mock_pyavd():
     )
     mock.get_anta_catalog.return_value = mock_catalog
 
+    # Mock pyavd.get_device_test_catalog for ANTA catalog generation
+    mock_device_catalog = MagicMock()
+    mock_device_catalog.tests = [
+        {"anta.tests.connectivity": [{"VerifyReachability": {"hosts": [{"destination": "8.8.8.8"}]}}]},
+        {"anta.tests.system": [{"VerifyUptime": {"minimum": 86400}}]},
+    ]
+    mock.get_device_test_catalog.return_value = mock_device_catalog
+
+    # Mock pyavd.api._anta.get_minimal_structured_configs
+    mock_api_anta = MagicMock()
+    mock_api_anta.get_minimal_structured_configs.return_value = {}
+    sys.modules["pyavd.api._anta"] = mock_api_anta
+
+    # Mock anta.catalog.AntaCatalog
+    mock_anta_catalog_module = MagicMock()
+    mock_anta_catalog_class = MagicMock()
+
+    # When AntaCatalog is instantiated, return an object with a dump method
+    def mock_catalog_init(tests):
+        catalog_instance = MagicMock()
+        # dump() returns an AntaCatalogFile object with yaml() method
+        catalog_file = MagicMock()
+        catalog_file.yaml.return_value = (
+            "# ANTA Catalog\n"
+            "anta.tests.connectivity:\n"
+            "  - VerifyReachability:\n"
+            "      hosts:\n"
+            "        - destination: 8.8.8.8\n"
+            "          source: Management0\n"
+            "          vrf: default\n"
+            "anta.tests.system:\n"
+            "  - VerifyUptime:\n"
+            "      minimum: 86400\n"
+        )
+        catalog_instance.dump.return_value = catalog_file
+        return catalog_instance
+
+    mock_anta_catalog_class.side_effect = mock_catalog_init
+    mock_anta_catalog_module.AntaCatalog = mock_anta_catalog_class
+    sys.modules["anta.catalog"] = mock_anta_catalog_module
+
     # Mock ANTA inventory generation
     mock_inventory = MagicMock()
     mock_inventory.dump.return_value = (
@@ -295,5 +336,6 @@ def mock_pyavd():
     yield mock
 
     # Cleanup
-    if "pyavd" in sys.modules:
-        del sys.modules["pyavd"]
+    for module_name in ["pyavd", "pyavd.api._anta", "anta.catalog"]:
+        if module_name in sys.modules:
+            del sys.modules[module_name]

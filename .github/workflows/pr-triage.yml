@@ -53,6 +53,17 @@ jobs:
           echo "scope=$SCOPE" >> $GITHUB_OUTPUT
           echo "breaking=$BREAKING" >> $GITHUB_OUTPUT
 
+          # Parse multiple scopes separated by commas (with or without spaces)
+          # Convert comma-separated scopes to JSON array
+          if [ -n "$SCOPE" ]; then
+            # Split on comma, trim spaces, convert to JSON array
+            SCOPE_ARRAY=$(echo "$SCOPE" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | jq -R . | jq -s -c .)
+            echo "scope_array=$SCOPE_ARRAY" >> $GITHUB_OUTPUT
+            echo "Parsed SCOPE_ARRAY: $SCOPE_ARRAY"
+          else
+            echo "scope_array=[]" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create and add kind label
         if: steps.parse.outputs.type != ''
         env:
@@ -71,23 +82,31 @@ jobs:
           gh pr edit "$PR_NUMBER" \
             --add-label "kind:$KIND_TYPE"
 
-      - name: Create and add scope label
+      - name: Create and add scope labels
         if: steps.parse.outputs.scope != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          SCOPE_NAME: ${{ steps.parse.outputs.scope }}
+          SCOPE_ARRAY: ${{ steps.parse.outputs.scope_array }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # Create label if it doesn't exist
-          gh label create "scope:$SCOPE_NAME" \
-            --description "Scope: $SCOPE_NAME" \
-            --color "1D76DB" \
-            --force || true
+          # Parse JSON array of scopes
+          SCOPES=$(echo "$SCOPE_ARRAY" | jq -r '.[]')
 
-          # Add label to PR
-          gh pr edit "$PR_NUMBER" \
-            --add-label "scope:$SCOPE_NAME"
+          # Process each scope
+          for SCOPE_NAME in $SCOPES; do
+            echo "Processing scope: $SCOPE_NAME"
+
+            # Create label if it doesn't exist
+            gh label create "scope:$SCOPE_NAME" \
+              --description "Scope: $SCOPE_NAME" \
+              --color "1D76DB" \
+              --force || true
+
+            # Add label to PR
+            gh pr edit "$PR_NUMBER" \
+              --add-label "scope:$SCOPE_NAME"
+          done
 
       - name: Create and add breaking change label
         if: steps.parse.outputs.breaking == 'true'
@@ -109,7 +128,7 @@ jobs:
       - name: Summary
         env:
           KIND_TYPE: ${{ steps.parse.outputs.type }}
-          SCOPE_NAME: ${{ steps.parse.outputs.scope }}
+          SCOPE_ARRAY: ${{ steps.parse.outputs.scope_array }}
           IS_BREAKING: ${{ steps.parse.outputs.breaking }}
         run: |
           echo "### 🏷️ PR Labeling Summary" >> $GITHUB_STEP_SUMMARY
@@ -119,11 +138,23 @@ jobs:
           else
             echo "- ⚠️ No type found in PR title" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -n "$SCOPE_NAME" ]; then
-            echo "- ✅ Added **scope:$SCOPE_NAME** label" >> $GITHUB_STEP_SUMMARY
+
+          # Display scope labels
+          SCOPES=$(echo "$SCOPE_ARRAY" | jq -r '.[]')
+          if [ -n "$SCOPES" ]; then
+            SCOPE_COUNT=$(echo "$SCOPE_ARRAY" | jq 'length')
+            if [ "$SCOPE_COUNT" -eq 1 ]; then
+              echo "- ✅ Added **scope:$SCOPES** label" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ✅ Added **$SCOPE_COUNT scope labels**:" >> $GITHUB_STEP_SUMMARY
+              for SCOPE_NAME in $SCOPES; do
+                echo "  - **scope:$SCOPE_NAME**" >> $GITHUB_STEP_SUMMARY
+              done
+            fi
           else
             echo "- ℹ️ No scope found in PR title" >> $GITHUB_STEP_SUMMARY
           fi
+
           if [ "$IS_BREAKING" = "true" ]; then
             echo "- 🚨 Added **compat:breaking** label (breaking change detected)" >> $GITHUB_STEP_SUMMARY
           fi

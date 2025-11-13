@@ -769,11 +769,85 @@ class InventoryLoader:
 
         return result
 
+    def _discover_node_type_keys(self, group_vars: Dict[str, Dict[str, Any]]) -> List[str]:
+        """Discover node type keys from inventory data.
+
+        Scans group_vars for keys that define device topology structures.
+        A key is considered a node type if it contains 'defaults', 'nodes', or 'node_groups'.
+
+        Parameters
+        ----------
+        group_vars : Dict[str, Dict[str, Any]]
+            Group variables from inventory
+
+        Returns
+        -------
+        List[str]
+            List of discovered node type keys (e.g., ['spine', 'leaf', 'p', 'pe'])
+        """
+        discovered_types: Set[str] = set()
+
+        # Scan all group_vars for topology structure keys
+        for group_data in group_vars.values():
+            for key, value in group_data.items():
+                if isinstance(value, dict):
+                    # Check if this key has topology structure markers
+                    if any(marker in value for marker in ["defaults", "nodes", "node_groups"]):
+                        discovered_types.add(key)
+                        self.logger.debug("Discovered node type key: %s", key)
+
+        return sorted(discovered_types)
+
+    def _detect_design_type(self, group_vars: Dict[str, Dict[str, Any]], node_types: List[str]) -> str:
+        """Detect AVD design type from inventory structure.
+
+        Parameters
+        ----------
+        group_vars : Dict[str, Dict[str, Any]]
+            Group variables from inventory
+        node_types : List[str]
+            Discovered node type keys
+
+        Returns
+        -------
+        str
+            Detected design type ('l3ls-evpn', 'mpls', 'l2ls', or 'custom')
+        """
+        # Check for explicit design type in group_vars
+        for group_data in group_vars.values():
+            if "design" in group_data and "type" in group_data["design"]:
+                design_type = str(group_data["design"]["type"])
+                self.logger.info("Detected design type from group_vars: %s", design_type)
+                return design_type
+
+        # Infer from node types present
+        node_types_set = set(node_types)
+
+        # MPLS design: has 'p' and/or 'pe' routers
+        if any(nt in node_types_set for nt in ["p", "pe"]):
+            self.logger.info("Detected MPLS design from node types: %s", node_types)
+            return "mpls"
+
+        # L2LS design: has 'l2spine' and 'l2leaf'
+        if "l2spine" in node_types_set or "l2leaf" in node_types_set:
+            self.logger.info("Detected L2LS design from node types")
+            return "l2ls"
+
+        # L3LS-EVPN design: has spine/leaf structure (default)
+        if any(nt in node_types_set for nt in ["spine", "l3spine", "leaf", "l3leaf", "l2leaf"]):
+            self.logger.info("Detected L3LS-EVPN design from node types")
+            return "l3ls-evpn"
+
+        # Unknown/custom design
+        self.logger.info("Unknown design type, using 'custom'")
+        return "custom"
+
     def _normalize_device_type(self, device_type: str) -> str:
         """Normalize AVD device type to canonical type.
 
         Maps AVD-specific device types (l3spine, l2leaf, l3leaf) to canonical
         types (spine, leaf) for internal processing.
+        For unknown types (e.g., 'p', 'pe', custom types), returns as-is.
 
         Parameters
         ----------
@@ -783,7 +857,7 @@ class InventoryLoader:
         Returns
         -------
         str
-            Canonical device type
+            Canonical device type or original if not in mapping
 
         Examples
         --------
@@ -793,6 +867,8 @@ class InventoryLoader:
         "leaf"
         >>> loader._normalize_device_type("spine")
         "spine"
+        >>> loader._normalize_device_type("p")
+        "p"
         """
         normalized = DEVICE_TYPE_MAPPING.get(device_type.lower(), device_type)
         if normalized != device_type:
@@ -918,10 +994,14 @@ class InventoryLoader:
         fabrics: List[FabricDefinition] = []
         devices_by_fabric: Dict[str, List[DeviceDefinition]] = {}
 
+        # Discover all node type keys dynamically
+        discovered_node_types = self._discover_node_type_keys(group_vars)
+        self.logger.info("Discovered node types: %s", discovered_node_types)
+
         # Parse devices from group variables
         for group_name, group_data in group_vars.items():
-            # Check if group defines device topology (spine, leaf, l2leaf, etc.)
-            if self._is_device_topology_group(group_data):
+            # Check if group defines device topology (using discovered node types)
+            if self._is_device_topology_group(group_data, discovered_node_types):
                 # Try to find fabric_name in this order:
                 # 1. Current group_data
                 # 2. Any other group_vars (might be parent group like campus_avd)
@@ -940,9 +1020,9 @@ class InventoryLoader:
                 if fabric_name not in devices_by_fabric:
                     devices_by_fabric[fabric_name] = []
 
-                # Parse devices from this group (pass resolved fabric_name and group_name)
+                # Parse devices from this group using discovered node types
                 devices = self._parse_devices_from_group(
-                    group_name, group_data, host_vars, global_vars, fabric_name
+                    group_name, group_data, host_vars, global_vars, fabric_name, discovered_node_types
                 )
 
                 # Apply custom configurations and add group membership to all devices
@@ -997,29 +1077,23 @@ class InventoryLoader:
 
         return fabrics
 
-    def _is_device_topology_group(self, group_data: Dict[str, Any]) -> bool:
+    def _is_device_topology_group(self, group_data: Dict[str, Any], node_types: List[str]) -> bool:
         """Check if group data contains device topology definitions.
 
         Parameters
         ----------
         group_data : Dict[str, Any]
             Group variables
+        node_types : List[str]
+            Discovered node type keys
 
         Returns
         -------
         bool
             True if group contains device topology
         """
-        # Check for common AVD topology keys
-        topology_keys = [
-            "l3spine",
-            "l2leaf",
-            "spine",
-            "leaf",
-            "type",
-            "node_groups",
-            "nodes",
-        ]
+        # Check for discovered node type keys plus generic topology markers
+        topology_keys = node_types + ["type", "node_groups", "nodes"]
         return any(key in group_data for key in topology_keys)
 
     def _parse_devices_from_group(
@@ -1029,8 +1103,9 @@ class InventoryLoader:
         host_vars: Dict[str, Dict[str, Any]],
         global_vars: Dict[str, Any],
         fabric_name: str,
+        node_types: List[str],
     ) -> List[DeviceDefinition]:
-        """Parse device definitions from group data.
+        """Parse device definitions from group data using discovered node types.
 
         Parameters
         ----------
@@ -1044,6 +1119,8 @@ class InventoryLoader:
             Global variables
         fabric_name : str
             Resolved fabric name (from parent resolution)
+        node_types : List[str]
+            Discovered node type keys to look for
 
         Returns
         -------
@@ -1051,71 +1128,36 @@ class InventoryLoader:
             List of parsed devices
         """
         devices: List[DeviceDefinition] = []
-        # fabric_name is now passed as parameter, no need to resolve again
 
         # Determine device type from group data and normalize it
         device_type = self._normalize_device_type(
             group_data.get("type", group_name.lower())
         )
 
-        # Parse from different AVD structures
-        # NOTE: Use separate if statements (not elif) because a single file
-        # can contain multiple topology types (e.g., spine: AND l3leaf:)
-        if "spine" in group_data:
-            # Parse spine topology
-            spine_data = group_data["spine"]
-            devices.extend(
-                self._parse_topology_section(
-                    spine_data,
-                    "spine",
-                    fabric_name,
-                    host_vars
-                )
-            )
+        # Parse from dynamically discovered node types
+        # Iterate through all discovered node type keys (e.g., spine, leaf, p, pe, custom types)
+        for node_type_key in node_types:
+            if node_type_key in group_data:
+                # Normalize the device type (e.g., l3spine -> spine, but p stays as p)
+                normalized_type = self._normalize_device_type(node_type_key)
 
-        if "l3spine" in group_data:
-            devices.extend(
-                self._parse_topology_section(
-                    group_data["l3spine"],
-                    self._normalize_device_type("l3spine"),
-                    fabric_name,
-                    host_vars
+                self.logger.debug(
+                    "Parsing node type '%s' (normalized: '%s') from group '%s'",
+                    node_type_key,
+                    normalized_type,
+                    group_name
                 )
-            )
 
-        if "leaf" in group_data:
-            # Parse leaf topology
-            leaf_data = group_data["leaf"]
-            devices.extend(
-                self._parse_topology_section(
-                    leaf_data,
-                    "leaf",
-                    fabric_name,
-                    host_vars
+                devices.extend(
+                    self._parse_topology_section(
+                        group_data[node_type_key],
+                        normalized_type,
+                        fabric_name,
+                        host_vars
+                    )
                 )
-            )
 
-        if "l3leaf" in group_data:
-            devices.extend(
-                self._parse_topology_section(
-                    group_data["l3leaf"],
-                    self._normalize_device_type("l3leaf"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-
-        if "l2leaf" in group_data:
-            devices.extend(
-                self._parse_topology_section(
-                    group_data["l2leaf"],
-                    self._normalize_device_type("l2leaf"),
-                    fabric_name,
-                    host_vars
-                )
-            )
-
-        # Legacy support: if no specific topology keys, check for generic structures
+        # Legacy support: if no specific topology keys found, check for generic structures
         if not devices:
             if "node_groups" in group_data:
                 devices.extend(
@@ -1339,28 +1381,29 @@ class InventoryLoader:
         FabricDefinition
             Fabric definition
         """
-        # Separate devices by type
-        spine_devices = [d for d in devices if "spine" in d.device_type.lower()]
-        leaf_devices = [
-            d
-            for d in devices
-            if "leaf" in d.device_type.lower() and "border" not in d.device_type.lower()
-        ]
-        border_leaf_devices = [d for d in devices if "border" in d.device_type.lower()]
+        # Organize devices by type
+        devices_by_type: Dict[str, List[DeviceDefinition]] = {}
+        for device in devices:
+            device_type = device.device_type
+            if device_type not in devices_by_type:
+                devices_by_type[device_type] = []
+            devices_by_type[device_type].append(device)
 
-        # Determine design type from group vars
-        design_type = "l3ls-evpn"  # Default
-        for group_data in group_vars.values():
-            if "design" in group_data and "type" in group_data["design"]:
-                design_type = group_data["design"]["type"]
-                break
+        # Discover node types and detect design type
+        node_types = self._discover_node_type_keys(group_vars)
+        design_type = self._detect_design_type(group_vars, node_types)
+
+        self.logger.info(
+            "Creating fabric '%s' with design '%s' and device types: %s",
+            fabric_name,
+            design_type,
+            sorted(devices_by_type.keys())
+        )
 
         fabric = FabricDefinition(
             name=fabric_name,
             design_type=design_type,
-            spine_devices=spine_devices,
-            leaf_devices=leaf_devices,
-            border_leaf_devices=border_leaf_devices,
+            devices_by_type=devices_by_type,
         )
 
         return fabric

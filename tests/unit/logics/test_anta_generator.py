@@ -42,9 +42,14 @@ class TestAntaCatalogGenerator:
         )
 
         # Create test inventory
-        fabric = FabricDefinition(name="TEST_FABRIC", design_type="l3ls-evpn")
-        fabric.spine_devices = [self.spine_device]
-        fabric.leaf_devices = [self.leaf_device]
+        fabric = FabricDefinition(
+            name="TEST_FABRIC",
+            design_type="l3ls-evpn",
+            devices_by_type={
+                "spine": [self.spine_device],
+                "leaf": [self.leaf_device],
+            },
+        )
 
         self.inventory = InventoryData(root_path=Path("/tmp/test"), fabrics=[fabric])
 
@@ -498,11 +503,17 @@ class TestAntaCatalogGenerator:
     def test_device_filtering_integration(self):
         """Test complete device filtering workflow when generating catalogs."""
         # Create inventory with multiple fabrics for filtering test
-        fabric1 = FabricDefinition(name="FABRIC1", design_type="l3ls-evpn")
-        fabric1.spine_devices = [self.spine_device]
+        fabric1 = FabricDefinition(
+            name="FABRIC1",
+            design_type="l3ls-evpn",
+            devices_by_type={"spine": [self.spine_device]},
+        )
 
-        fabric2 = FabricDefinition(name="FABRIC2", design_type="l3ls-evpn")
-        fabric2.leaf_devices = [self.leaf_device]
+        fabric2 = FabricDefinition(
+            name="FABRIC2",
+            design_type="l3ls-evpn",
+            devices_by_type={"leaf": [self.leaf_device]},
+        )
 
         multi_fabric_inventory = InventoryData(
             root_path=Path("/tmp/test"),

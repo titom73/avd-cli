@@ -43,7 +43,9 @@ class TestGenerateAllCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -101,7 +103,9 @@ class TestGenerateAllCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -156,7 +160,9 @@ class TestGenerateAllCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -213,7 +219,9 @@ class TestGenerateAllCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -269,7 +277,9 @@ class TestGenerateAllCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            leaf_devices=[device],
+            devices_by_type={
+                "leaf": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -364,8 +374,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -437,8 +449,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -500,8 +514,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -563,8 +579,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -629,8 +647,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -697,8 +717,10 @@ class TestDefaultOutputPath:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine_device],
-            leaf_devices=[leaf_device],
+            devices_by_type={
+                "spine": [spine_device],
+                "leaf": [leaf_device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -761,7 +783,9 @@ class TestGenerateConfigsCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -815,7 +839,9 @@ class TestGenerateConfigsCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -874,7 +900,9 @@ class TestGenerateDocsCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -932,7 +960,9 @@ class TestGenerateTestsCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -989,7 +1019,9 @@ class TestValidateCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1031,7 +1063,9 @@ class TestValidateCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            leaf_devices=[device],
+            devices_by_type={
+                "leaf": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1084,8 +1118,10 @@ class TestInfoCommand:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf],
+            devices_by_type={
+                "spine": [spine],
+                "leaf": [leaf],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1134,7 +1170,9 @@ class TestEnvironmentVariables:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1187,7 +1225,9 @@ class TestEnvironmentVariables:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1236,7 +1276,9 @@ class TestEnvironmentVariables:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,
@@ -1283,7 +1325,9 @@ class TestEnvironmentVariables:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device],
+            devices_by_type={
+                "spine": [device],
+            },
         )
         mock_inventory = InventoryData(
             root_path=inventory_path,

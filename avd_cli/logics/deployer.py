@@ -298,61 +298,55 @@ class Deployer:
         if not isinstance(group_data, dict):
             return
 
-        # Check if we should process this group based on limit_to_groups filter
-        should_process_hosts = True
-        if self.limit_to_groups:
-            # Only process hosts if current group is in the filter list
-            should_process_hosts = group_name in self.limit_to_groups
-
         # Merge parent vars with current group vars (current takes precedence)
         current_vars = parent_vars.copy()
         if "vars" in group_data:
             current_vars.update(group_data["vars"])
 
-        # Process direct hosts in this group (only if filter allows)
-        if should_process_hosts:
-            hosts = group_data.get("hosts", {})
-            if isinstance(hosts, dict):
-                for hostname, host_data in hosts.items():
-                    if not isinstance(host_data, dict):
-                        continue
+        # Process direct hosts in this group
+        # Note: Filtering by patterns will happen after all targets are built
+        hosts = group_data.get("hosts", {})
+        if isinstance(hosts, dict):
+            for hostname, host_data in hosts.items():
+                if not isinstance(host_data, dict):
+                    continue
 
-                    # Get IP address
-                    ansible_host = host_data.get("ansible_host")
-                    if not ansible_host:
+                # Get IP address
+                ansible_host = host_data.get("ansible_host")
+                if not ansible_host:
+                    self.logger.warning(
+                        "Skipping %s: missing ansible_host in inventory", hostname
+                    )
+                    continue
+
+                try:
+                    # Extract credentials (host vars override group vars)
+                    credentials = self._extract_credentials(host_data, current_vars)
+
+                    # Find config file
+                    config_file_path = self.configs_path / f"{hostname}.cfg"
+                    config_file: Optional[Path]
+                    if not config_file_path.exists():
                         self.logger.warning(
-                            "Skipping %s: missing ansible_host in inventory", hostname
+                            "Configuration file not found for %s: %s", hostname, config_file_path
                         )
-                        continue
+                        config_file = None
+                    else:
+                        config_file = config_file_path
 
-                    try:
-                        # Extract credentials (host vars override group vars)
-                        credentials = self._extract_credentials(host_data, current_vars)
-
-                        # Find config file
-                        config_file_path = self.configs_path / f"{hostname}.cfg"
-                        config_file: Optional[Path]
-                        if not config_file_path.exists():
-                            self.logger.warning(
-                                "Configuration file not found for %s: %s", hostname, config_file_path
-                            )
-                            config_file = None
-                        else:
-                            config_file = config_file_path
-
-                        targets.append(
-                            DeploymentTarget(
-                                hostname=hostname,
-                                ip_address=ansible_host,
-                                credentials=credentials,
-                                config_file=config_file,
-                                groups=[group_name],
-                            )
+                    targets.append(
+                        DeploymentTarget(
+                            hostname=hostname,
+                            ip_address=ansible_host,
+                            credentials=credentials,
+                            config_file=config_file,
+                            groups=[group_name],
                         )
+                    )
 
-                    except CredentialError as e:
-                        self.logger.error("Skipping %s: %s", hostname, e)
-                        continue
+                except CredentialError as e:
+                    self.logger.error("Skipping %s: %s", hostname, e)
+                    continue
 
         # Recursively process children groups
         children = group_data.get("children", {})
@@ -390,12 +384,32 @@ class Deployer:
         # Process all groups recursively
         for group_name, group_data in children.items():
             # Extract hosts recursively from this group
-            # The filtering by limit_to_groups will happen inside the recursive function
             self._extract_hosts_recursive(group_data, group_name, {}, targets)
+
+        # Filter targets by patterns (hostname or groups) if specified
+        if self.limit_to_groups:
+            from avd_cli.utils.pattern_matcher import PatternMatcher
+            pattern_matcher = PatternMatcher(self.limit_to_groups)
+
+            filtered_targets = []
+            for target in targets:
+                # Check if hostname matches any pattern
+                if pattern_matcher.matches(target.hostname):
+                    filtered_targets.append(target)
+                    continue
+
+                # Check if any of the target's groups match any pattern
+                for group in target.groups:
+                    if pattern_matcher.matches(group):
+                        filtered_targets.append(target)
+                        break
+
+            targets = filtered_targets
+            self.logger.info("Filtered to %d targets using patterns: %s", len(targets), self.limit_to_groups)
 
         if not targets:
             raise DeploymentError(
-                "No deployment targets found. Check inventory and group filters."
+                "No deployment targets found. Check inventory and limit patterns."
             )
 
         return targets

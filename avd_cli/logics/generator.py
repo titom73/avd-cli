@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from rich.console import Console
 
 from avd_cli.constants import (DEFAULT_CONFIGS_DIR, DEFAULT_DOCS_DIR,
-                               DEFAULT_TESTS_DIR, normalize_workflow)
+                               DEFAULT_TESTS_DIR)
 from avd_cli.exceptions import (ConfigurationGenerationError,
                                 DocumentationGenerationError,
                                 TestGenerationError)
@@ -38,15 +38,15 @@ class ConfigurationGenerator:
     >>> print(f"Generated {len(configs)} configurations")
     """
 
-    def __init__(self, workflow: str = "eos-design") -> None:
+    def __init__(self, workflow: str = "full") -> None:
         """Initialize the configuration generator.
 
         Parameters
         ----------
         workflow : str, optional
-            Workflow type ('eos-design' or 'cli-config'), by default "eos-design"
+            Workflow type ('full' or 'config-only'), by default "full"
         """
-        self.workflow = normalize_workflow(workflow)
+        self.workflow = workflow
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.pyavd: Any = None  # Will be initialized when needed
 
@@ -67,22 +67,33 @@ class ConfigurationGenerator:
         return configs_dir
 
     def _filter_devices(self, inventory: InventoryData, limit_to_groups: Optional[List[str]]) -> List[DeviceDefinition]:
-        """Filter devices by groups if specified."""
+        """Filter devices by limit patterns (hostnames, groups, or fabrics).
+
+        Parameters
+        ----------
+        inventory : InventoryData
+            Inventory data containing all devices
+        limit_to_groups : Optional[List[str]]
+            List of limit patterns (supports wildcards, ranges, exclusions)
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            Filtered list of devices
+        """
+        from avd_cli.utils.device_filter import DeviceFilter
+
         devices = inventory.get_all_devices()
         if limit_to_groups:
-            # Filter by fabric name OR by any group membership
-            devices = [
-                d for d in devices
-                if d.fabric in limit_to_groups or any(g in limit_to_groups for g in d.groups)
-            ]
-            self.logger.info("Limited to %d devices in groups: %s", len(devices), limit_to_groups)
+            device_filter = DeviceFilter(limit_to_groups)
+            devices = device_filter.filter_devices(devices)
         return devices
 
     def _generate_structured_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Generate structured configurations based on workflow."""
         structured_configs: Dict[str, Dict[str, Any]] = {}
 
-        if self.workflow == "eos-design":
+        if self.workflow == "full":
             # Validate inputs first
             self.logger.info("Validating inputs against eos_designs schema")
             for hostname, inputs in all_inputs.items():
@@ -102,20 +113,13 @@ class ConfigurationGenerator:
 
             self.logger.info("Generating structured configurations")
             for hostname, inputs in all_inputs.items():
-                # Generate structured_config from eos_designs schema
                 structured_config = self.pyavd.get_device_structured_config(
                     hostname=hostname, inputs=inputs, avd_facts=avd_facts
                 )
-
-                # Merge with eos_cli_config_gen variables (aliases, ntp, snmp, logging, aaa, etc.)
-                # The inputs contain ALL variables from group_vars/host_vars, including those
-                # that are specific to eos_cli_config_gen schema (not part of eos_designs)
-                # We deep merge to ensure structured_config from eos_designs takes precedence
-                # but eos_cli_config_gen variables are added where not present
-                structured_configs[hostname] = self._deep_merge(inputs, structured_config)
+                structured_configs[hostname] = structured_config
         else:
-            # Config-only workflow (cli-config)
-            self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
+            # Config-only workflow
+            self.logger.info("Using config-only workflow (eos_cli_config_gen only)")
             for hostname, inputs in all_inputs.items():
                 structured_configs[hostname] = inputs
 
@@ -261,18 +265,10 @@ class ConfigurationGenerator:
             # Start with global variables
             device_vars = deepcopy(inventory.global_vars)
 
-            # Merge ONLY group variables that this device belongs to (from device.groups)
-            # Plus the fabric group (from device.fabric)
-            # This prevents variables from unrelated groups from being incorrectly applied
-            device_groups = set(device.groups + [device.fabric])
-            for group_name in sorted(device_groups):
-                if group_name in inventory.group_vars:
-                    device_vars = self._deep_merge(device_vars, inventory.group_vars[group_name])
-
-            # Capture AVD 'type' from group_vars before host_vars merge
-            # The 'type' in group_vars (l2leaf, l3leaf, spine, etc.) takes precedence
-            # over any device_type from host_vars (which is for internal use only)
-            avd_type_from_groups = device_vars.get("type")
+            # Merge ALL group variables (already resolved by InventoryLoader)
+            # We merge all groups because we don't track the exact group hierarchy
+            for group_name in sorted(inventory.group_vars.keys()):
+                device_vars = self._deep_merge(device_vars, inventory.group_vars[group_name])
 
             # Merge host-specific variables (highest priority, already resolved)
             if device.hostname in inventory.host_vars:
@@ -283,14 +279,11 @@ class ConfigurationGenerator:
             device_vars = self._convert_numeric_strings(device_vars)
 
             # Ensure hostname is present (required by pyavd)
-            # Always override with actual hostname from inventory to prevent empty values
-            device_vars["hostname"] = device.hostname
+            device_vars.setdefault("hostname", device.hostname)
 
-            # Restore AVD type if it was defined in group_vars
-            if avd_type_from_groups:
-                device_vars["type"] = avd_type_from_groups
-            elif "type" not in device_vars:
-                # Only use inventory device_type as fallback if no AVD type is defined
+            # Only set type if not already defined in variables
+            # AVD group_vars should define the correct type (l3leaf, l2leaf, spine, etc.)
+            if "type" not in device_vars:
                 self.logger.warning(
                     "Device %s has no 'type' defined in AVD variables, using inventory type: %s",
                     device.hostname,
@@ -313,31 +306,6 @@ class ConfigurationGenerator:
             all_inputs[device.hostname] = device_vars
 
         return all_inputs
-
-    def _convert_inventory_to_pyavd_inputs(
-        self, inventory: InventoryData, devices: List[DeviceDefinition]
-    ) -> Dict[str, Dict[str, Any]]:
-        """Build pyavd inputs from resolved inventory data (legacy wrapper).
-
-        This is a backward-compatibility wrapper for the renamed method.
-
-        Parameters
-        ----------
-        inventory : InventoryData
-            Complete inventory data with resolved variables
-        devices : List[DeviceDefinition]
-            List of devices to build inputs for
-
-        Returns
-        -------
-        Dict[str, Dict[str, Any]]
-            Dictionary mapping hostnames to their complete AVD variables
-
-        See Also
-        --------
-        _build_pyavd_inputs_from_inventory : New method name
-        """
-        return self._build_pyavd_inputs_from_inventory(inventory, devices)
 
     def _find_node_in_groups(self, node_groups: List[Any], hostname: str) -> Union[int, None]:
         """Search through node groups for a hostname and return its ID."""
@@ -487,6 +455,62 @@ class ConfigurationGenerator:
 
         return result
 
+    def _convert_inventory_to_pyavd_inputs(
+        self, inventory: InventoryData, devices: List[DeviceDefinition]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Convert avd-cli inventory to pyavd input format.
+
+        Parameters
+        ----------
+        inventory : InventoryData
+            Complete inventory data
+        devices : List[DeviceDefinition]
+            List of devices to convert
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            Dictionary mapping hostnames to their pyavd input variables
+        """
+        all_inputs: Dict[str, Dict[str, Any]] = {}
+
+        for device in devices:
+            # Start with device's custom_variables and structured_config
+            device_vars = deepcopy(device.custom_variables)
+
+            # Add required device fields
+            device_vars.update(
+                {
+                    "hostname": device.hostname,
+                    "platform": device.platform,
+                    "mgmt_ip": str(device.mgmt_ip),
+                    "type": device.device_type,  # 'type' is the AVD key for device_type
+                }
+            )
+
+            # Add optional fields if present
+            if device.mgmt_gateway:
+                device_vars["mgmt_gateway"] = str(device.mgmt_gateway)
+            if device.serial_number:
+                device_vars["serial_number"] = device.serial_number
+            if device.system_mac_address:
+                device_vars["system_mac_address"] = device.system_mac_address
+            if device.pod:
+                device_vars["pod"] = device.pod
+            if device.rack:
+                device_vars["rack"] = device.rack
+
+            # Add fabric information
+            device_vars["fabric_name"] = device.fabric
+
+            # Merge structured_config if present
+            if device.structured_config:
+                device_vars["structured_config"] = deepcopy(device.structured_config)
+
+            all_inputs[device.hostname] = device_vars
+
+        return all_inputs
+
 
 class DocumentationGenerator:
     """Generator for device documentation.
@@ -498,28 +522,6 @@ class DocumentationGenerator:
     def __init__(self) -> None:
         """Initialize the documentation generator."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self.pyavd: Any = None
-
-    def _import_pyavd(self) -> Any:
-        """Import pyavd library.
-
-        Returns
-        -------
-        Any
-            pyavd module
-
-        Raises
-        ------
-        DocumentationGenerationError
-            If pyavd is not installed
-        """
-        try:
-            import pyavd
-            return pyavd
-        except ImportError as e:
-            raise DocumentationGenerationError(
-                "pyavd library not installed. Install with: pip install pyavd"
-            ) from e
 
     def generate(
         self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
@@ -555,19 +557,26 @@ class DocumentationGenerator:
 
         try:
             # Import pyavd
-            pyavd = self._import_pyavd()
+            try:
+                import pyavd
+            except ImportError as e:
+                raise DocumentationGenerationError(
+                    "pyavd library not installed. Install with: pip install pyavd"
+                ) from e
 
             devices = inventory.get_all_devices()
 
-            # Filter by groups if specified
+            # Filter by limit patterns if specified
             if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
+                from avd_cli.utils.device_filter import DeviceFilter
+                device_filter = DeviceFilter(limit_to_groups)
+                devices = device_filter.filter_devices(devices)
 
             # Reuse the conversion logic from ConfigurationGenerator
             from avd_cli.logics.generator import ConfigurationGenerator
 
-            config_gen = ConfigurationGenerator(workflow="eos-design")
-            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
+            config_gen = ConfigurationGenerator(workflow="full")
+            all_inputs = config_gen._convert_inventory_to_pyavd_inputs(inventory, devices)
 
             if not all_inputs:
                 self.logger.warning("No devices to process")
@@ -622,239 +631,6 @@ class TestGenerator:
         self.test_type = test_type
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def _filter_devices_with_id(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        """Filter out devices without ID required for ANTA test generation.
-
-        Parameters
-        ----------
-        all_inputs : Dict[str, Dict[str, Any]]
-            All device inputs from inventory
-
-        Returns
-        -------
-        Dict[str, Dict[str, Any]]
-            Filtered inputs containing only devices with ID
-        """
-        devices_without_id = [hostname for hostname, inputs in all_inputs.items() if "id" not in inputs]
-        if devices_without_id:
-            self.logger.warning(
-                "Excluding %d device(s) without 'id' from ANTA test generation: %s",
-                len(devices_without_id),
-                ", ".join(devices_without_id)
-            )
-            self.logger.warning(
-                "Devices must have 'id' defined in their node_groups topology structure for ANTA test generation"
-            )
-            # Remove devices without ID
-            return {k: v for k, v in all_inputs.items() if "id" in v}
-        return all_inputs
-
-    def _build_interface_tests(self, structured_configs: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Build interface tests for devices with interfaces configured."""
-        interface_tests = []
-        for hostname, config in structured_configs.items():
-            if config.get("ethernet_interfaces") or config.get("port_channel_interfaces"):
-                interface_tests.append({
-                    "VerifyInterfacesStatus": {
-                        "interfaces": [
-                            {"name": iface["name"], "status": "up"}
-                            for iface in config.get("ethernet_interfaces", [])
-                            if not iface.get("shutdown", False)
-                        ][:10],  # Limit to first 10 interfaces
-                        "filters": {"tags": [hostname]}
-                    }
-                })
-        return interface_tests
-
-    def _build_protocol_tests(self, structured_configs: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Build protocol-specific tests (MLAG, BGP, VXLAN)."""
-        protocol_tests: Dict[str, List[Dict[str, Any]]] = {}
-
-        # MLAG tests
-        mlag_tests = [
-            {"VerifyMlagStatus": {"filters": {"tags": [hostname]}}}
-            for hostname, config in structured_configs.items()
-            if config.get("mlag_configuration")
-        ]
-        if mlag_tests:
-            protocol_tests["anta.tests.mlag"] = mlag_tests
-
-        # BGP tests
-        bgp_tests = []
-        for hostname, config in structured_configs.items():
-            if config.get("router_bgp"):
-                bgp_tests.extend([
-                    {
-                        "VerifyBGPSpecificPeers": {
-                            "address_families": [{"afi": "evpn"}],
-                            "filters": {"tags": [hostname]}
-                        }
-                    },
-                    {
-                        "VerifyBGPPeerCount": {
-                            "address_families": [
-                                {"afi": "evpn", "num_peers": 2},
-                                {"afi": "ipv4", "safi": "unicast", "vrf": "default", "num_peers": 2}
-                            ],
-                            "filters": {"tags": [hostname]}
-                        }
-                    }
-                ])
-        if bgp_tests:
-            protocol_tests["anta.tests.routing.bgp"] = bgp_tests
-
-        # VXLAN tests
-        vxlan_tests = [
-            {"VerifyVxlan1Interface": {"filters": {"tags": [hostname]}}}
-            for hostname, config in structured_configs.items()
-            if config.get("vxlan_interface")
-        ]
-        if vxlan_tests:
-            protocol_tests["anta.tests.vxlan"] = vxlan_tests
-
-        return protocol_tests
-
-    def _generate_basic_anta_catalog(self, structured_configs: Dict[str, Dict[str, Any]]) -> str:
-        """Generate a basic ANTA test catalog in YAML format.
-
-        Creates a comprehensive ANTA catalog with tests for all devices based on their configurations.
-        Tests are organized by category and use filters/tags for device-specific targeting.
-        """
-        import yaml
-
-        # Organize tests by category
-        catalog: Dict[str, List[Dict[str, Any]]] = {}
-
-        # Hardware tests (apply to all devices)
-        catalog["anta.tests.hardware"] = [
-            {"VerifyTransceiverInventory": None},
-            {"VerifyEnvironmentPower": {"states": ["ok"]}},
-            {"VerifyEnvironmentCooling": {"states": ["ok"]}},
-            {"VerifyTemperature": None},
-            {"VerifyAdverseDrops": None},
-        ]
-
-        # System tests (apply to all devices)
-        catalog["anta.tests.system"] = [
-            {"VerifyUptime": {"minimum": 86400}},
-            {"VerifyReloadCause": None},
-            {"VerifyCoredump": None},
-            {"VerifyAgentLogs": None},
-            {"VerifyCPUUtilization": {"filters": {"utilization": {"max": 75.0}}}},
-            {"VerifyMemoryUtilization": {"filters": {"utilization": {"max": 75.0}}}},
-            {"VerifyFileSystemUtilization": None},
-            {"VerifyNTP": None},
-        ]
-
-        # Connectivity tests per device
-        catalog["anta.tests.connectivity"] = [
-            {
-                "VerifyReachability": {
-                    "hosts": [{"destination": "8.8.8.8", "source": "Management0", "vrf": "default"}],
-                    "filters": {"tags": [hostname]}
-                }
-            }
-            for hostname in structured_configs.keys()
-        ]
-
-        # Interface tests
-        interface_tests = self._build_interface_tests(structured_configs)
-        if interface_tests:
-            catalog["anta.tests.interfaces"] = interface_tests
-
-        # Protocol tests (MLAG, BGP, VXLAN)
-        catalog.update(self._build_protocol_tests(structured_configs))
-
-        return yaml.dump(catalog, default_flow_style=False, sort_keys=False)
-
-    def _generate_anta_inventory(
-        self, structured_configs: Dict[str, Dict[str, Any]], inventory: InventoryData
-    ) -> str:
-        """Generate ANTA inventory file with device connection information."""
-        import yaml
-
-        # Build inventory structure
-        hosts = []
-        for hostname in structured_configs.keys():
-            device = inventory.get_device_by_hostname(hostname)
-            if device:
-                hosts.append({
-                    "host": str(device.mgmt_ip),
-                    "name": hostname,
-                    "tags": [device.fabric, device.device_type],
-                })
-
-        anta_inventory = {
-            "anta_inventory": {
-                "hosts": hosts
-            }
-        }
-
-        return yaml.dump(anta_inventory, default_flow_style=False, sort_keys=False)
-
-    def _generate_structured_configs(
-        self, pyavd: Any, all_inputs: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
-        """Generate structured configurations for all devices using pyavd."""
-        self.logger.info("Generating AVD facts for test catalog (%d devices)", len(all_inputs))
-        avd_facts = pyavd.get_avd_facts(all_inputs)
-
-        self.logger.info("Generating structured configurations for %d devices", len(all_inputs))
-        structured_configs: Dict[str, Dict[str, Any]] = {}
-        for hostname, inputs in all_inputs.items():
-            structured_config = pyavd.get_device_structured_config(
-                hostname=hostname, inputs=inputs, avd_facts=avd_facts
-            )
-            structured_configs[hostname] = structured_config
-        return structured_configs
-
-    def _write_anta_catalog(self, tests_dir: Path, structured_configs: Dict[str, Dict[str, Any]]) -> Path:
-        """Write ANTA catalog file, using pyavd factory if available or basic generation as fallback."""
-        self.logger.info("Generating comprehensive ANTA test catalog for %d devices", len(structured_configs))
-
-        catalog_file = tests_dir / "anta_catalog.yml"
-
-        try:
-            # Try to use pyavd.get_device_test_catalog if anta/pydantic are available
-            from pyavd.api._anta import get_minimal_structured_configs
-            import pyavd
-
-            # Get minimal structured configs for cross-device test generation
-            minimal_structured_configs = get_minimal_structured_configs(structured_configs)
-
-            # Generate per-device catalogs and combine them
-            all_tests = []
-            for hostname, struct_config in structured_configs.items():
-                device_catalog = pyavd.get_device_test_catalog(
-                    hostname=hostname,
-                    structured_config=struct_config,
-                    minimal_structured_configs=minimal_structured_configs
-                )
-                all_tests.extend(device_catalog.tests)
-
-            # Write combined catalog using ANTA's native dump method
-            self.logger.info("Writing ANTA catalog to: %s", catalog_file)
-
-            # Create an ANTA catalog from all tests
-            from anta.catalog import AntaCatalog
-            combined_catalog = AntaCatalog(tests=all_tests)
-
-            # Use ANTA's dump method to get AntaCatalogFile, then serialize to YAML
-            catalog_file_obj = combined_catalog.dump()
-            with open(catalog_file, "w", encoding="utf-8") as f:
-                f.write(catalog_file_obj.yaml())
-
-        except (ImportError, AttributeError) as e:
-            # Fall back to basic ANTA catalog generation if dependencies are missing
-            self.logger.warning(
-                "Could not use pyavd ANTA factory (missing dependencies: %s). Generating basic catalog.", str(e)
-            )
-            self.logger.info("Writing basic ANTA catalog to: %s", catalog_file)
-            with open(catalog_file, "w", encoding="utf-8") as f:
-                f.write(self._generate_basic_anta_catalog(structured_configs))
-
-        return catalog_file
-
     def generate(
         self, inventory: InventoryData, output_path: Path, limit_to_groups: Optional[List[str]] = None
     ) -> List[Path]:
@@ -888,59 +664,31 @@ class TestGenerator:
         generated_files: List[Path] = []
 
         try:
-            # Import pyavd for ANTA catalog generation
-            try:
-                import pyavd
-            except ImportError as e:
-                raise TestGenerationError(
-                    "pyavd library not installed. Install with: pip install pyavd"
-                ) from e
-
             devices = inventory.get_all_devices()
 
-            # Filter by groups if specified
+            # Filter by limit patterns if specified
             if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
+                from avd_cli.utils.device_filter import DeviceFilter
+                device_filter = DeviceFilter(limit_to_groups)
+                devices = device_filter.filter_devices(devices)
 
-            # Reuse the conversion logic from ConfigurationGenerator
-            config_gen = ConfigurationGenerator(workflow="eos-design")
-            all_inputs = config_gen._build_pyavd_inputs_from_inventory(inventory, devices)
+            # TODO: Implement actual test generation
+            test_file = tests_dir / "devices_tests.yaml"
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("---\n")
+                f.write(f"# {self.test_type.upper()} Tests\n")
+                f.write("# Generated by avd-cli (placeholder)\n\n")
+                f.write("anta.tests.connectivity:\n")
+                for device in devices:
+                    f.write("  - VerifyReachability:\n")
+                    f.write("      hosts:\n")
+                    f.write(f"        - destination: {device.mgmt_ip}\n")
+                    f.write("          source: Management1\n")
+            generated_files.append(test_file)
 
-            if not all_inputs:
-                self.logger.warning("No devices to process")
-                return generated_files
-
-            # Filter out devices without ID (required by pyavd for ANTA catalog)
-            all_inputs = self._filter_devices_with_id(all_inputs)
-
-            if not all_inputs:
-                self.logger.warning("No devices with valid 'id' to generate tests for")
-                return generated_files
-
-            # Generate structured configs for all devices
-            structured_configs = self._generate_structured_configs(pyavd, all_inputs)
-
-            # Generate and write ANTA catalog
-            catalog_file = self._write_anta_catalog(tests_dir, structured_configs)
-            generated_files.append(catalog_file)
-
-            # Generate ANTA inventory file with device information
-            inventory_file = tests_dir / "anta_inventory.yml"
-            self.logger.info("Generating ANTA inventory file: %s", inventory_file)
-
-            with open(inventory_file, "w", encoding="utf-8") as f:
-                f.write(self._generate_anta_inventory(structured_configs, inventory))
-
-            generated_files.append(inventory_file)
-
-            self.logger.info(
-                "Generated %d ANTA files (catalog + inventory) with tests for all configured features",
-                len(generated_files)
-            )
+            self.logger.info("Generated %d test files", len(generated_files))
             return generated_files
 
-        except TestGenerationError:
-            raise
         except Exception as e:
             raise TestGenerationError(f"Failed to generate tests: {e}") from e
 
@@ -948,7 +696,7 @@ class TestGenerator:
 def generate_all(
     inventory: InventoryData,
     output_path: Path,
-    workflow: str = "eos-design",
+    workflow: str = "full",
     limit_to_groups: Optional[List[str]] = None,
 ) -> Tuple[List[Path], List[Path], List[Path]]:
     """Generate all outputs: configurations, documentation, and tests.
@@ -960,7 +708,7 @@ def generate_all(
     output_path : Path
         Output directory for all generated files
     workflow : str, optional
-        Workflow type, by default "eos-design"
+        Workflow type, by default "full"
     limit_to_groups : Optional[List[str]], optional
         Groups to limit generation to, by default None
 
@@ -969,7 +717,7 @@ def generate_all(
     Tuple[List[Path], List[Path], List[Path]]
         Tuple of (config_files, doc_files, test_files)
     """
-    config_gen = ConfigurationGenerator(workflow=normalize_workflow(workflow))
+    config_gen = ConfigurationGenerator(workflow=workflow)
     doc_gen = DocumentationGenerator()
     test_gen = TestGenerator()
 

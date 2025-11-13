@@ -35,6 +35,7 @@ def sample_inventory(tmp_path: Path) -> InventoryData:
         mgmt_ip=IPv4Address("192.168.1.10"),
         device_type="spine",
         fabric="DC1",
+        groups=["dc1", "spines", "dc1_spines"],
     )
     leaf1 = DeviceDefinition(
         hostname="leaf01",
@@ -42,6 +43,7 @@ def sample_inventory(tmp_path: Path) -> InventoryData:
         mgmt_ip=IPv4Address("192.168.1.20"),
         device_type="leaf",
         fabric="DC1",
+        groups=["dc1", "leaves", "dc1_leaves"],
     )
     spine2 = DeviceDefinition(
         hostname="dc2-spine01",
@@ -49,6 +51,7 @@ def sample_inventory(tmp_path: Path) -> InventoryData:
         mgmt_ip=IPv4Address("192.168.2.10"),
         device_type="spine",
         fabric="DC2",
+        groups=["dc2", "spines", "dc2_spines"],
     )
 
     fabric1 = FabricDefinition(

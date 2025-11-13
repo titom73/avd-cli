@@ -21,10 +21,27 @@ avd-cli deploy eos [OPTIONS]
 | `--dry-run` | | Flag | `false` | Preview changes without applying them |
 | `--diff` | | Flag | `false` | Display full configuration differences |
 | `--verify-ssl` | | Flag | `false` | Enable SSL certificate verification |
-| `--limit-to-groups` | `-l` | Text | All | Deploy to specific groups only (repeatable) |
+| `--limit` | `-l` | Text | All | Limit deployment to specific devices/groups/fabrics (repeatable, supports patterns) |
 | `--verbose` | `-v` | Flag | `false` | Show detailed deployment progress |
 
 See [Environment Variables](../environment-variables.md) for configuration via environment variables.
+
+### Pattern Matching
+
+The `--limit` option supports Ansible-style pattern matching:
+
+- **Exact match**: `spine01`, `leaf-1a`
+- **Wildcards**: `spine*`, `*leaf*`, `dc1_?`
+- **Numeric ranges**: `leaf[01:10]`, `spine[1:5]`
+- **Alphabetic ranges**: `pod[a:c]`, `rack[A:Z]`
+- **Exclusions**: `!spine01`, `!mgmt_*`
+
+Patterns can match:
+- **Hostnames**: Device names
+- **Groups**: Inventory groups (from `inventory.yml`)
+- **Fabrics**: Fabric names
+
+A device is included if it matches ANY of the criteria (OR logic).
 
 **Required variables in your inventory:**
 
@@ -213,9 +230,9 @@ all:
 
 ## Usage Examples
 
-### Incremental Group Deployment
+### Incremental Deployment
 
-Deploy to groups separately for safer rollouts:
+Deploy to devices/groups separately for safer rollouts:
 
 ```bash
 # Deploy spines first
@@ -225,6 +242,16 @@ avd-cli deploy eos -i ./inventory -l spines
 # Then deploy leafs
 avd-cli deploy eos -i ./inventory -l leafs --dry-run
 avd-cli deploy eos -i ./inventory -l leafs
+
+# Deploy specific devices only
+avd-cli deploy eos -i ./inventory -l spine01 -l spine02 --dry-run
+
+# Deploy with pattern matching
+avd-cli deploy eos -i ./inventory -l "spine*" --dry-run
+avd-cli deploy eos -i ./inventory -l "leaf[01:10]" -l "!leaf05" --dry-run
+
+# Deploy to entire fabric
+avd-cli deploy eos -i ./inventory -l DC1_FABRIC --dry-run
 ```
 
 ### Custom Configuration Path
@@ -334,13 +361,17 @@ spine-1:
     ```
 
 !!! success "2. Incremental Deployment"
-    Deploy to groups separately:
+    Deploy to groups or devices separately:
     ```bash
-    # Spines first
+    # Deploy by groups
     avd-cli deploy eos -i ./inventory -l spines
-
-    # Then leafs
     avd-cli deploy eos -i ./inventory -l leafs
+
+    # Deploy specific devices
+    avd-cli deploy eos -i ./inventory -l spine01 -l spine02
+
+    # Use pattern matching
+    avd-cli deploy eos -i ./inventory -l "spine[01:05]" -l "!spine03"
     ```
 
 !!! success "3. Version Control"

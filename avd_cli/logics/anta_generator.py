@@ -64,7 +64,9 @@ class AntaCatalogGenerator:
             # Get devices to process
             devices = inventory.get_all_devices()
             if limit_to_groups:
-                devices = [d for d in devices if d.fabric in limit_to_groups]
+                from avd_cli.utils.device_filter import DeviceFilter
+                device_filter = DeviceFilter(limit_to_groups)
+                devices = device_filter.filter_devices(devices)
 
             # Create output directory
             output_path.mkdir(parents=True, exist_ok=True)

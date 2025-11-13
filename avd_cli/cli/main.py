@@ -9,7 +9,7 @@ This module defines the main CLI group and command structure using Click.
 import sys
 from pathlib import Path
 from typing import Optional
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 
 import click
 from rich.console import Console
@@ -33,6 +33,53 @@ def suppress_pyavd_warnings(show_warnings: bool) -> None:
         import warnings
 
         warnings.filterwarnings("ignore", message=".*is deprecated.*", category=UserWarning)
+
+
+def handle_limit_options_callback(
+    ctx: click.Context, param: click.Parameter, value: Tuple[str, ...]
+) -> Tuple[str, ...]:
+    """Handle deprecation warning for --limit-to-groups option.
+
+    Parameters
+    ----------
+    ctx : click.Context
+        Click context
+    param : click.Parameter
+        The parameter that triggered this callback
+    value : Tuple[str, ...]
+        The value provided for the parameter
+
+    Returns
+    -------
+    Tuple[str, ...]
+        The value to use
+    """
+    # Check if --limit-to-groups was used
+    if param.name == "limit_to_groups" and value:
+        console.print(
+            "[yellow]Warning: --limit-to-groups is deprecated and will be removed in a future version. "
+            "Please use --limit instead.[/yellow]"
+        )
+    return value
+
+
+def merge_limit_parameters(limit: Tuple[str, ...], limit_to_groups: Tuple[str, ...]) -> Tuple[str, ...]:
+    """Merge --limit and deprecated --limit-to-groups parameters.
+
+    Parameters
+    ----------
+    limit : Tuple[str, ...]
+        Values from --limit option
+    limit_to_groups : Tuple[str, ...]
+        Values from deprecated --limit-to-groups option
+
+    Returns
+    -------
+    Tuple[str, ...]
+        Merged tuple of all limit patterns
+    """
+    # Combine both tuples, preserving order
+    return tuple(list(limit) + list(limit_to_groups))
 
 
 def resolve_output_path(inventory_path: Path, output_path: Optional[Path]) -> Path:
@@ -159,13 +206,24 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
         help="Output directory for generated files (default: <inventory_path>/intended)",
     )(func)
     func = click.option(
-        "--limit-to-groups",
+        "--limit",
         "-l",
+        "limit",
+        multiple=True,
+        envvar="AVD_CLI_LIMIT",
+        show_envvar=True,
+        help="Limit processing to specific devices, groups, or fabrics (supports wildcards, ranges, exclusions). "
+        "Can be used multiple times. Use comma-separated values in environment variable",
+    )(func)
+    func = click.option(
+        "--limit-to-groups",
+        "limit_to_groups",
         multiple=True,
         envvar="AVD_CLI_LIMIT_TO_GROUPS",
         show_envvar=True,
-        help="Limit processing to specific groups (can be used multiple times). "
-        "Use comma-separated values in environment variable",
+        hidden=True,
+        callback=handle_limit_options_callback,
+        help="DEPRECATED: Use --limit instead",
     )(func)
     func = click.option(
         "--show-deprecation-warnings",
@@ -225,6 +283,7 @@ def generate_all(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
+    limit: tuple[str, ...],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
@@ -260,11 +319,14 @@ def generate_all(
         $ export AVD_CLI_INVENTORY_PATH=./inventory
         $ avd-cli generate all
 
-    Limit to specific groups:
+    Limit to specific devices or groups (supports patterns):
 
-        $ avd-cli generate all -i ./inventory -l spine -l leaf
+        $ avd-cli generate all -i ./inventory -l spine* -l leaf[01:05]
     """
     verbose = ctx.obj.get("verbose", False)
+
+    # Merge limit parameters (new --limit and deprecated --limit-to-groups)
+    limit_patterns = merge_limit_parameters(limit, limit_to_groups)
 
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
@@ -278,8 +340,8 @@ def generate_all(
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
         console.print(f"[blue]ℹ[/blue] Workflow: {workflow}")
-        if limit_to_groups:
-            console.print(f"[blue]ℹ[/blue] Limited to groups: {', '.join(limit_to_groups)}")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Limited to patterns: {', '.join(limit_patterns)}")
 
     try:
         from avd_cli.logics.generator import generate_all as gen_all
@@ -306,8 +368,8 @@ def generate_all(
 
         # Generate all outputs
         console.print("[cyan]→[/cyan] Generating configurations, documentation, and tests...")
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        configs, docs, tests = gen_all(inventory, output_path, workflow, limit_groups)
+        limit_list = list(limit_patterns) if limit_patterns else None
+        configs, docs, tests = gen_all(inventory, output_path, workflow, limit_list)
 
         # Display summary
         console.print("\n[green]✓[/green] Generation complete!")
@@ -348,6 +410,7 @@ def generate_configs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
+    limit: tuple[str, ...],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
@@ -382,6 +445,9 @@ def generate_configs(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit parameters (new --limit and deprecated --limit-to-groups)
+    limit_patterns = merge_limit_parameters(limit, limit_to_groups)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -394,6 +460,8 @@ def generate_configs(
         console.print("[blue]ℹ[/blue] Generating configurations only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Limited to patterns: {', '.join(limit_patterns)}")
 
     try:
         from avd_cli.logics.generator import ConfigurationGenerator
@@ -421,8 +489,8 @@ def generate_configs(
         # Generate configurations
         console.print("[cyan]→[/cyan] Generating configurations...")
         generator = ConfigurationGenerator(workflow=workflow)
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        configs = generator.generate(inventory, output_path, limit_groups)
+        limit_list = list(limit_patterns) if limit_patterns else None
+        configs = generator.generate(inventory, output_path, limit_list)
 
         console.print(f"\n[green]✓[/green] Generated {len(configs)} configuration files")
         display_generation_summary("Configurations", len(configs), output_path, "configs")
@@ -440,6 +508,7 @@ def generate_docs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
+    limit: tuple[str, ...],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
 ) -> None:
@@ -468,6 +537,9 @@ def generate_docs(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit parameters (new --limit and deprecated --limit-to-groups)
+    limit_patterns = merge_limit_parameters(limit, limit_to_groups)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -475,6 +547,8 @@ def generate_docs(
         console.print("[blue]ℹ[/blue] Generating documentation only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Limited to patterns: {', '.join(limit_patterns)}")
 
     try:
         from avd_cli.logics.generator import DocumentationGenerator
@@ -493,8 +567,8 @@ def generate_docs(
         # Generate documentation
         console.print("[cyan]→[/cyan] Generating documentation...")
         generator = DocumentationGenerator()
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        docs = generator.generate(inventory, output_path, limit_groups)
+        limit_list = list(limit_patterns) if limit_patterns else None
+        docs = generator.generate(inventory, output_path, limit_list)
 
         console.print(f"\n[green]✓[/green] Generated {len(docs)} documentation files")
         display_generation_summary("Documentation", len(docs), output_path, "documentation")
@@ -520,6 +594,7 @@ def generate_tests(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
+    limit: tuple[str, ...],
     limit_to_groups: tuple[str, ...],
     show_deprecation_warnings: bool,
     test_type: str,
@@ -554,6 +629,9 @@ def generate_tests(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit parameters (new --limit and deprecated --limit-to-groups)
+    limit_patterns = merge_limit_parameters(limit, limit_to_groups)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -561,6 +639,8 @@ def generate_tests(
         console.print(f"[blue]ℹ[/blue] Generating {test_type.upper()} tests only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Limited to patterns: {', '.join(limit_patterns)}")
 
     try:
         from avd_cli.logics.generator import TestGenerator
@@ -579,8 +659,8 @@ def generate_tests(
         # Generate tests
         console.print(f"[cyan]→[/cyan] Generating {test_type.upper()} tests...")
         generator = TestGenerator(test_type=test_type)
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        tests = generator.generate(inventory, output_path, limit_groups)
+        limit_list = list(limit_patterns) if limit_patterns else None
+        tests = generator.generate(inventory, output_path, limit_list)
 
         console.print(f"\n[green]✓[/green] Generated {len(tests)} test files")
         display_generation_summary("Tests", len(tests), output_path, "tests")
@@ -911,12 +991,24 @@ def deploy(ctx: click.Context) -> None:
     help="Display configuration differences",
 )
 @click.option(
-    "--limit-to-groups",
+    "--limit",
     "-l",
+    "limit",
+    multiple=True,
+    envvar="AVD_CLI_LIMIT",
+    show_envvar=True,
+    help="Limit deployment to specific devices, groups, or fabrics (supports wildcards, ranges, exclusions). "
+    "Can be used multiple times. Use comma-separated values in environment variable",
+)
+@click.option(
+    "--limit-to-groups",
+    "limit_to_groups",
     multiple=True,
     envvar="AVD_CLI_LIMIT_TO_GROUPS",
     show_envvar=True,
-    help="Limit deployment to specific groups (can be used multiple times)",
+    hidden=True,
+    callback=handle_limit_options_callback,
+    help="DEPRECATED: Use --limit instead",
 )
 @click.option(
     "--max-concurrent",
@@ -949,6 +1041,7 @@ def deploy_eos(
     configs_path: Optional[Path],
     dry_run: bool,
     show_diff: bool,
+    limit: tuple[str, ...],
     limit_to_groups: tuple[str, ...],
     max_concurrent: int,
     timeout: int,
@@ -1002,6 +1095,9 @@ def deploy_eos(
 
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit parameters (new --limit and deprecated --limit-to-groups)
+    limit_patterns = merge_limit_parameters(limit, limit_to_groups)
+
     # Resolve configs path with default if needed
     if configs_path is None:
         configs_path = inventory_path / "intended" / "configs"
@@ -1019,6 +1115,8 @@ def deploy_eos(
         console.print(f"[blue]ℹ[/blue] Dry run: {dry_run}")
         console.print(f"[blue]ℹ[/blue] Show diff: {show_diff}")
         console.print(f"[blue]ℹ[/blue] SSL verification: {verify_ssl}")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Limited to patterns: {', '.join(limit_patterns)}")
 
     try:
         from avd_cli.logics.deployer import Deployer
@@ -1030,7 +1128,7 @@ def deploy_eos(
             mode=mode,
             dry_run=dry_run,
             show_diff=show_diff,
-            limit_to_groups=list(limit_to_groups) if limit_to_groups else None,
+            limit_to_groups=list(limit_patterns) if limit_patterns else None,
             max_concurrent=max_concurrent,
             timeout=timeout,
             verify_ssl=verify_ssl,

@@ -29,9 +29,26 @@ These options apply to all `generate` subcommands:
 |--------|-------|------|---------|-------------|
 | `--inventory-path` | `-i` | Path | *Required* | Path to AVD inventory directory |
 | `--output-path` | `-o` | Path | *Required* | Output directory for generated files |
-| `--limit-to-groups` | `-l` | Text | All | Limit processing to specific groups (repeatable) |
+| `--limit` | `-l` | Text | All | Limit processing to specific devices/groups/fabrics (repeatable, supports patterns) |
 | `--workflow` | | Choice | `eos-design` | Workflow type: `eos-design` or `cli-config` |
 | `--show-deprecation-warnings` | | Flag | `false` | Show pyavd deprecation warnings |
+
+### Pattern Matching
+
+The `--limit` option supports Ansible-style pattern matching:
+
+- **Exact match**: `spine01`, `leaf-1a`
+- **Wildcards**: `spine*`, `*leaf*`, `dc1_?`
+- **Numeric ranges**: `leaf[01:10]`, `spine[1:5]`
+- **Alphabetic ranges**: `pod[a:c]`, `rack[A:Z]`
+- **Exclusions**: `!spine01`, `!mgmt_*`
+
+Patterns can match:
+- **Hostnames**: Device names
+- **Groups**: Inventory groups (from `inventory.yml`)
+- **Fabrics**: Fabric names
+
+A device is included if it matches ANY of the criteria (OR logic).
 
 ---
 
@@ -54,8 +71,13 @@ avd-cli generate all -i ./inventory -o ./output
 # With specific workflow
 avd-cli generate all -i ./inventory -o ./output --workflow eos-design
 
-# Limit to specific groups
-avd-cli generate all -i ./inventory -o ./output -l SPINES -l LEAFS
+# Limit to specific devices/groups/fabrics
+avd-cli generate all -i ./inventory -o ./output -l "spine*"
+avd-cli generate all -i ./inventory -o ./output -l spines -l leaves
+avd-cli generate all -i ./inventory -o ./output -l DC1_FABRIC
+
+# With pattern matching
+avd-cli generate all -i ./inventory -o ./output -l "leaf[01:10]" -l "!leaf05"
 
 # Show deprecation warnings
 avd-cli generate all -i ./inventory -o ./output --show-deprecation-warnings

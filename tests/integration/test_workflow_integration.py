@@ -272,17 +272,16 @@ Device is configured with basic management interface.
         Test workflow with group filtering.
 
         Verifies that --limit functionality works correctly to process
-        only specified inventory groups/fabrics.
+        only specified inventory groups.
         """
         runner = CliRunner()
 
-        # Execute workflow with fabric limit (ATD_FABRIC contains all devices in this example)
-        # Note: limit-to-groups filters by fabric name or group_vars file name, not Ansible inventory groups
+        # Execute workflow with group limit
         result = safe_click_invoke(runner, cli, [
             'generate', 'configs',
             '--inventory-path', str(sample_inventory),
             '--output-path', str(output_directory),
-            '--limit-to-groups', 'ATD_FABRIC'
+            '--limit-to-groups', 'ATD_SPINES'
         ])
 
         # Verify group filtering worked through generated files (more reliable than exit codes with Rich I/O)
@@ -303,9 +302,11 @@ Device is configured with basic management interface.
             config_path = configs_dir / spine_config
             assert config_path.exists(), f"Spine config {spine_config} not created"
 
-        # Should also have leaf configs (ATD_FABRIC contains all devices)
-        # Note: In this example, all devices are in ATD_FABRIC, so we expect all configs
-        assert len(config_files) >= 2, f"Expected at least 2 config files, got {len(config_files)}"
+        # Should NOT have leaf configs (filtered out)
+        leaf_configs = ["s1-leaf1.cfg", "s1-leaf2.cfg", "s1-leaf3.cfg", "s1-leaf4.cfg"]
+        for leaf_config in leaf_configs:
+            config_path = configs_dir / leaf_config
+            assert not config_path.exists(), f"Leaf config {leaf_config} should not exist (filtered out)"
 
     def test_inventory_validation_failure(self, temp_workspace, output_directory):
         """

@@ -206,23 +206,24 @@ class TestDeviceDefinition:
                 fabric="DC1",
             )
 
-    def test_invalid_device_type(self) -> None:
-        """Test validation of unsupported device type.
+    def test_custom_device_type(self) -> None:
+        """Test that custom device types are accepted.
 
-        Given: Unsupported device type
+        Given: Custom/non-standard device type
         When: Creating DeviceDefinition
-        Then: ValueError is raised
+        Then: Device is created successfully with the custom type
 
-        AC-015: Device type validation
+        AC-015: Device type validation (updated for custom types)
+        AC-061: Custom node type support
         """
-        with pytest.raises(ValueError, match="Invalid device type"):
-            DeviceDefinition(
-                hostname="spine01",
-                platform="7050X3",
-                mgmt_ip="192.168.1.10",
-                device_type="invalid_type",
-                fabric="DC1",
-            )
+        device = DeviceDefinition(
+            hostname="custom01",
+            platform="7050X3",
+            mgmt_ip="192.168.1.10",
+            device_type="custom_type",
+            fabric="DC1",
+        )
+        assert device.device_type == "custom_type"
 
     def test_invalid_ip_address(self) -> None:
         """Test validation of invalid IP address.
@@ -327,14 +328,17 @@ class TestFabricDefinition:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf],
+            devices_by_type={
+                "spine": [spine],
+                "leaf": [leaf],
+            },
         )
 
         assert fabric.name == "DC1"
         assert fabric.design_type == "l3ls-evpn"
         assert len(fabric.spine_devices) == 1
         assert len(fabric.leaf_devices) == 1
+        assert len(fabric.devices_by_type) == 2
 
     def test_get_all_devices(self) -> None:
         """Test retrieving all devices from fabric.
@@ -368,9 +372,11 @@ class TestFabricDefinition:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf],
-            border_leaf_devices=[border],
+            devices_by_type={
+                "spine": [spine],
+                "leaf": [leaf],
+                "border_leaf": [border],
+            },
         )
 
         all_devices = fabric.get_all_devices()
@@ -411,8 +417,10 @@ class TestFabricDefinition:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine1, spine2],
-            leaf_devices=[leaf],
+            devices_by_type={
+                "spine": [spine1, spine2],
+                "leaf": [leaf],
+            },
         )
 
         spines = fabric.get_devices_by_type("spine")
@@ -453,8 +461,10 @@ class TestFabricDefinition:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf1, leaf2],
+            devices_by_type={
+                "spine": [spine],
+                "leaf": [leaf1, leaf2],
+            },
         )
 
         leaves = fabric.get_devices_by_type("leaf")
@@ -549,12 +559,12 @@ class TestInventoryData:
         fabric1 = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine1],
+            devices_by_type={"spine": [spine1]},
         )
         fabric2 = FabricDefinition(
             name="DC2",
             design_type="l3ls-evpn",
-            spine_devices=[spine2],
+            devices_by_type={"spine": [spine2]},
         )
 
         inventory = InventoryData(
@@ -592,8 +602,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf],
+            devices_by_type={"spine": [spine], "leaf": [leaf]},
         )
 
         inventory = InventoryData(
@@ -624,7 +633,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
+            devices_by_type={"spine": [spine]},
         )
 
         inventory = InventoryData(
@@ -660,7 +669,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device1, device2],
+            devices_by_type={"spine": [device1, device2]},
         )
 
         inventory = InventoryData(
@@ -697,7 +706,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[device1, device2],
+            devices_by_type={"spine": [device1, device2]},
         )
 
         inventory = InventoryData(
@@ -727,7 +736,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            leaf_devices=[leaf],
+            devices_by_type={"leaf": [leaf]},
         )
 
         inventory = InventoryData(
@@ -764,8 +773,7 @@ class TestInventoryData:
         fabric = FabricDefinition(
             name="DC1",
             design_type="l3ls-evpn",
-            spine_devices=[spine],
-            leaf_devices=[leaf],
+            devices_by_type={"spine": [spine], "leaf": [leaf]},
         )
 
         inventory = InventoryData(

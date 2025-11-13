@@ -223,10 +223,24 @@ class ConfigurationGenerator:
             # Try to convert to int
             if data.isdigit() or (data.startswith("-") and data[1:].isdigit()):
                 return int(data)
-            # Try to convert to float
+            # Try to convert to float - only if it looks like a valid float
+            # Avoid converting:
+            # - Strings with leading zeros (e.g., '0000.0001' for ISIS system IDs)
+            # - Multiple dots (e.g., IPv4 addresses, version numbers)
+            # - Other identifier-like patterns
             try:
-                if "." in data:
-                    return float(data)
+                if "." in data and data.count(".") == 1:
+                    parts = data.split(".")
+                    if len(parts) == 2:
+                        # Don't convert if integer part has leading zeros (except '0' itself)
+                        if parts[0].startswith("0") and len(parts[0]) > 1:
+                            return data
+                        # Don't convert if decimal part has leading zeros (indicates it's an ID, not a number)
+                        if parts[1].startswith("0") and len(parts[1]) > 1:
+                            return data
+                        # Only convert if both parts are numeric (with optional leading minus)
+                        if (parts[0].isdigit() or (parts[0].startswith("-") and parts[0][1:].isdigit())) and parts[1].isdigit():
+                            return float(data)
             except ValueError:
                 pass
             return data
@@ -291,7 +305,8 @@ class ConfigurationGenerator:
                 device_vars["type"] = avd_type_from_groups
             elif "type" not in device_vars:
                 # Only use inventory device_type as fallback if no AVD type is defined
-                self.logger.warning(
+                # This is normal for MPLS (p, pe) and custom node types
+                self.logger.debug(
                     "Device %s has no 'type' defined in AVD variables, using inventory type: %s",
                     device.hostname,
                     device.device_type,
@@ -304,9 +319,9 @@ class ConfigurationGenerator:
                 node_id = self._extract_node_id(device_vars, device.hostname)
                 if node_id is not None:
                     device_vars["id"] = node_id
-                    self.logger.info("Extracted node ID %s for device %s", node_id, device.hostname)
+                    self.logger.debug("Extracted node ID %s for device %s", node_id, device.hostname)
                 else:
-                    self.logger.warning(
+                    self.logger.debug(
                         "Device %s has no 'id' defined in AVD topology structure", device.hostname
                     )
 
@@ -384,40 +399,58 @@ class ConfigurationGenerator:
         str | None
             Device type (spine, leaf, etc.) if found, None otherwise
         """
-        # Look for common AVD topology keys
-        topology_keys = ["l2leaf", "l3spine", "spine", "leaf", "super_spine"]
+        # Discover topology keys dynamically from device_vars
+        # This supports L3LS-EVPN (spine, leaf), MPLS (p, pe), and custom node types
+        topology_keys = [
+            key for key in device_vars.keys()
+            if isinstance(device_vars.get(key), dict) and 
+            any(subkey in device_vars[key] for subkey in ["defaults", "nodes", "node_groups"])
+        ]
 
         for topology_key in topology_keys:
             topology_data = device_vars.get(topology_key)
             if not isinstance(topology_data, dict):
                 continue
 
+            # Check node_groups first
             node_groups = topology_data.get("node_groups", [])
-            if not isinstance(node_groups, list):
-                continue
+            if isinstance(node_groups, list):
+                # Search through all node groups for matching hostname
+                for node_group in node_groups:
+                    if not isinstance(node_group, dict):
+                        continue
 
-            # Search through all node groups for matching hostname
-            for node_group in node_groups:
-                if not isinstance(node_group, dict):
-                    continue
+                    nodes = node_group.get("nodes", [])
+                    if not isinstance(nodes, list):
+                        continue
 
-                nodes = node_group.get("nodes", [])
-                if not isinstance(nodes, list):
-                    continue
+                    for node in nodes:
+                        if not isinstance(node, dict):
+                            continue
 
+                        if node.get("name") == hostname:
+                            # Return the device type (topology_key)
+                            # Map l2leaf/l3spine to leaf/spine for consistency
+                            type_mapping = {
+                                "l2leaf": "leaf",
+                                "l3spine": "spine",
+                                "spine": "spine",
+                                "leaf": "leaf",
+                                "super_spine": "super_spine"
+                            }
+                            return type_mapping.get(topology_key, topology_key)
+
+            # Also check direct nodes[] (used in MPLS P routers)
+            nodes = topology_data.get("nodes", [])
+            if isinstance(nodes, list):
                 for node in nodes:
                     if not isinstance(node, dict):
                         continue
-
                     if node.get("name") == hostname:
-                        # Return the device type (topology_key)
-                        # Map l2leaf/l3spine to leaf/spine for consistency
+                        # Map type if needed
                         type_mapping = {
                             "l2leaf": "leaf",
                             "l3spine": "spine",
-                            "spine": "spine",
-                            "leaf": "leaf",
-                            "super_spine": "super_spine"
                         }
                         return type_mapping.get(topology_key, topology_key)
 
@@ -431,6 +464,8 @@ class ConfigurationGenerator:
         - l3spine.node_groups[].nodes[]
         - spine.node_groups[].nodes[]
         - leaf.node_groups[].nodes[]
+        - p.nodes[] (MPLS)
+        - pe.node_groups[].nodes[] (MPLS)
 
         Parameters
         ----------
@@ -444,21 +479,36 @@ class ConfigurationGenerator:
         int | None
             Node ID if found, None otherwise
         """
-        # Look for common AVD topology keys
-        topology_keys = ["l2leaf", "l3spine", "spine", "leaf", "super_spine"]
+        # Discover topology keys dynamically from device_vars
+        # This supports L3LS-EVPN (spine, leaf), MPLS (p, pe), and custom node types
+        topology_keys = [
+            key for key in device_vars.keys()
+            if isinstance(device_vars.get(key), dict) and 
+            any(subkey in device_vars[key] for subkey in ["defaults", "nodes", "node_groups"])
+        ]
 
         for topology_key in topology_keys:
             topology_data = device_vars.get(topology_key)
             if not isinstance(topology_data, dict):
                 continue
 
+            # Check node_groups first
             node_groups = topology_data.get("node_groups", [])
-            if not isinstance(node_groups, list):
-                continue
+            if isinstance(node_groups, list):
+                result = self._find_node_in_groups(node_groups, hostname)
+                if result is not None:
+                    return result
 
-            result = self._find_node_in_groups(node_groups, hostname)
-            if result is not None:
-                return result
+            # Also check direct nodes[] (used in MPLS P routers)
+            nodes = topology_data.get("nodes", [])
+            if isinstance(nodes, list):
+                for node in nodes:
+                    if not isinstance(node, dict):
+                        continue
+                    if node.get("name") == hostname:
+                        node_id = node.get("id")
+                        if node_id is not None:
+                            return self._validate_node_id(node_id, hostname)
 
         return None
 

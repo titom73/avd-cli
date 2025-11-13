@@ -7,6 +7,7 @@ This module defines the core data models for representing AVD inventories,
 including devices, fabrics, and complete inventory structures.
 """
 
+import logging
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from pathlib import Path
@@ -100,6 +101,7 @@ class DeviceDefinition:
 
         Platform list is dynamically loaded from py-avd schema where possible.
         Falls back to hardcoded list if py-avd is unavailable.
+        Comparison is case-insensitive to handle variations like ceos/cEOS.
 
         Raises
         ------
@@ -107,7 +109,9 @@ class DeviceDefinition:
             If platform is not in supported platforms list
         """
         supported_platforms = get_supported_platforms()
-        if self.platform not in supported_platforms:
+        # Case-insensitive comparison to handle ceos/cEOS variations
+        supported_platforms_lower = [p.lower() for p in supported_platforms]
+        if self.platform.lower() not in supported_platforms_lower:
             raise ValueError(
                 f"Unsupported platform: {self.platform}. " f"Supported: {', '.join(sorted(supported_platforms))}"
             )
@@ -117,16 +121,35 @@ class DeviceDefinition:
 
         Device type list is dynamically loaded from py-avd schema where possible.
         Falls back to hardcoded list if py-avd is unavailable.
+        
+        Note: For multi-design support (MPLS, custom designs), we accept any device type
+        that is alphanumeric. Standard L3LS-EVPN types are still validated against the schema.
 
         Raises
         ------
         ValueError
-            If device_type is not in supported device types list
+            If device_type is empty or contains invalid characters
         """
+        # Basic validation: must be non-empty and alphanumeric (with underscores)
+        if not self.device_type:
+            raise ValueError("Device type cannot be empty")
+        
+        if not self.device_type.replace("_", "").isalnum():
+            raise ValueError(
+                f"Invalid device type format: {self.device_type}. "
+                f"Device type must contain only alphanumeric characters and underscores."
+            )
+        
+        # For standard L3LS-EVPN types, log a warning if not in known types
+        # but don't fail - allows MPLS (p, pe) and custom types
         valid_types = get_supported_device_types()
         if self.device_type not in valid_types:
-            raise ValueError(
-                f"Invalid device type: {self.device_type}. " f"Valid types: {', '.join(sorted(valid_types))}"
+            logger = logging.getLogger(__name__)
+            logger.debug(
+                "Device type '%s' not in standard types %s. "
+                "Assuming MPLS or custom design type.",
+                self.device_type,
+                valid_types
             )
 
     def _normalize_ip_addresses(self) -> None:
@@ -148,19 +171,16 @@ class FabricDefinition:
     """Fabric topology definition.
 
     Represents a complete fabric with all its devices organized by type.
+    Uses flexible device dictionary to support any AVD design type.
 
     Parameters
     ----------
     name : str
         Fabric name
     design_type : str
-        Design type (e.g., 'l3ls-evpn', 'mpls')
-    spine_devices : List[DeviceDefinition], optional
-        List of spine devices, by default empty list
-    leaf_devices : List[DeviceDefinition], optional
-        List of leaf devices, by default empty list
-    border_leaf_devices : List[DeviceDefinition], optional
-        List of border leaf devices, by default empty list
+        Design type (e.g., 'l3ls-evpn', 'mpls', 'l2ls')
+    devices_by_type : Dict[str, List[DeviceDefinition]], optional
+        Dictionary mapping device type to list of devices, by default empty dict
     bgp_asn_range : Optional[str], optional
         BGP ASN range for the fabric, by default None
     mlag_peer_l3_vlan : int, optional
@@ -171,24 +191,59 @@ class FabricDefinition:
 
     name: str
     design_type: str
-    spine_devices: List[DeviceDefinition] = field(default_factory=list)
-    leaf_devices: List[DeviceDefinition] = field(default_factory=list)
-    border_leaf_devices: List[DeviceDefinition] = field(default_factory=list)
+    devices_by_type: Dict[str, List[DeviceDefinition]] = field(default_factory=dict)
 
     # Fabric-wide settings
     bgp_asn_range: Optional[str] = None
     mlag_peer_l3_vlan: int = 4093
     mlag_peer_vlan: int = 4094
 
+    # Backward compatibility properties
+    @property
+    def spine_devices(self) -> List[DeviceDefinition]:
+        """Get spine devices (backward compatibility).
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            List of spine devices
+        """
+        return self.devices_by_type.get("spine", [])
+
+    @property
+    def leaf_devices(self) -> List[DeviceDefinition]:
+        """Get leaf devices (backward compatibility).
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            List of leaf devices
+        """
+        return self.devices_by_type.get("leaf", [])
+
+    @property
+    def border_leaf_devices(self) -> List[DeviceDefinition]:
+        """Get border leaf devices (backward compatibility).
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            List of border leaf devices
+        """
+        return self.devices_by_type.get("border_leaf", [])
+
     def get_all_devices(self) -> List[DeviceDefinition]:
-        """Get all devices in fabric.
+        """Get all devices in fabric across all types.
 
         Returns
         -------
         List[DeviceDefinition]
             Combined list of all devices in the fabric
         """
-        return self.spine_devices + self.leaf_devices + self.border_leaf_devices
+        all_devices = []
+        for device_list in self.devices_by_type.values():
+            all_devices.extend(device_list)
+        return all_devices
 
     def get_devices_by_type(self, device_type: str) -> List[DeviceDefinition]:
         """Get devices filtered by type.
@@ -203,7 +258,7 @@ class FabricDefinition:
         List[DeviceDefinition]
             List of devices matching the specified type
         """
-        return [d for d in self.get_all_devices() if d.device_type == device_type]
+        return self.devices_by_type.get(device_type, [])
 
 
 @dataclass
@@ -294,10 +349,17 @@ class InventoryData:
         if duplicate_ips:
             errors.append(f"Duplicate management IPs: {set(duplicate_ips)}")
 
-        # Validate topology only for eos-design workflow
+        # Validate topology only for design types that require specific structure
         if not skip_topology_validation:
             for fabric in self.fabrics:
-                if not fabric.spine_devices:
-                    errors.append(f"Fabric {fabric.name} has no spine devices")
+                # Only validate spine presence for L3LS-EVPN design
+                if fabric.design_type == "l3ls-evpn" and not fabric.spine_devices:
+                    errors.append(f"Fabric {fabric.name} (l3ls-evpn) has no spine devices")
+
+                # For MPLS, validate P or PE routers exist
+                if fabric.design_type == "mpls":
+                    all_devices = fabric.get_all_devices()
+                    if not all_devices:
+                        errors.append(f"Fabric {fabric.name} (mpls) has no devices")
 
         return errors

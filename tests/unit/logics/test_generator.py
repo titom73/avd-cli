@@ -54,13 +54,17 @@ def sample_inventory(tmp_path: Path) -> InventoryData:
     fabric1 = FabricDefinition(
         name="DC1",
         design_type="l3ls-evpn",
-        spine_devices=[spine1],
-        leaf_devices=[leaf1],
+        devices_by_type={
+            "spine": [spine1],
+            "leaf": [leaf1],
+        },
     )
     fabric2 = FabricDefinition(
         name="DC2",
         design_type="l3ls-evpn",
-        spine_devices=[spine2],
+        devices_by_type={
+            "spine": [spine2],
+        },
     )
 
     # Add minimal AVD variables structure required by pyavd
@@ -333,6 +337,34 @@ class TestConfigurationGenerator:
         result_float = generator._convert_numeric_strings(float_data)
         assert result_float["rate"] == 1.5
         assert result_float["threshold"] == 0.95
+
+        # Test ISIS system IDs and other IDs with leading zeros (should NOT convert)
+        # AC-070: ISIS system ID preservation
+        id_data = {
+            "isis_system_id_prefix": "0000.0001",
+            "mac_address": "00:1c:73:00:dc:00",
+            "ipv4": "192.168.1.1",
+            "version": "1.0.0",
+        }
+        result_ids = generator._convert_numeric_strings(id_data)
+        assert result_ids["isis_system_id_prefix"] == "0000.0001"  # Must remain string
+        assert result_ids["mac_address"] == "00:1c:73:00:dc:00"  # Must remain string
+        assert result_ids["ipv4"] == "192.168.1.1"  # Must remain string (multiple dots)
+        assert result_ids["version"] == "1.0.0"  # Must remain string (multiple dots)
+
+        # Test that valid floats with leading zeros in decimal are NOT converted
+        # (e.g., '1.001' might be a version or ID, not 1.001)
+        edge_case_data = {
+            "valid_float": "1.5",
+            "zero_decimal": "1.0",  # This should convert to 1.0
+            "leading_zero_decimal": "1.001",  # This should NOT convert (leading zero in decimal)
+            "leading_zero_int": "01.5",  # This should NOT convert (leading zero in integer)
+        }
+        result_edge = generator._convert_numeric_strings(edge_case_data)
+        assert result_edge["valid_float"] == 1.5
+        assert result_edge["zero_decimal"] == 1.0
+        assert result_edge["leading_zero_decimal"] == "1.001"  # Must remain string
+        assert result_edge["leading_zero_int"] == "01.5"  # Must remain string
 
     def test_deep_merge(self) -> None:
         """Test _deep_merge method.

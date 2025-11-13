@@ -1,0 +1,76 @@
+all:
+  children:
+    cpe:
+    # Group for the CPE devices in MPLS environment.
+    # Provide network services endpoint.
+    # They are not managed with eos_designs. Only eos_cli_config_gen.
+      hosts:
+        s1-ce01:
+          ansible_host: 192.168.2.211
+          device_id: 11
+        s1-ce03:
+          ansible_host: 192.168.2.212
+          device_id: 13
+        s1-ce04:
+          ansible_host: 192.168.2.213
+          device_id: 14
+        s2-ce01:
+          ansible_host: 192.168.2.221
+          device_id: 21
+
+    backbone:
+      children:
+        backbone_p_routers:
+          vars:
+            type: "p"
+          hosts:
+            s1-p01:
+              ansible_host: 192.168.2.111
+            s1-p02:
+              ansible_host: 192.168.2.112
+            s2-p01:
+              ansible_host: 192.168.2.121
+            s2-p02:
+              ansible_host: 192.168.2.122
+        backbone_pe_routers:
+          vars:
+            type: "pe"
+          hosts:
+            s1-pe01:
+              ansible_host: 192.168.2.11
+            s1-pe02:
+              ansible_host: 192.168.2.12
+            s1-pe03:
+              ansible_host: 192.168.2.13
+            s1-pe04:
+              ansible_host: 192.168.2.14
+            s2-pe01:
+              ansible_host: 192.168.2.21
+        network_services:
+          children:
+            backbone_pe_routers:
+
+        # network_services:
+        #   children:
+        #     backbone_pe_routers:
+
+    labs:
+      children:
+        l3vpn:
+          hosts:
+            s1-pe03:
+            s1-pe04:
+            s1-p01:
+            s2-p01:
+            s2-pe01:
+            s1-ce03:
+            s1-ce04:
+            s2-ce01:
+
+        vpws:
+          hosts:
+            s1-pe03:
+            s1-pe04:
+            s1-p01:
+            s1-ce03:
+            s1-ce04:

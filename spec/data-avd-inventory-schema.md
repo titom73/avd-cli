@@ -1,15 +1,31 @@
 ---
 title: AVD Inventory Data Schema Specification
-version: 1.4
+version: 1.5
 date_created: 2025-11-06
-last_updated: 2025-11-06
+last_updated: 2025-01-19
 owner: AVD CLI Development Team
-tags: [data, schema, avd, inventory, validation, jinja2, templating]
+tags: [data, schema, avd, inventory, validation, jinja2, templating, mpls, multi-design]
 ---
 
 # Introduction
 
 This specification defines the data schema requirements for AVD inventory structures, validation rules, and data contracts that the AVD CLI tool must support when processing Arista AVD inventories.
+
+**Version 1.5 Updates (2025-01-19):**
+
+This revision extends the specification to support multiple AVD design types beyond the traditional L3LS-EVPN spine/leaf architecture:
+
+- **Multi-Design Support**: Added support for MPLS, L2LS, and custom design types
+- **Dynamic Node Type Discovery**: Inventory loader now discovers node type keys dynamically (e.g., "p", "pe" for MPLS; "spine", "leaf" for L3LS-EVPN)
+- **Flexible Device Organization**: `FabricDefinition` now uses `devices_by_type: Dict[str, List[DeviceDefinition]]` instead of hardcoded `spine_devices`/`leaf_devices` fields
+- **Design-Agnostic Validation**: Topology validation is now design-aware (e.g., MPLS doesn't require spine devices)
+- **MPLS Example Support**: Added comprehensive examples and tests for MPLS design with P (provider) and PE (provider edge) routers
+- **Custom Node Types**: Full support for user-defined node types via `custom_node_type_keys` and dynamic discovery
+
+These changes ensure that `avd-cli` works seamlessly with:
+- `examples/eos-design-complex` (L3LS-EVPN design with spine/leaf)
+- `examples/eos-design-mpls` (MPLS design with P/PE routers)
+- User inventories with custom node type definitions
 
 ## 1. Purpose & Scope
 
@@ -50,6 +66,10 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 - **host_vars**: Directory containing host-level variable definitions
 - **Fabric**: Collection of network devices forming a network topology
 - **Device Role**: Type of device (spine, leaf, border_leaf, etc.)
+- **Design Type**: AVD network architecture pattern (l3ls-evpn, mpls, l2ls) that defines the routing protocols and topology structure
+- **Node Type**: Category of network device within a design (e.g., spine, leaf for l3ls-evpn; p, pe for mpls)
+- **Standard Node Types**: Default node type keys provided by each AVD design (e.g., spine, l3leaf, l2leaf for l3ls-evpn)
+- **Custom Node Types**: User-defined node type keys in inventory via custom_node_type_keys or direct definition in group_vars (e.g., wan_edge, core_router)
 - **Structured Config**: Hierarchical configuration data structure
 - **Schema Validation**: Process of verifying data against defined rules
 - **Custom Structured Configuration**: User-defined configuration that extends or overrides AVD-generated structured configs
@@ -84,6 +104,11 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 - **REQ-018**: Application shall support Jinja2 filters: `{{ variable | default(value) }}`, `{{ variable | lower }}`, etc.
 - **REQ-019**: Template resolution shall occur after all YAML files are loaded but before validation
 - **REQ-020**: Unresolved template variables shall be handled gracefully with clear error messages
+- **REQ-021**: Application shall support multiple AVD design types: l3ls-evpn, mpls, l2ls
+- **REQ-022**: Application shall discover node type keys dynamically from inventory data, where each design type provides a standard list of node types (e.g., spine/l3leaf/l2leaf for l3ls-evpn; p/pe for mpls) and users can define additional custom node types in group_vars
+- **REQ-023**: Application shall not assume spine/leaf topology exists for all design types
+- **REQ-024**: Application shall support design-specific standard node types defined per design (spine/l3leaf/l2leaf/border_leaf for l3ls-evpn; p/pe for mpls; l2spine/l2leaf for l2ls) and allow custom node type definitions via custom_node_type_keys
+- **REQ-025**: Application shall handle inventories with "type" variable defining device roles (e.g., vars: type: "pe")
 
 ### Validation Requirements
 
@@ -138,8 +163,19 @@ Define the data structures, validation rules, and constraints for AVD inventory 
 
 - **DTM-001**: Application shall maintain a mapping table for AVD device type aliases to canonical types
 - **DTM-002**: Mapping shall include: l3spine → spine, l2leaf → leaf, l3leaf → leaf
-- **DTM-003**: Unknown types shall be accepted if validation is relaxed or custom types are configured
-- **DTM-004**: Validation shall support both strict mode (canonical only) and permissive mode (aliases allowed)
+- **DTM-003**: Application shall support custom node types defined in inventory (e.g., "p", "pe" for MPLS design)
+- **DTM-004**: Unknown types shall be accepted with validation mode: strict mode (error) or permissive mode (warning)
+- **DTM-005**: Application shall detect node type definitions from inventory data (keys like "p:", "pe:", custom_node_type_keys)
+- **DTM-006**: Application shall categorize devices by their inventory-defined type without forcing spine/leaf classification
+
+### Design-Specific Node Type Requirements
+
+- **DNT-001**: Application shall recognize standard node types per design: l3ls-evpn (spine, l3leaf, l2leaf, border_leaf), mpls (p, pe), l2ls (l2spine, l2leaf)
+- **DNT-002**: Application shall support custom_node_type_keys for defining additional node types beyond standard ones
+- **DNT-003**: Application shall allow users to define custom node type keys directly in group_vars (e.g., "wan_edge:", "core_router:")
+- **DNT-004**: Application shall not restrict node type discovery to a predefined list, allowing any key with topology structure (defaults, nodes, node_groups)
+- **DNT-005**: Standard node types for each design shall be used for validation and type-specific processing when design_type is detected
+- **DNT-006**: Custom node types shall be treated equivalently to standard node types in device organization and filtering
 
 ### Custom Structured Configuration Requirements
 
@@ -331,30 +367,46 @@ class DeviceDefinition:
 
 @dataclass
 class FabricDefinition:
-    """Fabric topology definition."""
+    """Fabric topology definition.
+    
+    Uses flexible device dictionary to support any AVD design type.
+    """
 
     name: str
-    design_type: str  # l3ls-evpn, mpls, etc.
-    spine_devices: List[DeviceDefinition] = field(default_factory=list)
-    leaf_devices: List[DeviceDefinition] = field(default_factory=list)
-    border_leaf_devices: List[DeviceDefinition] = field(default_factory=list)
+    design_type: str  # l3ls-evpn, mpls, l2ls, etc.
+    devices_by_type: Dict[str, List[DeviceDefinition]] = field(default_factory=dict)
 
     # Fabric-wide settings
     bgp_asn_range: Optional[str] = None
     mlag_peer_l3_vlan: int = 4093
     mlag_peer_vlan: int = 4094
 
+    # Backward compatibility properties
+    @property
+    def spine_devices(self) -> List[DeviceDefinition]:
+        """Get spine devices (backward compatibility)."""
+        return self.devices_by_type.get("spine", [])
+
+    @property
+    def leaf_devices(self) -> List[DeviceDefinition]:
+        """Get leaf devices (backward compatibility)."""
+        return self.devices_by_type.get("leaf", [])
+
+    @property
+    def border_leaf_devices(self) -> List[DeviceDefinition]:
+        """Get border leaf devices (backward compatibility)."""
+        return self.devices_by_type.get("border_leaf", [])
+
     def get_all_devices(self) -> List[DeviceDefinition]:
-        """Get all devices in fabric."""
-        return (
-            self.spine_devices +
-            self.leaf_devices +
-            self.border_leaf_devices
-        )
+        """Get all devices in fabric across all types."""
+        all_devices = []
+        for device_list in self.devices_by_type.values():
+            all_devices.extend(device_list)
+        return all_devices
 
     def get_devices_by_type(self, device_type: str) -> List[DeviceDefinition]:
         """Get devices filtered by type."""
-        return [d for d in self.get_all_devices() if d.device_type == device_type]
+        return self.devices_by_type.get(device_type, [])
 
 @dataclass
 class InventoryData:
@@ -378,8 +430,15 @@ class InventoryData:
                 return device
         return None
 
-    def validate(self) -> List[str]:
-        """Validate complete inventory structure."""
+    def validate(self, skip_topology_validation: bool = False) -> List[str]:
+        """Validate complete inventory structure.
+        
+        Parameters
+        ----------
+        skip_topology_validation : bool
+            If True, skip design-specific topology checks (e.g., spine presence).
+            Useful for non-L3LS-EVPN designs like MPLS.
+        """
         errors = []
 
         # Check for duplicate hostnames
@@ -394,10 +453,18 @@ class InventoryData:
         if duplicate_ips:
             errors.append(f"Duplicate management IPs: {set(duplicate_ips)}")
 
-        # Validate each fabric
-        for fabric in self.fabrics:
-            if not fabric.spine_devices:
-                errors.append(f"Fabric {fabric.name} has no spine devices")
+        # Validate topology only for designs that require specific structure
+        if not skip_topology_validation:
+            for fabric in self.fabrics:
+                # Only validate spine presence for L3LS-EVPN design
+                if fabric.design_type == "l3ls-evpn" and not fabric.spine_devices:
+                    errors.append(f"Fabric {fabric.name} (l3ls-evpn) has no spine devices")
+                
+                # For MPLS, validate P or PE routers exist
+                if fabric.design_type == "mpls":
+                    all_devices = fabric.get_all_devices()
+                    if not all_devices:
+                        errors.append(f"Fabric {fabric.name} (mpls) has no devices")
 
         return errors
 ```
@@ -555,9 +622,9 @@ custom_structured_configuration:
         - MLAG
 ```
 
-#### Device Type Mapping Example
+#### Device Type Mapping Example (L3LS-EVPN Design)
 
-AVD uses specific device type names that map to canonical types:
+AVD uses specific device type names that map to canonical types for L3LS-EVPN design:
 
 ```yaml
 ---
@@ -577,7 +644,7 @@ l3spine:
 # Application must recognize: l3spine → spine
 ```
 
-**Device Type Mapping Table:**
+**L3LS-EVPN Device Type Mapping Table:**
 
 | AVD Type | Canonical Type | Description |
 |----------|---------------|-------------|
@@ -590,6 +657,147 @@ l3spine:
 | `super_spine` | `super_spine` | Super spine in large fabrics |
 | `overlay_controller` | `overlay_controller` | Route reflector/controller |
 | `wan_router` | `wan_router` | WAN edge router |
+
+#### MPLS Design Type Support
+
+MPLS design uses different node types than L3LS-EVPN. Instead of spine/leaf, it uses provider (P) and provider edge (PE) routers.
+
+**MPLS Inventory Example (eos-design-mpls)**:
+
+```yaml
+---
+# inventory.yml - MPLS design with P and PE routers
+all:
+  children:
+    backbone:
+      children:
+        backbone_p_routers:
+          vars:
+            type: "p"  # Provider router type
+          hosts:
+            s1-p01:
+              ansible_host: 192.168.2.111
+            s2-p01:
+              ansible_host: 192.168.2.121
+        backbone_pe_routers:
+          vars:
+            type: "pe"  # Provider edge router type
+          hosts:
+            s1-pe01:
+              ansible_host: 192.168.2.11
+            s1-pe02:
+              ansible_host: 192.168.2.12
+
+# group_vars/backbone/p-nodes.yml - P router definitions
+p:
+  defaults:
+    platform: ceos
+    loopback_ipv4_pool: 10.255.0.0/27
+    mpls_overlay_role: server
+  nodes:
+    - name: s1-p01
+      id: 1
+      mgmt_ip: 192.168.2.111/24
+    - name: s2-p01
+      id: 3
+      mgmt_ip: 192.168.2.121/24
+
+# group_vars/backbone/pe-nodes.yml - PE router definitions
+pe:
+  defaults:
+    platform: ceos
+    loopback_ipv4_pool: 10.255.1.0/27
+    mpls_overlay_role: client
+  nodes:
+    - name: s1-pe01
+      id: 1
+      mgmt_ip: 192.168.2.11/24
+    - name: s1-pe02
+      id: 2
+      mgmt_ip: 192.168.2.12/24
+
+# group_vars/backbone/settings.yml - MPLS-specific settings
+fabric_name: "backbone"
+underlay_routing_protocol: "isis-sr"
+overlay_routing_protocol: "ibgp"
+bgp_as: "65000"
+
+# Custom MPLS router configurations
+custom_core_router_bgp:
+  as_notation: "asdot"
+  address_family_evpn:
+    neighbor_default:
+      encapsulation: "mpls"
+      next_hop_self_source_interface: "Loopback0"
+
+custom_core_router_isis:
+  graceful_restart:
+    enabled: True
+  segment_routing_mpls:
+    enabled: True
+```
+
+**Standard Node Types by Design:**
+
+| Design Type | Standard Node Types | Description |
+|-------------|---------------------|-------------|
+| l3ls-evpn | spine, l3leaf, l2leaf, border_leaf, super_spine, overlay_controller | Traditional DC fabric with BGP EVPN |
+| mpls | p, pe | Service provider core with MPLS |
+| l2ls | l2spine, l2leaf | Layer 2 campus design |
+
+**MPLS Node Type Requirements:**
+
+- **NODE-001**: Application shall recognize "p" node type key in group_vars (provider router)
+- **NODE-002**: Application shall recognize "pe" node type key in group_vars (provider edge router)
+- **NODE-003**: Application shall extract device type from inventory.yml "vars: type: pe" pattern
+- **NODE-004**: Application shall NOT require spine/leaf device types for MPLS design
+- **NODE-005**: Application shall support custom_core_router_bgp and custom_core_router_isis variables
+- **NODE-006**: Application shall handle ISIS-SR underlay and iBGP overlay routing protocols
+
+#### Custom Node Type Definition
+
+Users can define custom node types beyond the standard ones provided by each design:
+
+```yaml
+---
+# group_vars/CUSTOM_FABRIC/custom_nodes.yml
+# Define a custom "wan_edge" node type
+wan_edge:
+  defaults:
+    platform: vEOS-lab
+    bgp_as: 65100
+    wan_role: edge
+  nodes:
+    - name: wan-edge-01
+      id: 1
+      mgmt_ip: 192.168.10.1/24
+    - name: wan-edge-02
+      id: 2
+      mgmt_ip: 192.168.10.2/24
+
+# Define a custom "core_router" node type
+core_router:
+  defaults:
+    platform: 7280R3
+    bgp_as: 65000
+    routing_protocol: ospf
+  node_groups:
+    - group: CORE_PAIR
+      nodes:
+        - name: core-01
+          id: 1
+          mgmt_ip: 192.168.0.50/24
+        - name: core-02
+          id: 2
+          mgmt_ip: 192.168.0.51/24
+```
+
+**Custom Node Type Requirements:**
+
+- **CUSTOM-001**: Application shall discover any group_vars key with "defaults", "nodes", or "node_groups" as a potential node type
+- **CUSTOM-002**: Custom node types shall be added to FabricDefinition.devices_by_type dictionary
+- **CUSTOM-003**: Custom node types shall be accessible via get_devices_by_type(custom_type)
+- **CUSTOM-004**: Documentation should recommend prefixing custom types to avoid conflicts (e.g., "org_wan_edge")
 
 #### Jinja2 Template Variables Example
 
@@ -815,6 +1023,36 @@ class ValidationResult:
 - **AC-043**: Given template syntax error, When resolving, Then error includes file path and line information
 - **AC-044**: Given resolved template produces invalid type, When validating, Then type validation error is raised
 - **AC-045**: Given multiple templates in same string, When resolving, Then all templates are resolved correctly
+
+### MPLS Design Type Support
+
+- **AC-046**: Given MPLS inventory with "p:" node type key, When loading, Then P routers are discovered and loaded
+- **AC-047**: Given MPLS inventory with "pe:" node type key, When loading, Then PE routers are discovered and loaded
+- **AC-048**: Given inventory with vars: type: "pe", When parsing hosts, Then device_type is set to "pe"
+- **AC-049**: Given MPLS design fabric, When validating, Then no error for missing spine devices
+- **AC-050**: Given MPLS fabric with P and PE devices, When retrieving all devices, Then both types are returned
+- **AC-051**: Given custom_core_router_bgp in group_vars, When loading, Then custom BGP config is preserved
+- **AC-052**: Given custom_core_router_isis in group_vars, When loading, Then custom ISIS config is preserved
+- **AC-053**: Given FabricDefinition with devices_by_type, When accessing spine_devices property, Then empty list returned if no spine type
+- **AC-054**: Given FabricDefinition with devices_by_type: {"p": [...], "pe": [...]}, When calling get_devices_by_type("p"), Then P routers returned
+- **AC-055**: Given MPLS inventory (examples/eos-design-mpls), When loading complete inventory, Then all P and PE devices loaded correctly
+
+### Multi-Design-Type Flexibility
+
+- **AC-056**: Given inventory with custom node type "wan_edge:", When loading, Then devices are discovered with type "wan_edge"
+- **AC-057**: Given FabricDefinition without spine devices, When validating with skip_topology_validation=True, Then no validation errors
+- **AC-058**: Given inventory with mixed designs (l3ls-evpn and mpls), When loading, Then both fabrics loaded with correct types
+- **AC-059**: Given node type not in DEVICE_TYPE_MAPPING, When loading with permissive mode, Then device loaded with warning
+- **AC-060**: Given node type not in DEVICE_TYPE_MAPPING, When loading with strict mode, Then validation error raised
+
+### Custom Node Types
+
+- **AC-061**: Given group_vars with "wan_edge:" key containing "defaults" and "nodes", When discovering node types, Then "wan_edge" is identified as node type
+- **AC-062**: Given custom node type "core_router:" with devices, When loading inventory, Then devices are added to fabric.devices_by_type["core_router"]
+- **AC-063**: Given FabricDefinition with custom node type "wan_edge", When calling get_devices_by_type("wan_edge"), Then custom devices returned
+- **AC-064**: Given inventory with both standard (spine) and custom (wan_edge) node types, When loading, Then both types discovered and loaded
+- **AC-065**: Given custom node type with node_groups structure, When parsing, Then all nodes in all groups are discovered
+- **AC-066**: Given l3ls-evpn design with custom "dmz_leaf" node type, When loading, Then standard types (spine, l3leaf) and custom type (dmz_leaf) coexist
 
 ## 6. Test Automation Strategy
 
@@ -1375,6 +1613,153 @@ def test_preserve_non_string_types():
 - Test custom_structured_platform_settings with multiple platforms
 - Test custom_structured_configuration merge behavior
 
+### MPLS Design Integration Tests
+
+```python
+def test_load_mpls_inventory():
+    """Test loading MPLS design inventory (examples/eos-design-mpls)."""
+    from avd_cli.logics.loader import InventoryLoader
+
+    loader = InventoryLoader()
+    inventory = loader.load(Path("examples/eos-design-mpls"))
+
+    # Verify backbone fabric loaded
+    assert len(inventory.fabrics) == 1
+    fabric = inventory.fabrics[0]
+    assert fabric.name == "backbone"
+    assert fabric.design_type == "mpls"  # Detected from settings or default
+
+    # Verify P routers discovered
+    p_routers = fabric.get_devices_by_type("p")
+    assert len(p_routers) == 4  # s1-p01, s1-p02, s2-p01, s2-p02
+    assert all(d.device_type == "p" for d in p_routers)
+
+    # Verify PE routers discovered
+    pe_routers = fabric.get_devices_by_type("pe")
+    assert len(pe_routers) == 5  # s1-pe01, s1-pe02, s1-pe03, s1-pe04, s2-pe01
+    assert all(d.device_type == "pe" for d in pe_routers)
+
+    # Verify custom MPLS settings loaded
+    assert "custom_core_router_bgp" in inventory.group_vars.get("backbone", {})
+    assert "custom_core_router_isis" in inventory.group_vars.get("backbone", {})
+
+    # Verify no spine devices (MPLS doesn't use spine/leaf)
+    assert len(fabric.spine_devices) == 0
+    assert len(fabric.leaf_devices) == 0
+
+def test_mpls_device_discovery_from_vars_type():
+    """Test discovering device type from inventory.yml vars: type: 'pe' pattern."""
+    from avd_cli.logics.loader import InventoryLoader
+
+    loader = InventoryLoader()
+    inventory = loader.load(Path("examples/eos-design-mpls"))
+
+    # Find a PE device
+    pe_device = inventory.get_device_by_hostname("s1-pe01")
+    assert pe_device is not None
+    assert pe_device.device_type == "pe"
+
+    # Find a P device
+    p_device = inventory.get_device_by_hostname("s1-p01")
+    assert p_device is not None
+    assert p_device.device_type == "p"
+
+def test_mpls_custom_router_configs():
+    """Test that custom_core_router_bgp and custom_core_router_isis are loaded."""
+    from avd_cli.logics.loader import InventoryLoader
+
+    loader = InventoryLoader()
+    inventory = loader.load(Path("examples/eos-design-mpls"))
+
+    backbone_vars = inventory.group_vars.get("backbone", {})
+
+    # Verify custom BGP config
+    assert "custom_core_router_bgp" in backbone_vars
+    bgp_config = backbone_vars["custom_core_router_bgp"]
+    assert bgp_config["as_notation"] == "asdot"
+    assert "address_family_evpn" in bgp_config
+
+    # Verify custom ISIS config
+    assert "custom_core_router_isis" in backbone_vars
+    isis_config = backbone_vars["custom_core_router_isis"]
+    assert isis_config["graceful_restart"]["enabled"] is True
+    assert isis_config["segment_routing_mpls"]["enabled"] is True
+
+def test_fabric_with_custom_node_types():
+    """Test FabricDefinition with custom node types (p, pe)."""
+    from avd_cli.models.inventory import FabricDefinition, DeviceDefinition
+    from ipaddress import ip_address
+
+    # Create fabric with custom MPLS node types
+    fabric = FabricDefinition(
+        name="backbone",
+        design_type="mpls",
+        devices_by_type={
+            "p": [
+                DeviceDefinition(
+                    hostname="s1-p01",
+                    platform="ceos",
+                    mgmt_ip=ip_address("192.168.2.111"),
+                    device_type="p",
+                    fabric="backbone"
+                )
+            ],
+            "pe": [
+                DeviceDefinition(
+                    hostname="s1-pe01",
+                    platform="ceos",
+                    mgmt_ip=ip_address("192.168.2.11"),
+                    device_type="pe",
+                    fabric="backbone"
+                )
+            ]
+        }
+    )
+
+    # Verify devices retrieved by type
+    assert len(fabric.get_devices_by_type("p")) == 1
+    assert len(fabric.get_devices_by_type("pe")) == 1
+    assert len(fabric.get_all_devices()) == 2
+
+    # Verify backward compatibility properties return empty
+    assert len(fabric.spine_devices) == 0
+    assert len(fabric.leaf_devices) == 0
+
+def test_mpls_validation_no_spine_required():
+    """Test that MPLS fabric validation doesn't require spine devices."""
+    from avd_cli.models.inventory import InventoryData, FabricDefinition, DeviceDefinition
+    from ipaddress import ip_address
+    from pathlib import Path
+
+    fabric = FabricDefinition(
+        name="backbone",
+        design_type="mpls",
+        devices_by_type={
+            "p": [
+                DeviceDefinition(
+                    hostname="s1-p01",
+                    platform="ceos",
+                    mgmt_ip=ip_address("192.168.2.111"),
+                    device_type="p",
+                    fabric="backbone"
+                )
+            ]
+        }
+    )
+
+    inventory = InventoryData(
+        root_path=Path("."),
+        fabrics=[fabric]
+    )
+
+    # Validate with topology validation enabled
+    errors = inventory.validate(skip_topology_validation=False)
+    
+    # Should NOT error about missing spines for MPLS design
+    assert not any("spine devices" in err for err in errors)
+    assert len(errors) == 0
+```
+
 ## 7. Rationale & Context
 
 ### Why Dataclasses over Dictionaries?
@@ -1481,6 +1866,63 @@ custom_structured_platform_settings:
 
 This pattern is documented in the [AVD Custom Structured Configuration Guide](https://avd.arista.com/devel/ansible_collections/arista/avd/roles/eos_designs/docs/how-to/custom-structured-configuration.html) and is widely used in production AVD deployments.
 
+### Why Support Multiple AVD Design Types?
+
+AVD supports multiple network design patterns, each with different topology structures:
+
+- **L3LS-EVPN Design**: Traditional data center with spine/leaf architecture
+- **MPLS Design**: Service provider core with P (provider) and PE (provider edge) routers
+- **L2LS Design**: Layer 2 spine/leaf for campus or small deployments
+
+**Why Flexible Node Type Support is Essential:**
+
+1. **Design Diversity**: Different designs use different device roles (p/pe vs spine/leaf vs l2spine/l2leaf)
+2. **User Inventories**: Users define custom node types via custom_node_type_keys and node_type_keys
+3. **No Forced Classification**: Attempting to map all types to spine/leaf breaks MPLS and custom designs
+4. **AVD Compatibility**: py-avd supports flexible node types, avd-cli must match this flexibility
+
+**MPLS Design Characteristics:**
+
+```yaml
+# MPLS uses P and PE routers, NOT spine/leaf
+p:  # Provider routers (core)
+  defaults:
+    platform: ceos
+    mpls_overlay_role: server
+  nodes:
+    - name: s1-p01
+      id: 1
+
+pe:  # Provider edge routers (customer-facing)
+  defaults:
+    platform: ceos
+    mpls_overlay_role: client
+    evpn_role: client
+  nodes:
+    - name: s1-pe01
+      id: 1
+
+# Routing protocols differ from L3LS-EVPN
+underlay_routing_protocol: "isis-sr"  # Not BGP
+overlay_routing_protocol: "ibgp"       # Not eBGP EVPN
+```
+
+**Design-Agnostic Implementation Approach:**
+
+- Use `devices_by_type: Dict[str, List[DeviceDefinition]]` instead of hardcoded spine_devices/leaf_devices
+- Discover node type keys dynamically from group_vars (look for "p:", "pe:", "spine:", "leaf:", etc.)
+- Extract device type from inventory.yml vars (e.g., `vars: type: "pe"`)
+- Don't validate topology structure unless design_type is known and requires it
+- Support backward compatibility via @property accessors (spine_devices, leaf_devices)
+
+**Benefits:**
+
+- ✅ examples/eos-design-mpls works without modification
+- ✅ examples/eos-design-complex continues to work (L3LS-EVPN)
+- ✅ Custom node types in user inventories are supported
+- ✅ Future AVD designs automatically supported
+- ✅ Matches py-avd's flexible design philosophy
+
 ### Why Support Jinja2 Templates?
 
 Jinja2 template support is essential for AVD inventory compatibility and DRY principles:
@@ -1535,6 +1977,162 @@ This approach matches Ansible's variable resolution behavior and ensures AVD inv
 - **PLT-005**: py-avd (pyavd) - Core AVD library providing schema definitions and constants
 
 ## 9. Examples & Edge Cases
+
+### Dynamic Node Type Discovery
+
+The inventory loader shall dynamically discover node type keys from group_vars without hardcoded assumptions:
+
+```python
+def _discover_node_type_keys(self, group_vars: Dict[str, Dict[str, Any]]) -> Set[str]:
+    """Discover all node type keys defined in group_vars.
+    
+    Scans group_vars for keys that look like AVD node type definitions.
+    These typically have "defaults" and "nodes" or "node_groups" sub-keys.
+    
+    Examples of node type keys:
+    - Standard L3LS-EVPN: "spine", "l3spine", "leaf", "l3leaf", "l2leaf"
+    - MPLS: "p", "pe"
+    - Custom: "wan_edge", "core_router", etc.
+    
+    Parameters
+    ----------
+    group_vars : Dict[str, Dict[str, Any]]
+        All group variables
+    
+    Returns
+    -------
+    Set[str]
+        Set of discovered node type keys
+    """
+    node_type_keys = set()
+    
+    for group_name, group_data in group_vars.items():
+        if not isinstance(group_data, dict):
+            continue
+            
+        # Check each key in group_data
+        for key, value in group_data.items():
+            if not isinstance(value, dict):
+                continue
+            
+            # Heuristic: node type keys have "defaults", "nodes", or "node_groups"
+            has_defaults = "defaults" in value
+            has_nodes = "nodes" in value
+            has_node_groups = "node_groups" in value
+            
+            if has_defaults or has_nodes or has_node_groups:
+                self.logger.debug("Discovered node type key: %s (in group %s)", key, group_name)
+                node_type_keys.add(key)
+    
+    return node_type_keys
+
+# Usage in _parse_fabrics:
+def _parse_fabrics(
+    self,
+    global_vars: Dict[str, Any],
+    group_vars: Dict[str, Dict[str, Any]],
+    host_vars: Dict[str, Dict[str, Any]],
+    group_hierarchy: Dict[str, List[str]],
+    host_to_group: Dict[str, str],
+) -> List[FabricDefinition]:
+    """Parse loaded YAML data into fabric and device structures."""
+    fabrics: List[FabricDefinition] = []
+    devices_by_fabric: Dict[str, Dict[str, List[DeviceDefinition]]] = {}
+    
+    # Discover node type keys dynamically (e.g., "p", "pe", "spine", "leaf")
+    node_type_keys = self._discover_node_type_keys(group_vars)
+    self.logger.info("Discovered node types: %s", sorted(node_type_keys))
+    
+    # Parse devices from group variables
+    for group_name, group_data in group_vars.items():
+        # Determine fabric_name
+        fabric_name = self._resolve_fabric_name(group_data, group_vars, global_vars)
+        
+        if fabric_name not in devices_by_fabric:
+            devices_by_fabric[fabric_name] = {}
+        
+        # Check each discovered node type key
+        for node_type_key in node_type_keys:
+            if node_type_key in group_data:
+                # Parse devices for this node type
+                devices = self._parse_topology_section(
+                    group_data[node_type_key],
+                    node_type_key,  # Use key as device_type (e.g., "p", "pe")
+                    fabric_name,
+                    host_vars
+                )
+                
+                # Add to devices_by_fabric
+                if node_type_key not in devices_by_fabric[fabric_name]:
+                    devices_by_fabric[fabric_name][node_type_key] = []
+                devices_by_fabric[fabric_name][node_type_key].extend(devices)
+    
+    # Create fabric definitions with flexible devices_by_type
+    for fabric_name, devices_dict in devices_by_fabric.items():
+        fabric = FabricDefinition(
+            name=fabric_name,
+            design_type=self._detect_design_type(group_vars, global_vars),
+            devices_by_type=devices_dict  # {"p": [...], "pe": [...]} or {"spine": [...], "leaf": [...]}
+        )
+        fabrics.append(fabric)
+    
+    return fabrics
+
+def _detect_design_type(
+    self,
+    group_vars: Dict[str, Dict[str, Any]],
+    global_vars: Dict[str, Any]
+) -> str:
+    """Detect design type from inventory variables.
+    
+    Checks for design.type key or infers from routing protocols.
+    
+    Returns
+    -------
+    str
+        Design type: "l3ls-evpn", "mpls", "l2ls", or "unknown"
+    """
+    # Check for explicit design.type
+    for group_data in group_vars.values():
+        if "design" in group_data and "type" in group_data["design"]:
+            return group_data["design"]["type"]
+    
+    # Infer from underlay_routing_protocol
+    for group_data in group_vars.values():
+        underlay = group_data.get("underlay_routing_protocol", "")
+        if "isis-sr" in underlay or "isis" in underlay:
+            return "mpls"
+        if "ebgp" in underlay or "bgp" in underlay:
+            return "l3ls-evpn"
+    
+    return "unknown"
+```
+
+**Example: MPLS Inventory Processing**
+
+```python
+# Given: examples/eos-design-mpls inventory structure
+# group_vars/backbone/p-nodes.yml contains "p:" key
+# group_vars/backbone/pe-nodes.yml contains "pe:" key
+
+loader = InventoryLoader()
+inventory = loader.load(Path("examples/eos-design-mpls"))
+
+# Discovered node types: ["p", "pe"]
+# Fabric: backbone
+# Design type: mpls (detected from isis-sr underlay)
+# devices_by_type: {
+#     "p": [s1-p01, s1-p02, s2-p01, s2-p02],
+#     "pe": [s1-pe01, s1-pe02, s1-pe03, s1-pe04, s2-pe01]
+# }
+
+fabric = inventory.fabrics[0]
+assert fabric.name == "backbone"
+assert fabric.design_type == "mpls"
+assert len(fabric.get_devices_by_type("p")) == 4
+assert len(fabric.get_devices_by_type("pe")) == 5
+assert len(fabric.spine_devices) == 0  # No spines in MPLS design
+```
 
 ### Schema Utility Module
 

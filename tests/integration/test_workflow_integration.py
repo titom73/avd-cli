@@ -11,12 +11,15 @@ infrastructure testing strategy specification.
 
 import shutil
 import tempfile
-import pytest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+import pytest
 from click.testing import CliRunner
 
 from avd_cli.cli.main import cli
+from tests.integration import test_utils
 from tests.integration.test_utils import safe_click_invoke
 
 
@@ -306,6 +309,84 @@ Device is configured with basic management interface.
         # Should also have leaf configs (ATD_FABRIC contains all devices)
         # Note: In this example, all devices are in ATD_FABRIC, so we expect all configs
         assert len(config_files) >= 2, f"Expected at least 2 config files, got {len(config_files)}"
+
+    def test_limit_filter_without_matches_exits(self, sample_inventory, output_directory):
+        """Test that limit patterns failing to match devices exit with clear feedback."""
+        runner = CliRunner()
+        captured_console: dict[str, MagicMock] = {}
+
+        original_mock_rich_console = test_utils.mock_rich_console
+
+        @contextmanager
+        def capturing_mock_console():
+            with original_mock_rich_console() as mock_console:
+                captured_console["console"] = mock_console
+                yield mock_console
+
+        with patch('tests.integration.test_utils.mock_rich_console', capturing_mock_console):
+            result = safe_click_invoke(runner, cli, [
+                'generate', 'configs',
+                '--inventory-path', str(sample_inventory),
+                '--output-path', str(output_directory),
+                '--limit', 'non-existent-device',
+            ])
+
+        assert result.exit_code == 1, "Command should exit when no devices match"
+        assert captured_console, "Console should be captured for inspection"
+        print_calls = captured_console["console"].print.call_args_list
+        assert any("No devices match patterns" in " ".join(str(arg) for arg in call.args) for call in print_calls)
+
+    def test_docs_only_workflow_triggers_summary(self, sample_inventory, output_directory):
+        """Test docs-only command invokes the generator and displays summary table."""
+        runner = CliRunner()
+        generated_docs = [output_directory / "documentation" / "s1-spine1.md"]
+
+        with patch("avd_cli.logics.generator.DocumentationGenerator") as mock_doc_generator, \
+             patch("avd_cli.cli.main.display_generation_summary") as mock_summary:
+            mock_doc_generator.return_value.generate.return_value = generated_docs
+
+            result = safe_click_invoke(runner, cli, [
+                'generate', 'docs',
+                '--inventory-path', str(sample_inventory),
+                '--output-path', str(output_directory),
+            ])
+
+        if result.output and "I/O operation on closed file" not in result.output:
+            assert result.exit_code == 0, f"Docs command failed: {result.output}"
+
+        expected_args = ("Documentation", len(generated_docs), output_directory, "documentation")
+        assert any(call.args == expected_args for call in mock_summary.call_args_list), (
+            "Summary should be displayed with expected arguments"
+        )
+
+    def test_tests_only_workflow_supports_robot_type(self, sample_inventory, output_directory):
+        """Test tests-only command passes custom test type and shows summary."""
+        runner = CliRunner()
+        generated_tests = [output_directory / "tests" / "robot_catalog.yml"]
+
+        with patch("avd_cli.logics.generator.TestGenerator") as mock_test_generator, \
+             patch("avd_cli.cli.main.display_generation_summary") as mock_summary:
+            mock_instance = mock_test_generator.return_value
+            mock_instance.generate.return_value = generated_tests
+
+            result = safe_click_invoke(runner, cli, [
+                'generate', 'tests',
+                '--inventory-path', str(sample_inventory),
+                '--output-path', str(output_directory),
+                '--test-type', 'robot',
+            ])
+
+        if result.output and "I/O operation on closed file" not in result.output:
+            assert result.exit_code == 0, f"Tests command failed: {result.output}"
+
+        assert any(call.kwargs.get('test_type') == 'robot' for call in mock_test_generator.call_args_list), (
+            "TestGenerator should be instantiated with requested test type"
+        )
+
+        expected_summary_args = ("Tests", len(generated_tests), output_directory, "tests")
+        assert any(call.args == expected_summary_args for call in mock_summary.call_args_list), (
+            "Summary should be displayed for tests command"
+        )
 
     def test_inventory_validation_failure(self, temp_workspace, output_directory):
         """

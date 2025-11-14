@@ -40,10 +40,25 @@
   --md-code-border-color:              #0000004f;
   --block-code-bg-color:               #e4e4e4;
 
+  /* Typography size adjustments */
+  --md-typeset-font-size:              0.75rem;
+
   font-feature-settings: "kern","liga";
   font-family: var(--md-text-font-family,_),-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* body {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.md-typeset p,
+.md-typeset li,
+.md-typeset blockquote {
+  font-size: 0.9rem;
+  margin-bottom: 0.95rem;
+} */
 
 [data-md-color-scheme="slate"] {
   /* Default color shades */
@@ -110,9 +125,9 @@
   }
 
   .md-typeset h2 {
-    line-height: 2em;
-    font-size: 1.5rem;
-    margin: 1em 0;
+    line-height: 1.4em;
+    font-size: 1.2rem;
+    margin: 1.4em 0 0.7em;
     letter-spacing: -.01em;
     color: var(--md-default-fg-color--light);
     text-transform: capitalize;
@@ -121,9 +136,9 @@
   }
 
   .md-typeset h3 {
-    line-height: 1em;
-    font-size: 1.3rem;
-    margin: 1em 0;
+    line-height: 1.4em;
+    font-size: 1.05rem;
+    margin: 1.1em 0 0.55em;
     letter-spacing: -.01em;
     color: var(--md-default-fg-color--light);
     font-style: normal;
@@ -131,11 +146,11 @@
   }
 
   .md-typeset h4 {
-    font-size: 1.1rem;
-    margin: 1em 0;
+    font-size: 0.98rem;
+    margin: 0.95em 0 0.45em;
     font-weight: 700;
     letter-spacing: -.01em;
-    line-height: 1em;
+    line-height: 1.4em;
     color: var(--md-default-fg-color--light);
     font-style: italic;
   }
@@ -151,7 +166,8 @@
 
   .md-typeset table:not([class]) th {
     min-width: 5rem;
-    padding: .6rem .8rem;
+    padding: .45rem .65rem;
+    font-size: 0.825rem;
     color: var(--md-default-fg-color);
     vertical-align: top;
     text-align: left;
@@ -159,13 +175,15 @@
 
   .md-typeset table:not([class]) td {
     border-collapse: collapse;
+    padding: .45rem .65rem;
+    font-size: 0.825rem;
     vertical-align: center;
     text-align: left;
   }
 
   .md-typeset code {
     padding: 0 .2941176471em;
-    font-size: 100%;
+    /* font-size: 0.5rem; */
     word-break: break-word;
     background-color: var(--md-code-bg-color);
     border-radius: .1rem;
@@ -175,16 +193,16 @@
 
   .highlight code {
     background-color: var(--md-code-bg-color);
-    font-size: 90%;
+    font-size: 0.65rem;
     border-radius: 0%;
   }
 
   .md-typeset .admonition,
   .md-typeset details {
-    margin: 1.5625em 0;
-    padding: 0 .6rem;
+    margin: 1.1em 0;
+    padding: 0 .75rem;
     overflow: hidden;
-    font-size: 90%;
+    font-size: 0.85rem;
     page-break-inside: avoid;
     border-left: .2rem solid var(--md-accent-bg-color);
     border-left-color: var(--md-accent-bg-color);

@@ -297,19 +297,27 @@ class InventoryData:
         # Collect all devices that match the filter
         filtered_devices = []
         for fabric in self.fabrics:
-            # Filter each device list in the fabric
-            fabric.spine_devices = [
+            # Filter each device list in the fabric (modify in-place to avoid read-only error)
+            filtered_spines = [
                 d for d in fabric.spine_devices
                 if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
             ]
-            fabric.leaf_devices = [
+            filtered_leaves = [
                 d for d in fabric.leaf_devices
                 if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
             ]
-            fabric.border_leaf_devices = [
+            filtered_borders = [
                 d for d in fabric.border_leaf_devices
                 if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
             ]
+
+            # Clear and update lists in-place
+            fabric.spine_devices.clear()
+            fabric.spine_devices.extend(filtered_spines)
+            fabric.leaf_devices.clear()
+            fabric.leaf_devices.extend(filtered_leaves)
+            fabric.border_leaf_devices.clear()
+            fabric.border_leaf_devices.extend(filtered_borders)
 
             # Collect all filtered devices
             filtered_devices.extend(fabric.get_all_devices())

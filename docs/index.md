@@ -18,12 +18,14 @@ A command-line interface for processing Arista AVD inventories and generating co
 - **Validate inventory** structure and data
 - **Output ANTA tests** for network validation
 
-<div align="center">
+<!-- <div align="center">
     <img src="./imgs/avd-cli-banner.png" alt="AVD CLI Banner" style="width:1200px;"/>
-</div>
+</div> -->
 
 
 ## Quick Start
+
+- Generate configurations, documentations and tests of the fabric.
 
 ```bash
 # Install avd-cli
@@ -48,7 +50,11 @@ avd-cli generate all \
 │ Documentation  │    10 │ ./output/documentation         │
 │ Tests          │     1 │ ./output/tests                 │
 └────────────────┴───────┴────────────────────────────────┘
+```
 
+- Deploy configurations to EOS devices using eAPI
+
+```bash
 # Deploy configurations to EOS devices
 avd-cli deploy eos --inventory-path ./inventory --dry-run --diff
 
@@ -77,6 +83,7 @@ Deployment Plan (dry-run)
 
 ## 💡 Advanced Features
 
+- **Inventory advanced features**: In-depth guide to templating, inheritance, and overrides in AVD inventories ([Inventory advanced features](user-guide/inventory-advanced.md))
 - **Jinja2 Template Support**: Full support for Jinja2 variables and expressions in inventory files
 - **Variable Inheritance**: Sophisticated variable inheritance across inventory hierarchy
 - **Flexible Variable Organization**: Support for both files and directories in group_vars/host_vars

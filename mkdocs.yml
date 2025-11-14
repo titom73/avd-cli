@@ -169,6 +169,7 @@ nav:
 - User Guide:
   - Commands Overview: user-guide/commands/overview.md
   - Inventory Structure: user-guide/inventory-structure.md
+  - Advanced Inventory Structure: user-guide/inventory-advanced.md
   - Get inventory information: user-guide/commands/info.md
   - Validate inventory: user-guide/commands/validate.md
   - Build Configuration: user-guide/commands/generate.md

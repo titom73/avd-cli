@@ -85,5 +85,9 @@ output/
 
 examples/**
 examples/*
+!examples/cli-config-gen/**
+!examples/eos-design-basics/**
+!examples/eos-design-complex/**
+!examples/eos-design-mpls/**
 
 .envrc

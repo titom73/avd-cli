@@ -39,6 +39,8 @@ pip install avd-cli
 
 ### Basic Usage
 
+- Build AVD artifacts for the entire fabric
+
 ```bash
 # Generate all outputs (configs, documentation, ANTA tests)
 # Default output: ./examples/atd-inventory/intended/
@@ -57,7 +59,11 @@ avd-cli generate all --inventory-path ./examples/atd-inventory
 │ Documentation  │    10 │ examples/atd-inventory/intended/documentation   │
 │ Tests          │     2 │ examples/atd-inventory/intended/tests           │
 └────────────────┴───────┴─────────────────────────────────────────────────┘
+```
 
+- Deploy configurations to EOS devices using eAPI
+
+```bash
 # Deploy configurations to EOS devices
 avd-cli deploy eos --inventory-path ./examples/atd-inventory --dry-run --diff
 

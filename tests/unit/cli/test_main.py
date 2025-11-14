@@ -156,6 +156,9 @@ class TestGenerateAllCommand:
             mgmt_ip="192.168.1.10",
             device_type="spine",
             fabric="DC1",
+            # Device must have groups for DeviceFilter.matches_device() to match by group;
+            # without this, the filter would not match and the test would fail
+            groups=["spine"],
         )
         fabric = FabricDefinition(
             name="DC1",
@@ -195,7 +198,8 @@ class TestGenerateAllCommand:
                 )
 
         assert result.exit_code == 0
-        assert "Limited to groups: spine, leaf" in result.output
+        # Updated assertion to match new filter message format
+        assert "Filter patterns: spine, leaf" in result.output
 
     def test_generate_all_with_workflow(self, tmp_path: Path) -> None:
         """Test generate all with workflow option.

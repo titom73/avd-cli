@@ -150,16 +150,21 @@ class TestConfigurationGenerator:
         assert configs_dir.is_dir()
 
     def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
-        """Test configuration generation limited to specific groups.
+        """Test configuration generation limited to specific devices using DeviceFilter.
 
         Given: Inventory with 2 fabrics (DC1, DC2)
-        When: Calling generate() with limit_to_groups=['DC1']
+        When: Calling generate() with device_filter for 'DC1' pattern
         Then: Only DC1 devices are processed
         """
+        from avd_cli.utils.device_filter import DeviceFilter
+
         generator = ConfigurationGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC1"])
+        # Create DeviceFilter with DC1 pattern (matches fabric name)
+        device_filter = DeviceFilter.from_patterns(["DC1"])
+
+        result = generator.generate(sample_inventory, output_path, device_filter=device_filter)
 
         # Should generate 2 configs (DC1 devices only)
         assert len(result) == 2
@@ -650,16 +655,21 @@ class TestDocumentationGenerator:
         assert all(f.exists() for f in result)
 
     def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
-        """Test documentation generation limited to groups.
+        """Test documentation generation limited to specific devices using DeviceFilter.
 
         Given: Inventory with 2 fabrics
-        When: Calling generate() with limit_to_groups=['DC2']
+        When: Calling generate() with device_filter for 'DC2' pattern
         Then: Generates only 1 doc (DC2 devices)
         """
+        from avd_cli.utils.device_filter import DeviceFilter
+
         generator = DocumentationGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC2"])
+        # Create DeviceFilter with DC2 pattern (matches fabric name)
+        device_filter = DeviceFilter.from_patterns(["DC2"])
+
+        result = generator.generate(sample_inventory, output_path, device_filter=device_filter)
 
         assert len(result) == 1
         hostnames = [f.stem for f in result]
@@ -810,16 +820,21 @@ class TestTestGenerator:
         assert "anta_inventory.yml" in file_names
 
     def test_generate_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
-        """Test test generation limited to groups.
+        """Test test generation limited to specific devices using DeviceFilter.
 
         Given: Inventory with 2 fabrics
-        When: Calling generate() with limit_to_groups=['DC1']
+        When: Calling generate() with device_filter for 'DC1' pattern
         Then: Test file includes only DC1 devices
         """
+        from avd_cli.utils.device_filter import DeviceFilter
+
         generator = TestGenerator()
         output_path = tmp_path / "output"
 
-        result = generator.generate(sample_inventory, output_path, limit_to_groups=["DC1"])
+        # Create DeviceFilter with DC1 pattern (matches fabric name)
+        device_filter = DeviceFilter.from_patterns(["DC1"])
+
+        result = generator.generate(sample_inventory, output_path, device_filter=device_filter)
 
         # Should have test files
         assert len(result) > 0  # Should have files for DC1 devices
@@ -945,15 +960,20 @@ class TestGenerateAll:
         assert len(tests) >= 1  # At least one test file
 
     def test_generate_all_with_limit_to_groups(self, sample_inventory: InventoryData, tmp_path: Path) -> None:
-        """Test generate_all with limit_to_groups.
+        """Test generate_all with device filtering using DeviceFilter.
 
-        Given: limit_to_groups parameter
+        Given: device_filter parameter
         When: Calling generate_all()
         Then: All generators respect the filter
         """
+        from avd_cli.utils.device_filter import DeviceFilter
+
         output_path = tmp_path / "output"
 
-        configs, docs, tests = generate_all(sample_inventory, output_path, limit_to_groups=["DC1"])
+        # Create DeviceFilter with DC1 pattern (matches fabric name)
+        device_filter = DeviceFilter.from_patterns(["DC1"])
+
+        configs, docs, tests = generate_all(sample_inventory, output_path, device_filter=device_filter)
 
         # Only DC1 devices (2 devices)
         assert len(configs) == 2

@@ -159,13 +159,27 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
         help="Output directory for generated files (default: <inventory_path>/intended)",
     )(func)
     func = click.option(
-        "--limit-to-groups",
+        "--limit",
         "-l",
+        "limit_patterns",
+        multiple=True,
+        envvar="AVD_CLI_LIMIT",
+        show_envvar=True,
+        help=(
+            "Filter devices by hostname or group name pattern. "
+            "Supports glob wildcards: *, ?, [...]. "
+            "Can be specified multiple times for union. "
+            "Example: --limit 'leaf-*' --limit spine-1"
+        ),
+    )(func)
+    func = click.option(
+        "--limit-to-groups",
+        "limit_to_groups_patterns",
         multiple=True,
         envvar="AVD_CLI_LIMIT_TO_GROUPS",
         show_envvar=True,
-        help="Limit processing to specific groups (can be used multiple times). "
-        "Use comma-separated values in environment variable",
+        hidden=True,  # Hide from help but keep for backward compatibility
+        help="(Deprecated: use --limit instead) Filter devices by group name pattern",
     )(func)
     func = click.option(
         "--show-deprecation-warnings",
@@ -225,7 +239,8 @@ def generate_all(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
-    limit_to_groups: tuple[str, ...],
+    limit_patterns: tuple[str, ...],
+    limit_to_groups_patterns: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
 ) -> None:
@@ -274,16 +289,20 @@ def generate_all(
 
     workflow = normalize_workflow(workflow)
 
+    # Merge limit patterns (backward compatibility with --limit-to-groups)
+    all_patterns = list(limit_patterns) + list(limit_to_groups_patterns)
+
     if verbose:
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
         console.print(f"[blue]ℹ[/blue] Workflow: {workflow}")
-        if limit_to_groups:
-            console.print(f"[blue]ℹ[/blue] Limited to groups: {', '.join(limit_to_groups)}")
+        if all_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(all_patterns)}")
 
     try:
         from avd_cli.logics.generator import generate_all as gen_all
         from avd_cli.logics.loader import InventoryLoader
+        from avd_cli.utils.device_filter import DeviceFilter
 
         # Suppress pyavd deprecation warnings unless explicitly requested
         suppress_pyavd_warnings(show_deprecation_warnings)
@@ -293,7 +312,23 @@ def generate_all(
         loader = InventoryLoader()
         inventory = loader.load(inventory_path)
 
+        console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
+
+        # Create device filter if patterns provided (but don't filter inventory yet)
+        device_filter = DeviceFilter.from_patterns(all_patterns)
+        if device_filter:
+            # Count how many devices match for user feedback
+            matching_devices = [
+                d for d in inventory.get_all_devices()
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            if not matching_devices:
+                console.print(f"[red]✗[/red] No devices match patterns: {', '.join(all_patterns)}")
+                sys.exit(1)
+            console.print(f"[blue]ℹ[/blue] Will generate outputs for {len(matching_devices)} filtered devices")
+
         # Validate inventory (skip topology validation for cli-config workflow)
+        # Note: We validate ALL devices to ensure inventory is correct
         skip_topology = workflow == "cli-config"
         errors = inventory.validate(skip_topology_validation=skip_topology)
         if errors:
@@ -302,12 +337,9 @@ def generate_all(
                 console.print(f"  [red]•[/red] {error}")
             sys.exit(1)
 
-        console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
-
-        # Generate all outputs
+        # Generate all outputs (pass device_filter to generators)
         console.print("[cyan]→[/cyan] Generating configurations, documentation, and tests...")
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        configs, docs, tests = gen_all(inventory, output_path, workflow, limit_groups)
+        configs, docs, tests = gen_all(inventory, output_path, workflow, device_filter)
 
         # Display summary
         console.print("\n[green]✓[/green] Generation complete!")
@@ -348,7 +380,8 @@ def generate_configs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
-    limit_to_groups: tuple[str, ...],
+    limit_patterns: tuple[str, ...],
+    limit_to_groups_patterns: tuple[str, ...],
     show_deprecation_warnings: bool,
     workflow: str,
 ) -> None:
@@ -382,6 +415,9 @@ def generate_configs(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit patterns (backward compatibility)
+    all_patterns = list(limit_patterns) + list(limit_to_groups_patterns)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -394,10 +430,13 @@ def generate_configs(
         console.print("[blue]ℹ[/blue] Generating configurations only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if all_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(all_patterns)}")
 
     try:
         from avd_cli.logics.generator import ConfigurationGenerator
         from avd_cli.logics.loader import InventoryLoader
+        from avd_cli.utils.device_filter import DeviceFilter
 
         # Suppress pyavd deprecation warnings unless explicitly requested
         suppress_pyavd_warnings(show_deprecation_warnings)
@@ -407,7 +446,23 @@ def generate_configs(
         loader = InventoryLoader()
         inventory = loader.load(inventory_path)
 
+        console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
+
+        # Create device filter if patterns provided (but don't filter inventory yet)
+        device_filter = DeviceFilter.from_patterns(all_patterns)
+        if device_filter:
+            # Count how many devices match for user feedback
+            matching_devices = [
+                d for d in inventory.get_all_devices()
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            if not matching_devices:
+                console.print(f"[red]✗[/red] No devices match patterns: {', '.join(all_patterns)}")
+                sys.exit(1)
+            console.print(f"[blue]ℹ[/blue] Will generate configs for {len(matching_devices)} filtered devices")
+
         # Validate inventory (skip topology validation for cli-config workflow)
+        # Note: We validate ALL devices to ensure inventory is correct
         skip_topology = workflow == "cli-config"
         errors = inventory.validate(skip_topology_validation=skip_topology)
         if errors:
@@ -416,13 +471,10 @@ def generate_configs(
                 console.print(f"  [red]•[/red] {error}")
             sys.exit(1)
 
-        console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
-
-        # Generate configurations
+        # Generate configurations (pass device_filter to generator)
         console.print("[cyan]→[/cyan] Generating configurations...")
         generator = ConfigurationGenerator(workflow=workflow)
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        configs = generator.generate(inventory, output_path, limit_groups)
+        configs = generator.generate(inventory, output_path, device_filter)
 
         console.print(f"\n[green]✓[/green] Generated {len(configs)} configuration files")
         display_generation_summary("Configurations", len(configs), output_path, "configs")
@@ -440,7 +492,8 @@ def generate_docs(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
-    limit_to_groups: tuple[str, ...],
+    limit_patterns: tuple[str, ...],
+    limit_to_groups_patterns: tuple[str, ...],
     show_deprecation_warnings: bool,
 ) -> None:
     """Generate documentation only.
@@ -468,6 +521,9 @@ def generate_docs(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit patterns (backward compatibility)
+    all_patterns = list(limit_patterns) + list(limit_to_groups_patterns)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -475,10 +531,13 @@ def generate_docs(
         console.print("[blue]ℹ[/blue] Generating documentation only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if all_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(all_patterns)}")
 
     try:
         from avd_cli.logics.generator import DocumentationGenerator
         from avd_cli.logics.loader import InventoryLoader
+        from avd_cli.utils.device_filter import DeviceFilter
 
         # Suppress pyavd deprecation warnings unless explicitly requested
         suppress_pyavd_warnings(show_deprecation_warnings)
@@ -490,11 +549,23 @@ def generate_docs(
 
         console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
 
-        # Generate documentation
+        # Create device filter if patterns provided (but don't filter inventory yet)
+        device_filter = DeviceFilter.from_patterns(all_patterns)
+        if device_filter:
+            # Count how many devices match for user feedback
+            matching_devices = [
+                d for d in inventory.get_all_devices()
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            if not matching_devices:
+                console.print(f"[red]✗[/red] No devices match patterns: {', '.join(all_patterns)}")
+                sys.exit(1)
+            console.print(f"[blue]ℹ[/blue] Will generate docs for {len(matching_devices)} filtered devices")
+
+        # Generate documentation (pass device_filter to generator)
         console.print("[cyan]→[/cyan] Generating documentation...")
         generator = DocumentationGenerator()
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        docs = generator.generate(inventory, output_path, limit_groups)
+        docs = generator.generate(inventory, output_path, device_filter)
 
         console.print(f"\n[green]✓[/green] Generated {len(docs)} documentation files")
         display_generation_summary("Documentation", len(docs), output_path, "documentation")
@@ -520,7 +591,8 @@ def generate_tests(
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],
-    limit_to_groups: tuple[str, ...],
+    limit_patterns: tuple[str, ...],
+    limit_to_groups_patterns: tuple[str, ...],
     show_deprecation_warnings: bool,
     test_type: str,
 ) -> None:
@@ -554,6 +626,9 @@ def generate_tests(
     """
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit patterns (backward compatibility)
+    all_patterns = list(limit_patterns) + list(limit_to_groups_patterns)
+
     # Resolve output path with default if needed
     output_path = resolve_output_path(inventory_path, output_path)
 
@@ -561,10 +636,13 @@ def generate_tests(
         console.print(f"[blue]ℹ[/blue] Generating {test_type.upper()} tests only")
         console.print(f"[blue]ℹ[/blue] Inventory path: {inventory_path}")
         console.print(f"[blue]ℹ[/blue] Output path: {output_path}")
+        if all_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(all_patterns)}")
 
     try:
         from avd_cli.logics.generator import TestGenerator
         from avd_cli.logics.loader import InventoryLoader
+        from avd_cli.utils.device_filter import DeviceFilter
 
         # Suppress pyavd deprecation warnings unless explicitly requested
         suppress_pyavd_warnings(show_deprecation_warnings)
@@ -576,11 +654,23 @@ def generate_tests(
 
         console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
 
-        # Generate tests
+        # Create device filter if patterns provided (but don't filter inventory yet)
+        device_filter = DeviceFilter.from_patterns(all_patterns)
+        if device_filter:
+            # Count how many devices match for user feedback
+            matching_devices = [
+                d for d in inventory.get_all_devices()
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            if not matching_devices:
+                console.print(f"[red]✗[/red] No devices match patterns: {', '.join(all_patterns)}")
+                sys.exit(1)
+            console.print(f"[blue]ℹ[/blue] Will generate tests for {len(matching_devices)} filtered devices")
+
+        # Generate tests (pass device_filter to generator)
         console.print(f"[cyan]→[/cyan] Generating {test_type.upper()} tests...")
         generator = TestGenerator(test_type=test_type)
-        limit_groups = list(limit_to_groups) if limit_to_groups else None
-        tests = generator.generate(inventory, output_path, limit_groups)
+        tests = generator.generate(inventory, output_path, device_filter)
 
         console.print(f"\n[green]✓[/green] Generated {len(tests)} test files")
         display_generation_summary("Tests", len(tests), output_path, "tests")
@@ -911,12 +1001,27 @@ def deploy(ctx: click.Context) -> None:
     help="Display configuration differences",
 )
 @click.option(
-    "--limit-to-groups",
+    "--limit",
     "-l",
+    "limit_patterns",
+    multiple=True,
+    envvar="AVD_CLI_LIMIT",
+    show_envvar=True,
+    help=(
+        "Filter devices by hostname or group name pattern. "
+        "Supports glob wildcards: *, ?, [...]. "
+        "Can be specified multiple times for union. "
+        "Example: --limit 'leaf-*' --limit spine-1"
+    ),
+)
+@click.option(
+    "--limit-to-groups",
+    "limit_to_groups_patterns",
     multiple=True,
     envvar="AVD_CLI_LIMIT_TO_GROUPS",
     show_envvar=True,
-    help="Limit deployment to specific groups (can be used multiple times)",
+    hidden=True,  # Hide from help but keep for backward compatibility
+    help="(Deprecated: use --limit instead) Filter devices by group name pattern",
 )
 @click.option(
     "--max-concurrent",
@@ -949,7 +1054,8 @@ def deploy_eos(
     configs_path: Optional[Path],
     dry_run: bool,
     show_diff: bool,
-    limit_to_groups: tuple[str, ...],
+    limit_patterns: tuple[str, ...],
+    limit_to_groups_patterns: tuple[str, ...],
     max_concurrent: int,
     timeout: int,
     verify_ssl: bool,
@@ -1002,6 +1108,9 @@ def deploy_eos(
 
     verbose = ctx.obj.get("verbose", False)
 
+    # Merge limit patterns (backward compatibility)
+    all_patterns = list(limit_patterns) + list(limit_to_groups_patterns)
+
     # Resolve configs path with default if needed
     if configs_path is None:
         configs_path = inventory_path / "intended" / "configs"
@@ -1019,18 +1128,24 @@ def deploy_eos(
         console.print(f"[blue]ℹ[/blue] Dry run: {dry_run}")
         console.print(f"[blue]ℹ[/blue] Show diff: {show_diff}")
         console.print(f"[blue]ℹ[/blue] SSL verification: {verify_ssl}")
+        if all_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(all_patterns)}")
 
     try:
         from avd_cli.logics.deployer import Deployer
+        from avd_cli.utils.device_filter import DeviceFilter
 
-        # Create deployer
+        # Create device filter from patterns (supports hostname and group filtering)
+        device_filter = DeviceFilter.from_patterns(all_patterns) if all_patterns else None
+
+        # Create deployer with device filter
         deployer = Deployer(
             inventory_path=inventory_path,
             configs_path=configs_path,
             mode=mode,
             dry_run=dry_run,
             show_diff=show_diff,
-            limit_to_groups=list(limit_to_groups) if limit_to_groups else None,
+            device_filter=device_filter,
             max_concurrent=max_concurrent,
             timeout=timeout,
             verify_ssl=verify_ssl,

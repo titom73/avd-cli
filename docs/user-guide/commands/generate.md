@@ -29,7 +29,8 @@ These options apply to all `generate` subcommands:
 |--------|-------|------|---------|-------------|
 | `--inventory-path` | `-i` | Path | *Required* | Path to AVD inventory directory |
 | `--output-path` | `-o` | Path | *Required* | Output directory for generated files |
-| `--limit-to-groups` | `-l` | Text | All | Limit processing to specific groups (repeatable) |
+| `--limit` | `-l` | Text | All | Filter devices by hostname or group patterns (repeatable, supports wildcards) |
+| `--limit-to-groups` | | Text | All | **Deprecated**. Use `--limit` instead. Limit to specific groups |
 | `--workflow` | | Choice | `eos-design` | Workflow type: `eos-design` or `cli-config` |
 | `--show-deprecation-warnings` | | Flag | `false` | Show pyavd deprecation warnings |
 
@@ -54,8 +55,17 @@ avd-cli generate all -i ./inventory -o ./output
 # With specific workflow
 avd-cli generate all -i ./inventory -o ./output --workflow eos-design
 
-# Limit to specific groups
+# Filter by group names
 avd-cli generate all -i ./inventory -o ./output -l SPINES -l LEAFS
+
+# Filter by hostname patterns (wildcards supported)
+avd-cli generate all -i ./inventory -o ./output -l "spine*"
+
+# Filter by specific hostnames
+avd-cli generate all -i ./inventory -o ./output -l spine-01 -l leaf-1a
+
+# Mix hostname and group filters
+avd-cli generate all -i ./inventory -o ./output -l "spine*" -l BORDER_LEAFS
 
 # Show deprecation warnings
 avd-cli generate all -i ./inventory -o ./output --show-deprecation-warnings
@@ -96,8 +106,14 @@ avd-cli generate configs -i INVENTORY_PATH -o OUTPUT_PATH [OPTIONS]
 # Generate all device configurations
 avd-cli generate configs -i ./inventory -o ./output
 
-# Generate configs for spines only
+# Filter by group name
 avd-cli generate configs -i ./inventory -o ./output -l SPINES
+
+# Filter by hostname pattern
+avd-cli generate configs -i ./inventory -o ./output -l "spine-*"
+
+# Filter specific devices
+avd-cli generate configs -i ./inventory -o ./output -l spine-01 -l spine-02
 
 # Use cli-config workflow (skip eos_design role)
 avd-cli generate configs -i ./inventory -o ./output --workflow cli-config
@@ -144,8 +160,14 @@ avd-cli generate docs -i INVENTORY_PATH -o OUTPUT_PATH [OPTIONS]
 # Generate all documentation
 avd-cli generate docs -i ./inventory -o ./output
 
-# Generate docs for specific devices
+# Filter by group name
 avd-cli generate docs -i ./inventory -o ./output -l RACK1
+
+# Filter by hostname pattern
+avd-cli generate docs -i ./inventory -o ./output -l "leaf-*"
+
+# Filter specific devices
+avd-cli generate docs -i ./inventory -o ./output -l spine-01
 ```
 
 ### Generated Documentation
@@ -180,8 +202,14 @@ avd-cli generate tests -i ./inventory -o ./output
 # Generate Robot Framework tests
 avd-cli generate tests -i ./inventory -o ./output --test-type robot
 
-# Generate tests for specific device groups only
+# Filter by group name
 avd-cli generate tests -i ./inventory -o ./output -l SPINES
+
+# Filter by hostname pattern
+avd-cli generate tests -i ./inventory -o ./output -l "spine-*"
+
+# Filter multiple patterns
+avd-cli generate tests -i ./inventory -o ./output -l "spine*" -l "leaf-1*"
 ```
 
 ### ANTA Test Generation
@@ -272,7 +300,7 @@ All options support environment variables with the `AVD_CLI_` prefix:
 |-----------|---------------------|---------|
 | `-i, --inventory-path` | `AVD_CLI_INVENTORY_PATH` | `./inventory` |
 | `-o, --output-path` | `AVD_CLI_OUTPUT_PATH` | `./output` |
-| `-l, --limit-to-groups` | `AVD_CLI_LIMIT_TO_GROUPS` | `SPINES,LEAFS` |
+| `-l, --limit` | `AVD_CLI_LIMIT` | `spine*,LEAFS` |
 | `--workflow` | `AVD_CLI_WORKFLOW` | `eos-design` |
 | `--show-deprecation-warnings` | `AVD_CLI_SHOW_DEPRECATION_WARNINGS` | `true` |
 | `--test-type` | `AVD_CLI_TEST_TYPE` | `anta` |
@@ -294,15 +322,42 @@ avd-cli generate all
 
 ### Selective Generation
 
-Process only specific device groups for faster iteration:
+The `--limit` option supports flexible device filtering using:
+
+- **Group names**: `SPINES`, `LEAFS`, `BORDER_LEAFS`
+- **Hostname patterns**: `spine*`, `leaf-[12]*`, `border-?`
+- **Exact hostnames**: `spine-01`, `leaf-1a`
+
+**Wildcard patterns:**
+
+- `*` - Matches any characters: `spine*` matches `spine-01`, `spine-02`, `spineA`
+- `?` - Matches single character: `leaf-?` matches `leaf-1`, `leaf-a`
+- `[...]` - Matches character set: `leaf-[12]a` matches `leaf-1a`, `leaf-2a`
+
+**Examples:**
 
 ```bash
-# Only spines
+# Filter by group name
 avd-cli generate all -i ./inventory -o ./output -l SPINES
 
-# Multiple groups
-avd-cli generate all -i ./inventory -o ./output -l SPINES -l LEAFS -l BORDER_LEAFS
+# Filter by hostname pattern (all spines)
+avd-cli generate all -i ./inventory -o ./output -l "spine*"
+
+# Filter specific devices
+avd-cli generate all -i ./inventory -o ./output -l spine-01 -l spine-02
+
+# Multiple groups and patterns
+avd-cli generate all -i ./inventory -o ./output -l SPINES -l "border-*" -l leaf-1a
+
+# Complex patterns
+avd-cli generate all -i ./inventory -o ./output -l "spine-0[1-3]" -l "leaf-[12]?"
 ```
+
+!!! info "How Filtering Works"
+    - AVD needs **all devices** for topology context (BGP neighbors, MLAG peers, etc.)
+    - Filtering happens **after** AVD facts calculation
+    - Only **output files** for filtered devices are generated
+    - This ensures configurations are correct even when filtering single devices
 
 ### CI/CD Integration
 

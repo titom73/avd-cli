@@ -11,9 +11,13 @@ import logging
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from avd_cli.utils.schema import get_supported_device_types, get_supported_platforms
+
+# Conditional import for DeviceFilter (used in type hints)
+if TYPE_CHECKING:
+    from avd_cli.utils.device_filter import DeviceFilter
 
 
 @dataclass
@@ -317,6 +321,67 @@ class InventoryData:
             if device.hostname == hostname:
                 return device
         return None
+
+    def filter_devices(self, device_filter: Optional["DeviceFilter"]) -> None:  # noqa: F821
+        """Filter devices in inventory based on patterns.
+
+        This method applies device filtering in-place, modifying the inventory
+        to contain only devices that match the filter patterns. Devices are
+        matched by hostname OR group membership (union logic).
+
+        Parameters
+        ----------
+        device_filter : Optional[DeviceFilter]
+            Filter to apply. If None, no filtering is performed.
+
+        Raises
+        ------
+        ValueError
+            If no devices match the filter patterns
+
+        Examples
+        --------
+        >>> from avd_cli.utils.device_filter import DeviceFilter
+        >>> filter = DeviceFilter(patterns=["leaf-*"])
+        >>> inventory.filter_devices(filter)
+        >>> # inventory now contains only devices matching "leaf-*"
+        """
+        if device_filter is None:
+            return
+
+        # Collect all devices that match the filter
+        filtered_devices = []
+        for fabric in self.fabrics:
+            # Filter each device list in the fabric (modify in-place to avoid read-only error)
+            filtered_spines = [
+                d for d in fabric.spine_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            filtered_leaves = [
+                d for d in fabric.leaf_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            filtered_borders = [
+                d for d in fabric.border_leaf_devices
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+
+            # Clear and update lists in-place
+            fabric.spine_devices.clear()
+            fabric.spine_devices.extend(filtered_spines)
+            fabric.leaf_devices.clear()
+            fabric.leaf_devices.extend(filtered_leaves)
+            fabric.border_leaf_devices.clear()
+            fabric.border_leaf_devices.extend(filtered_borders)
+
+            # Collect all filtered devices
+            filtered_devices.extend(fabric.get_all_devices())
+
+        # Validate at least one device matched
+        if not filtered_devices:
+            raise ValueError(
+                f"No devices matched the filter patterns: {device_filter.patterns}"
+            )
 
     def validate(self, skip_topology_validation: bool = False) -> List[str]:
         """Validate complete inventory structure.

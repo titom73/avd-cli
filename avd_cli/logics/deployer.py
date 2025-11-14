@@ -12,16 +12,11 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import yaml
 from rich.console import Console
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TaskID,
-    TextColumn,
-)
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn
 from rich.table import Table
 
 from avd_cli.exceptions import (
@@ -32,6 +27,10 @@ from avd_cli.exceptions import (
     DeploymentError,
 )
 from avd_cli.utils.eapi_client import DeploymentMode, EapiClient, EapiConfig
+
+# Conditional import for DeviceFilter (used in type hints)
+if TYPE_CHECKING:
+    from avd_cli.utils.device_filter import DeviceFilter
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +138,7 @@ class Deployer:
         dry_run: bool = False,
         show_diff: bool = False,
         limit_to_groups: Optional[List[str]] = None,
+        device_filter: Optional["DeviceFilter"] = None,
         max_concurrent: int = 10,
         timeout: int = 30,
         verify_ssl: bool = False,
@@ -159,7 +159,9 @@ class Deployer:
         show_diff : bool
             If True, display configuration diffs
         limit_to_groups : Optional[List[str]]
-            Only deploy to devices in these groups
+            Deprecated. Use device_filter instead. Only deploy to devices in these groups.
+        device_filter : Optional[DeviceFilter]
+            Filter to determine which devices to deploy to (supports hostname and group patterns)
         max_concurrent : int
             Maximum concurrent deployments
         timeout : int
@@ -174,7 +176,9 @@ class Deployer:
         self.mode = mode
         self.dry_run = dry_run
         self.show_diff = show_diff
+        # Support both old limit_to_groups and new device_filter for backward compatibility
         self.limit_to_groups = limit_to_groups or []
+        self.device_filter = device_filter
         self.max_concurrent = max_concurrent
         self.timeout = timeout
         self.verify_ssl = verify_ssl
@@ -298,61 +302,66 @@ class Deployer:
         if not isinstance(group_data, dict):
             return
 
-        # Check if we should process this group based on limit_to_groups filter
-        should_process_hosts = True
-        if self.limit_to_groups:
-            # Only process hosts if current group is in the filter list
-            should_process_hosts = group_name in self.limit_to_groups
-
         # Merge parent vars with current group vars (current takes precedence)
         current_vars = parent_vars.copy()
         if "vars" in group_data:
             current_vars.update(group_data["vars"])
 
-        # Process direct hosts in this group (only if filter allows)
-        if should_process_hosts:
-            hosts = group_data.get("hosts", {})
-            if isinstance(hosts, dict):
-                for hostname, host_data in hosts.items():
-                    if not isinstance(host_data, dict):
+        # Process direct hosts in this group
+        hosts = group_data.get("hosts", {})
+        if isinstance(hosts, dict):
+            for hostname, host_data in hosts.items():
+                if not isinstance(host_data, dict):
+                    continue
+
+                # Check device filter (supports both hostname and group patterns)
+                if self.device_filter:
+                    # Match against hostname OR group name
+                    if not self.device_filter.matches_device(hostname, [group_name]):
+                        self.logger.debug("Skipping %s: doesn't match filter", hostname)
+                        continue
+                elif self.limit_to_groups:
+                    # Legacy behavior: only check group name
+                    if group_name not in self.limit_to_groups:
+                        self.logger.debug("Skipping %s: group %s not in limit_to_groups", hostname, group_name)
                         continue
 
-                    # Get IP address
-                    ansible_host = host_data.get("ansible_host")
-                    if not ansible_host:
+                # Get IP address
+                ansible_host = host_data.get("ansible_host")
+                if not ansible_host:
+                    self.logger.warning(
+                        "Skipping %s: missing ansible_host in inventory", hostname
+                    )
+                    continue
+
+                try:
+                    # Extract credentials (host vars override group vars)
+                    credentials = self._extract_credentials(host_data, current_vars)
+
+                    # Find config file
+                    config_file_path = self.configs_path / f"{hostname}.cfg"
+                    config_file: Optional[Path]
+                    if not config_file_path.exists():
                         self.logger.warning(
-                            "Skipping %s: missing ansible_host in inventory", hostname
+                            "Configuration file not found for %s: %s", hostname, config_file_path
                         )
-                        continue
+                        config_file = None
+                    else:
+                        config_file = config_file_path
 
-                    try:
-                        # Extract credentials (host vars override group vars)
-                        credentials = self._extract_credentials(host_data, current_vars)
-
-                        # Find config file
-                        config_file_path = self.configs_path / f"{hostname}.cfg"
-                        config_file: Optional[Path]
-                        if not config_file_path.exists():
-                            self.logger.warning(
-                                "Configuration file not found for %s: %s", hostname, config_file_path
-                            )
-                            config_file = None
-                        else:
-                            config_file = config_file_path
-
-                        targets.append(
-                            DeploymentTarget(
-                                hostname=hostname,
-                                ip_address=ansible_host,
-                                credentials=credentials,
-                                config_file=config_file,
-                                groups=[group_name],
-                            )
+                    targets.append(
+                        DeploymentTarget(
+                            hostname=hostname,
+                            ip_address=ansible_host,
+                            credentials=credentials,
+                            config_file=config_file,
+                            groups=[group_name],
                         )
+                    )
 
-                    except CredentialError as e:
-                        self.logger.error("Skipping %s: %s", hostname, e)
-                        continue
+                except CredentialError as e:
+                    self.logger.error("Skipping %s: %s", hostname, e)
+                    continue
 
         # Recursively process children groups
         children = group_data.get("children", {})

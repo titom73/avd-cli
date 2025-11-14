@@ -128,7 +128,7 @@ Prior to this feature, the CLI provided `--limit-to-groups` which only supported
 ## 3. Constraints and Assumptions
 
 ### Technical Constraints
-- Must use Python 3.10+ for type hints and pattern matching syntax
+- Must use Python 3.9+ for type hints (tested on 3.9, 3.10, 3.11, 3.12, 3.13)
 - Must integrate with existing Click-based CLI framework
 - Must work with pyavd's data structures and expectations
 - Must maintain existing inventory YAML structure
@@ -410,10 +410,10 @@ from fnmatch import fnmatch
 class DeviceFilter:
     """Filter for selecting devices by hostname or group patterns."""
 
-    patterns: list[str]
+    patterns: List[str]
 
     @classmethod
-    def from_patterns(cls, patterns: list[str] | None) -> "DeviceFilter | None":
+    def from_patterns(cls, patterns: Optional[List[str]]) -> Optional["DeviceFilter"]:
         """
         Create a DeviceFilter from CLI patterns.
 
@@ -458,7 +458,7 @@ class DeviceFilter:
         """
         return any(fnmatch(group, pattern) for pattern in self.patterns)
 
-    def matches_device(self, hostname: str, groups: list[str]) -> bool:
+    def matches_device(self, hostname: str, groups: List[str]) -> bool:
         """
         Check if device matches filter by hostname OR group membership.
 
@@ -618,10 +618,10 @@ class DeviceFilter:
         patterns: List of glob patterns for matching
     """
 
-    patterns: list[str]
+    patterns: List[str]
 
     @classmethod
-    def from_patterns(cls, patterns: list[str] | None) -> "DeviceFilter | None":
+    def from_patterns(cls, patterns: Optional[List[str]]) -> Optional["DeviceFilter"]:
         """Create filter from CLI patterns."""
         ...
 
@@ -633,7 +633,7 @@ class DeviceFilter:
         """Check if group matches any pattern."""
         ...
 
-    def matches_device(self, hostname: str, groups: list[str]) -> bool:
+    def matches_device(self, hostname: str, groups: List[str]) -> bool:
         """Check if device matches by hostname or group."""
         ...
 ```
@@ -649,9 +649,9 @@ class AvdInventory:
         devices: List of network devices
     """
 
-    devices: list[Device]
+    devices: List[Device]
 
-    def filter_devices(self, device_filter: DeviceFilter | None) -> None:
+    def filter_devices(self, device_filter: Optional[DeviceFilter]) -> None:
         """
         Filter devices in-place based on patterns.
 

@@ -152,7 +152,9 @@ class TestGenerateAllCommand:
             mgmt_ip="192.168.1.10",
             device_type="spine",
             fabric="DC1",
-            groups=["spine"],  # Add groups so filter can match
+            # Device must have groups for DeviceFilter.matches_device() to match by group;
+            # without this, the filter would not match and the test would fail
+            groups=["spine"],
         )
         fabric = FabricDefinition(
             name="DC1",

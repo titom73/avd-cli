@@ -10,9 +10,13 @@ including devices, fabrics, and complete inventory structures.
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from avd_cli.utils.schema import get_supported_device_types, get_supported_platforms
+
+# Conditional import for DeviceFilter (used in type hints)
+if TYPE_CHECKING:
+    from avd_cli.utils.device_filter import DeviceFilter
 
 
 @dataclass
@@ -263,7 +267,7 @@ class InventoryData:
                 return device
         return None
 
-    def filter_devices(self, device_filter: Optional["DeviceFilter"]) -> None:  # type: ignore  # noqa: F821
+    def filter_devices(self, device_filter: Optional["DeviceFilter"]) -> None:  # noqa: F821
         """Filter devices in inventory based on patterns.
 
         This method applies device filtering in-place, modifying the inventory

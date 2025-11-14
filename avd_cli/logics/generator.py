@@ -76,11 +76,40 @@ class ConfigurationGenerator:
         inventory: InventoryData,
         device_filter: Optional["DeviceFilter"] = None
     ) -> List[DeviceDefinition]:
-        """Filter devices using DeviceFilter if specified.
+        """Filter devices from inventory using an optional DeviceFilter.
 
-        This method is used ONLY for determining which config files to write.
-        All devices are still included in avd_facts calculation for proper
-        topology context (BGP neighbors, links, etc.).
+        This method determines which device configuration files to generate
+        by applying the provided DeviceFilter. All devices are still included
+        in avd_facts calculation for proper topology context (BGP neighbors,
+        links, etc.).
+
+        Parameters
+        ----------
+        inventory : InventoryData
+            Loaded inventory data containing device definitions.
+        device_filter : Optional[DeviceFilter], optional
+            Device filter to apply, by default None. If provided, only devices
+            matching the filter (by hostname or group patterns) will be included.
+
+        Returns
+        -------
+        List[DeviceDefinition]
+            List of devices matching the filter, or all devices if no filter is provided.
+
+        Examples
+        --------
+        >>> generator = ConfigurationGenerator()
+        >>> filtered_devices = generator._filter_devices(inventory, device_filter)
+        >>> print(f"Filtered {len(filtered_devices)} devices for config generation")
+
+        Notes
+        -----
+        - This method is used ONLY for determining which config files to write.
+        - All devices are still included in avd_facts calculation for proper topology context.
+
+        See Also
+        --------
+        ConfigurationGenerator.generate : Main configuration generation method
         """
         devices = inventory.get_all_devices()
         if device_filter:

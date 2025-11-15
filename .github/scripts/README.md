@@ -4,6 +4,51 @@ This directory contains helper scripts for various development and deployment ta
 
 ## Available Scripts
 
+### 🐳 Docker Build Helper (`docker-build.sh`)
+
+Automated Docker image builder with intelligent version detection and OCI labels.
+
+**Usage:**
+
+```bash
+./.github/scripts/docker-build.sh [OPTIONS]
+```
+
+**Options:**
+
+- `-t, --tag TAG` - Override the image tag (default: git describe)
+- `-p, --push` - Push the image after build
+- `-r, --registry REG` - Specify registry (e.g., ghcr.io/user)
+- `-d, --dev` - Build as development version
+- `-h, --help` - Show help message
+
+**Examples:**
+
+```bash
+# Build with auto-detected version
+./.github/scripts/docker-build.sh
+
+# Build with custom tag
+./.github/scripts/docker-build.sh --tag v1.0.0
+
+# Build and push to registry
+./.github/scripts/docker-build.sh --push --registry ghcr.io/titom73
+
+# Build dev version
+./.github/scripts/docker-build.sh --dev
+```
+
+**Features:**
+
+- ✅ Automatic version detection from git tags
+- ✅ OCI-compliant image labels
+- ✅ Multi-tag support (version + latest)
+- ✅ Registry push support
+- ✅ Colored output and error handling
+- ✅ Version information display
+
+**See also:** `.github/DOCKER.md` for complete Docker build documentation
+
 ### 📚 Documentation Helper (`docs-helper.sh`)
 
 Interactive helper script for managing documentation with MkDocs and mike.

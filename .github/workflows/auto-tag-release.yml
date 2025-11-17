@@ -37,7 +37,9 @@ jobs:
           # Fetch all history and tags for tag existence check
           fetch-depth: 0
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # CRITICAL: Use PAT to trigger the release workflow
+          # GITHUB_TOKEN would NOT trigger other workflows (GitHub security limitation)
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
 
       - name: Extract version from branch name
         id: extract-version

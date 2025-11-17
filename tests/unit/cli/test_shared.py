@@ -152,21 +152,28 @@ class TestMainCli:
         import click
 
         cli = shared.main_cli()
+        verbose_captured = []
 
-        @cli.command()
-        @shared.common_generate_options
-        def test_cmd(ctx, **kwargs):
-            return ctx.obj.get("verbose", False)
-
-        # Command should be registered
-        ctx = click.Context(cli)
-        assert "test-cmd" in cli.list_commands(ctx)
+        @cli.command("dummy")
+        @click.pass_context
+        def dummy_cmd(ctx):
+            # Capture verbose flag from context
+            verbose_captured.append(ctx.obj.get("verbose", False))
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["--verbose", "test-cmd", "--help"], obj={})
         
-        # Help should work (exit code 0)
+        # Test with verbose flag
+        result = runner.invoke(cli, ["--verbose", "dummy"])
         assert result.exit_code == 0
+        assert len(verbose_captured) == 1
+        assert verbose_captured[0] is True
+        
+        # Test without verbose flag
+        verbose_captured.clear()
+        result = runner.invoke(cli, ["dummy"])
+        assert result.exit_code == 0
+        assert len(verbose_captured) == 1
+        assert verbose_captured[0] is False
 
 
 class TestRunCli:

@@ -161,13 +161,13 @@ class TestMainCli:
             verbose_captured.append(ctx.obj.get("verbose", False))
 
         runner = CliRunner()
-        
+
         # Test with verbose flag
         result = runner.invoke(cli, ["--verbose", "dummy"])
         assert result.exit_code == 0
         assert len(verbose_captured) == 1
         assert verbose_captured[0] is True
-        
+
         # Test without verbose flag
         verbose_captured.clear()
         result = runner.invoke(cli, ["dummy"])

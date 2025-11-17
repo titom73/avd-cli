@@ -81,21 +81,25 @@ gh pr merge --squash
 
 Or merge via GitHub web interface.
 
-### 5. Automatic Tag Creation and Release 🎉
+### 5. Sit Back and Relax ☕ - Everything is Automated!
 
-**✨ New: Fully Automated!**
+**✨ Fully Automated Release Pipeline**
 
-When you merge the PR, the [`auto-tag-release.yml`](https://github.com/titom73/avd-cli/actions/workflows/auto-tag-release.yml) workflow automatically:
+When you merge the PR, the following happens **automatically without any manual intervention**:
+
+#### Step 1: Auto-Tag (within seconds)
+
+The [`auto-tag-release.yml`](https://github.com/titom73/avd-cli/actions/workflows/auto-tag-release.yml) workflow:
 
 1. ✅ Detects that a `release/v*` branch was merged to `main`
 2. ✅ Extracts the version from the branch name
 3. ✅ Verifies it matches the version in `pyproject.toml`
 4. ✅ Creates the git tag (e.g., `v0.1.1`)
-5. ✅ Pushes the tag to GitHub
+5. ✅ **Pushes the tag to GitHub using PAT token** (this is critical!)
 
-**No manual tag creation needed!** The tag is created automatically within seconds of merging.
+**Why use PAT?** GitHub's `GITHUB_TOKEN` doesn't trigger other workflows (security feature). By using a Personal Access Token (PAT), we ensure the tag push triggers the release workflow.
 
-### 6. Automatic Release Publication
+#### Step 2: Automatic Release Publication (1-5 minutes)
 
 Once the tag is created, the [release workflow](https://github.com/titom73/avd-cli/actions/workflows/release.yml) automatically:
 
@@ -105,11 +109,17 @@ Once the tag is created, the [release workflow](https://github.com/titom73/avd-c
 4. 🐳 Builds and pushes Docker images to Docker Hub and GHCR
 5. 📚 Deploys documentation
 
-**Monitor the release:**
+**Monitor both workflows:**
 
 ```bash
+# Watch the auto-tag workflow
+gh run watch
+
+# Then watch the release workflow
 gh run watch
 ```
+
+**That's it! No manual commands needed. Just merge and monitor.** 🎉
 
 ---
 
@@ -226,27 +236,59 @@ gh workflow run prepare-release.yml -f version_bump=major
 2. Close existing PR if any
 3. Re-run the workflow
 
-### Tag/Version Mismatch on Release
+### Tag Creation Not Triggered
 
-**Error:** `Git tag (vX.Y.Z) does not match version in pyproject.toml (vA.B.C)`
+**Error:** Tag was not created automatically after merging PR
+
+**Possible Causes:**
+1. PR doesn't have the `kind:release` label
+2. Branch name doesn't match `release/v*` pattern
+3. PAT token is not configured or expired
 
 **Solution:**
 
-1. Ensure you merged the version bump PR before creating the tag
-2. Pull latest changes from main:
+1. Check if the auto-tag workflow ran:
+   ```bash
+   gh run list --workflow=auto-tag-release.yml
+   ```
+
+2. If it didn't run, check the PR labels:
+   ```bash
+   gh pr view 123 --json labels
+   ```
+
+3. Verify PAT token is configured:
+   ```bash
+   gh secret list | grep PAT
+   ```
+
+4. Manual fallback (if needed):
    ```bash
    git checkout main
    git pull origin main
+   VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+   git tag "v$VERSION"
+   git push origin "v$VERSION"
    ```
-3. Verify version in `pyproject.toml`:
+
+### Release Workflow Not Triggered
+
+**Error:** Tag was created but release workflow didn't start
+
+**Cause:** Tag was created with `GITHUB_TOKEN` instead of `PAT`
+
+**Solution:**
+
+1. Delete and recreate the tag manually with PAT authentication:
    ```bash
-   grep '^version = ' pyproject.toml
+   git tag -d v0.1.1
+   git push --delete origin v0.1.1
+   # Then create it with a local git authenticated with PAT
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
-4. Create tag matching that version:
-   ```bash
-   git tag vA.B.C
-   git push origin vA.B.C
-   ```
+
+2. Or ensure the `PAT` secret is properly configured in repository settings
 
 ---
 
@@ -283,26 +325,34 @@ gh workflow run prepare-release.yml -f version_bump=patch
 gh run watch
 
 # 3. Check the created PR
-gh pr list --label release
+gh pr list --label kind:release
 
 # 4. Review and merge the PR
 gh pr view 123  # Replace with actual PR number
 gh pr merge 123 --squash
 
-# 5. Create and push the tag
-git checkout main
-git pull origin main
-git tag v0.1.1
-git push origin v0.1.1
+# 5. 🎉 That's it! Everything else is automatic!
+#    - Tag is created automatically (within seconds)
+#    - Release workflow is triggered automatically
+#    - Package is built and published to PyPI
+#    - Docker images are built and pushed
+#    - Documentation is deployed
 
-# 6. Monitor the release
-gh run watch
+# 6. Monitor the automated workflows
+gh run watch  # Watch auto-tag workflow
+gh run watch  # Watch release workflow
 
-# 7. Verify the release
+# 7. Verify the release (after ~5-10 minutes)
 gh release list
+gh release view v0.1.1
 ```
 
-**Timeline:** ~5-10 minutes total
+**Timeline:** 
+- PR creation: ~1 minute
+- Your review and merge: ~5-10 minutes
+- **Automated tag creation: ~10 seconds** ⚡
+- **Automated release: ~5-10 minutes** 🚀
+- **Total: ~10-20 minutes with zero manual commands!**
 
 ---
 

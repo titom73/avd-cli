@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
 
       - name: Load UV version
         id: versions
@@ -76,7 +76,7 @@ jobs:
         id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
           base: main
           branch: release/v${{ steps.bump.outputs.version }}
           title: "release: avd-cli v${{ steps.bump.outputs.version }}"
@@ -97,19 +97,25 @@ jobs:
             1. **Review** this PR and update `RELEASE_NOTES.md` with actual changes
             2. **Ensure all tests pass** in the PR checks
             3. **Merge** this PR to `main`
-            4. **Create and push the tag** to trigger the release:
-               ```bash
-               git checkout main
-               git pull origin main
-               git tag v${{ steps.bump.outputs.version }}
-               git push origin v${{ steps.bump.outputs.version }}
-               ```
-            5. The [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml) will automatically:
+            4. 🎉 **That's it!** The release tag will be created automatically!
+
+            ### 🤖 Automated Release Process
+
+            When you merge this PR, the following will happen **automatically**:
+
+            1. 🏷️  The [auto-tag workflow](https://github.com/${{ github.repository }}/actions/workflows/auto-tag-release.yml) will:
+               - Create and push tag `v${{ steps.bump.outputs.version }}`
+               - Trigger the release workflow
+
+            2. 🚀 The [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml) will:
                - ✅ Verify tag matches version in `pyproject.toml`
+               - 📝 Create GitHub Release with generated notes
                - 📦 Build package with `uv build`
                - 🚀 Publish to PyPI
-               - 🐳 Build and push Docker images
+               - 🐳 Build and push Docker images (multi-platform)
                - 📚 Deploy documentation
+
+            **No manual commands needed!** Just merge and relax ☕
 
             ### 📝 Release Notes
 
@@ -137,11 +143,16 @@ jobs:
           echo "1. Review the PR: ${{ steps.create-pr.outputs.pull-request-url }}" >> $GITHUB_STEP_SUMMARY
           echo "2. Update RELEASE_NOTES.md with actual changes" >> $GITHUB_STEP_SUMMARY
           echo "3. Merge the PR after tests pass" >> $GITHUB_STEP_SUMMARY
-          echo "4. Create and push the release tag:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "git checkout main && git pull" >> $GITHUB_STEP_SUMMARY
-          echo "git tag v${{ steps.bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "git push origin v${{ steps.bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "4. 🎉 **That's it!** Release will be automated!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The release workflow will be triggered automatically when you push the tag." >> $GITHUB_STEP_SUMMARY
+          echo "### 🤖 Automated Release Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "When you merge the PR, the following happens automatically:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. 🏷️  Tag v${{ steps.bump.outputs.version }} is created and pushed" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📝 GitHub Release is created" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📦 Package is built and published to PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🐳 Docker images are built and pushed" >> $GITHUB_STEP_SUMMARY
+          echo "5. 📚 Documentation is deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**No manual intervention required!** ✨" >> $GITHUB_STEP_SUMMARY

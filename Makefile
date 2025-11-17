@@ -75,6 +75,56 @@ publish-test: build ## Publish to TestPyPI
 publish: build ## Publish to PyPI
 	uv publish
 
+################################################################################
+# Docker targets
+################################################################################
+
+.PHONY: docker-build docker-build-dev docker-run docker-version docker-info
+
+docker-build: ## Build Docker image with git version (make docker-build [TAG=custom-tag])
+	@echo "Building Docker image..."
+	@GIT_VERSION=$$(git describe --tags --always --dirty 2>/dev/null || echo "dev"); \
+	GIT_SHA=$$(git rev-parse HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_DATE=$$(date -u +'%Y-%m-%dT%H:%M:%SZ'); \
+	IMAGE_TAG=$${TAG:-$$GIT_VERSION}; \
+	echo "Version: $$GIT_VERSION"; \
+	echo "Revision: $$GIT_SHA"; \
+	echo "Build date: $$BUILD_DATE"; \
+	echo "Image tag: $$IMAGE_TAG"; \
+	docker build \
+		--build-arg VERSION=$$GIT_VERSION \
+		--build-arg REVISION=$$GIT_SHA \
+		--build-arg BUILD_DATE=$$BUILD_DATE \
+		-t avd-cli:$$IMAGE_TAG \
+		-t avd-cli:latest \
+		.
+	@echo "✓ Docker image built successfully"
+	@echo "  Tags: avd-cli:$$IMAGE_TAG, avd-cli:latest"
+
+docker-build-dev: ## Build Docker image with 'dev' version
+	@echo "Building Docker image (dev)..."
+	@BUILD_DATE=$$(date -u +'%Y-%m-%dT%H:%M:%SZ'); \
+	docker build \
+		--build-arg VERSION=dev \
+		--build-arg REVISION=dev \
+		--build-arg BUILD_DATE=$$BUILD_DATE \
+		-t avd-cli:dev \
+		.
+	@echo "✓ Docker image built: avd-cli:dev"
+
+docker-run: ## Run Docker container (make docker-run ARGS="--help")
+	docker run --rm -it avd-cli:latest $(ARGS)
+
+docker-version: ## Show version info from Docker image
+	@echo "Docker image version information:"
+	@docker inspect avd-cli:latest --format='Version: {{index .Config.Labels "org.opencontainers.image.version"}}'
+	@docker inspect avd-cli:latest --format='Revision: {{index .Config.Labels "org.opencontainers.image.revision"}}'
+	@docker inspect avd-cli:latest --format='Build date: {{index .Config.Labels "org.opencontainers.image.created"}}'
+
+docker-info: ## Show all labels from Docker image
+	@echo "Docker image labels:"
+	@docker inspect avd-cli:latest --format='{{json .Config.Labels}}' | jq .
+
 tox-list: ## List all tox environments
 	uv run tox list
 

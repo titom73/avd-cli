@@ -95,11 +95,11 @@ docker-build: ## Build Docker image with git version (make docker-build [TAG=cus
 		--build-arg VERSION=$$GIT_VERSION \
 		--build-arg REVISION=$$GIT_SHA \
 		--build-arg BUILD_DATE=$$BUILD_DATE \
-		-t avd-cli:$$IMAGE_TAG \
-		-t avd-cli:latest \
+		-t ghcr.io/titom73/avd-cli:$$IMAGE_TAG \
+		-t ghcr.io/titom73/avd-cli:latest \
 		.
 	@echo "✓ Docker image built successfully"
-	@echo "  Tags: avd-cli:$$IMAGE_TAG, avd-cli:latest"
+	@echo "  Tags: ghcr.io/titom73/avd-cli:$$IMAGE_TAG, ghcr.io/titom73/avd-cli:latest"
 
 docker-build-dev: ## Build Docker image with 'dev' version
 	@echo "Building Docker image (dev)..."
@@ -108,22 +108,22 @@ docker-build-dev: ## Build Docker image with 'dev' version
 		--build-arg VERSION=dev \
 		--build-arg REVISION=dev \
 		--build-arg BUILD_DATE=$$BUILD_DATE \
-		-t avd-cli:dev \
+		-t ghcr.io/titom73/avd-cli:dev \
 		.
-	@echo "✓ Docker image built: avd-cli:dev"
+	@echo "✓ Docker image built: ghcr.io/titom73/avd-cli:dev"
 
 docker-run: ## Run Docker container (make docker-run ARGS="--help")
-	docker run --rm -it avd-cli:latest $(ARGS)
+	docker run --rm -it ghcr.io/titom73/avd-cli:latest $(ARGS)
 
 docker-version: ## Show version info from Docker image
 	@echo "Docker image version information:"
-	@docker inspect avd-cli:latest --format='Version: {{index .Config.Labels "org.opencontainers.image.version"}}'
-	@docker inspect avd-cli:latest --format='Revision: {{index .Config.Labels "org.opencontainers.image.revision"}}'
-	@docker inspect avd-cli:latest --format='Build date: {{index .Config.Labels "org.opencontainers.image.created"}}'
+	@docker inspect ghcr.io/titom73/avd-cli:latest --format='Version: {{index .Config.Labels "org.opencontainers.image.version"}}'
+	@docker inspect ghcr.io/titom73/avd-cli:latest --format='Revision: {{index .Config.Labels "org.opencontainers.image.revision"}}'
+	@docker inspect ghcr.io/titom73/avd-cli:latest --format='Build date: {{index .Config.Labels "org.opencontainers.image.created"}}'
 
 docker-info: ## Show all labels from Docker image
 	@echo "Docker image labels:"
-	@docker inspect avd-cli:latest --format='{{json .Config.Labels}}' | jq .
+	@docker inspect ghcr.io/titom73/avd-cli:latest --format='{{json .Config.Labels}}' | jq .
 
 tox-list: ## List all tox environments
 	uv run tox list

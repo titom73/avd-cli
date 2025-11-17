@@ -4,6 +4,17 @@ on:
   push:
     tags:
     - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      docker_tag:
+        description: 'Docker image tag (e.g., dev, test, v1.2.3-rc1)'
+        required: true
+        type: string
+      docker_only:
+        description: 'Build Docker image only (skip PyPI and version verification)'
+        required: false
+        type: boolean
+        default: true
 
 # Default permissions for all jobs (least privilege)
 permissions:
@@ -12,6 +23,8 @@ permissions:
 jobs:
   verify-version:
     name: Verify tag matches version in pyproject.toml
+    # Skip version verification when building Docker only via workflow_dispatch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.docker_only)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,6 +70,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.docker_only)
     runs-on: ubuntu-latest
     needs: [verify-version]
     permissions:
@@ -80,6 +94,7 @@ jobs:
 
   pypi:
     name: Publish Python 🐍 distribution 📦 to PyPI
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.docker_only)
     runs-on: ubuntu-latest
     needs: [verify-version, create-release]
     environment:
@@ -118,7 +133,9 @@ jobs:
   docker:
     name: Docker Image Build
     runs-on: ubuntu-latest
+    # Only depend on pypi job if it's running (not in docker_only mode)
     needs: [ pypi ]
+    if: always() && (needs.pypi.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.docker_only))
     permissions:
       contents: read
       packages: write # Required to push to GitHub Container Registry (ghcr.io)
@@ -132,6 +149,23 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    - name: Determine version and tags
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger: use custom tag
+          VERSION="${{ inputs.docker_tag }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_latest=false" >> $GITHUB_OUTPUT
+          echo "Using custom tag: $VERSION"
+        else
+          # Tag push: use git tag
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_latest=true" >> $GITHUB_OUTPUT
+          echo "Using git tag: $VERSION"
+        fi
+
     - name: Docker meta for TAG
       id: meta
       uses: docker/metadata-action@v5
@@ -140,8 +174,8 @@ jobs:
           ${{ secrets.DOCKER_IMAGE }}
           ghcr.io/${{ secrets.DOCKER_IMAGE }}
         tags: |
-          type=semver,pattern={{raw}}
-          type=raw,value=latest
+          type=raw,value=${{ steps.version.outputs.version }}
+          type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
 
     # - name: Login to DockerHub
     #   uses: docker/login-action@v3
@@ -166,14 +200,34 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
-          VERSION=${{ github.ref_name }}
+          VERSION=${{ steps.version.outputs.version }}
           REVISION=${{ github.sha }}
           BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+    - name: Build summary
+      run: |
+        echo "## 🐳 Docker Image Built Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+        echo "**Tags**:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "**Trigger**: Manual (workflow_dispatch)" >> $GITHUB_STEP_SUMMARY
+          echo "**Custom tag**: ${{ inputs.docker_tag }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Trigger**: Git tag push" >> $GITHUB_STEP_SUMMARY
+          echo "**Git tag**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        fi
 
   # Documentation deployment is now handled by the documentation.yml workflow
   # which is triggered automatically on tag push
   trigger-docs-deployment:
     name: "Trigger documentation deployment"
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: [ docker ]
     permissions:

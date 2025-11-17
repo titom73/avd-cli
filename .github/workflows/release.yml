@@ -171,8 +171,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          ${{ secrets.DOCKER_IMAGE }}
-          ghcr.io/${{ secrets.DOCKER_IMAGE }}
+          ghcr.io/titom73/avd-cli
         tags: |
           type=raw,value=${{ steps.version.outputs.version }}
           type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}

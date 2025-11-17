@@ -94,7 +94,8 @@ jobs:
           ALIAS="${{ steps.version.outputs.alias }}"
 
           if [ -n "$ALIAS" ]; then
-            uv run mike deploy --push "$VERSION" "$ALIAS"
+            # Deploy with --update-aliases to move alias from old version to new
+            uv run mike deploy --update-aliases --push "$VERSION" "$ALIAS"
             if [ "$ALIAS" == "stable" ]; then
               uv run mike set-default --push stable
             elif [ "$ALIAS" == "latest" ]; then

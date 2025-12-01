@@ -1,16 +1,53 @@
-ARG PYTHON_VER=3
+# ==========================================
+# Stage 1: Builder
+# ==========================================
+ARG PYTHON_VER=3.12
+FROM python:${PYTHON_VER}-slim AS builder
 
-FROM ghcr.io/astral-sh/uv:latest AS uv
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-FROM python:${PYTHON_VER}-slim
+WORKDIR /app
 
-# Copy UV from official image
-COPY --from=uv /uv /usr/local/bin/uv
+# Enable bytecode compilation for faster startup
+ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /local
+# 1. Copy only dependency files first to leverage Docker layer caching
+COPY pyproject.toml uv.lock ./
 
-# Copy all necessary files for installation
-COPY . ./
+# 2. Install dependencies only (creates .venv)
+# This layer will be cached unless pyproject.toml or uv.lock changes
+RUN uv sync --frozen --no-install-project --no-dev
+
+# 3. Copy the rest of the application
+COPY . .
+
+# 4. Install the project itself into the existing environment
+RUN uv sync --frozen --no-dev --no-editable
+
+# ==========================================
+# Stage 2: Runtime
+# ==========================================
+FROM python:${PYTHON_VER}-slim AS runtime
+
+WORKDIR /app
+
+# Create a non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy the virtual environment from the builder stage
+# We only need the .venv folder where everything is installed
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+
+# Add virtual environment to PATH
+ENV PATH="/app/.venv/bin:$PATH"
+# Prevent Python from writing pyc files to disc (read-only filesystem friendly)
+ENV PYTHONDONTWRITEBYTECODE=1
+# Ensure output is flushed directly to terminal
+ENV PYTHONUNBUFFERED=1
+
+# Switch to non-root user
+USER appuser
 
 # Build arguments for versioning
 ARG VERSION=dev
@@ -31,8 +68,5 @@ LABEL   "org.opencontainers.image.title"="avd-cli" \
         "org.opencontainers.image.revision"="${REVISION}" \
         "org.opencontainers.image.version"="${VERSION}" \
         "org.opencontainers.image.created"="${BUILD_DATE}"
-
-# Install dependencies and application using UV with frozen lockfile for reproducibility
-RUN uv sync --frozen --no-dev --no-editable
 
 ENTRYPOINT [ "avd-cli" ]

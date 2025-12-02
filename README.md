@@ -85,6 +85,18 @@ Deployment Plan (dry-run)
 └────────────────┴─────────┴──────────┴────────────┴───────┘
 ```
 
+## Containerlab topology generation
+
+Use `avd-cli generate topology containerlab` to emit a Containerlab topology from an
+AVD inventory. The command reuses the resolved `group_vars` and `host_vars`
+produced by the `InventoryLoader`, writes every node as `kind: ceos` with
+`mgmt-ipv4` sourced from `ansible_host`, and generates `links` when both `peer`
+and `peer_interface` values are available on an `ethernet_interfaces` entry. The
+startup configuration is pulled from `<startup-dir>/{hostname}.cfg`, which defaults
+to `<inventory>/intended/configs` but can be overridden with `--startup-dir`.
+The generated YAML is written to `<output-path>/containerlab/{topology-name}.yml`
+so it can be committed directly to your Containerlab topology repository.
+
 ## Documentation
 
 Complete documentation is available at **[titom73.github.io/avd-cli](https://titom73.github.io/avd-cli/)**

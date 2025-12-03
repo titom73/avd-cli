@@ -18,6 +18,7 @@ avd-cli generate SUBCOMMAND [OPTIONS]
 | `configs` | Generate device configurations only |
 | `docs` | Generate documentation only |
 | `tests` | Generate ANTA test files only |
+| `topology containerlab` | Generate Containerlab topology from AVD inventory |
 
 ---
 
@@ -289,6 +290,269 @@ anta nrfu --catalog spine01_tests.yaml --inventory inventory.yaml --limit spine0
 # Execute all device tests in parallel
 find tests/ -name "*_tests.yaml" -exec anta nrfu --catalog {} --inventory inventory.yaml \;
 ```
+
+---
+
+## generate topology containerlab
+
+Generate a Containerlab topology file from your AVD inventory for network testing and simulation.
+
+### Usage
+
+```bash
+avd-cli generate topology containerlab -i INVENTORY_PATH -o OUTPUT_PATH [OPTIONS]
+```
+
+### Options
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--inventory-path` | `-i` | Path | *Required* | Path to AVD inventory directory |
+| `--output-path` | `-o` | Path | *Required* | Output directory for topology file |
+| `--limit` | `-l` | Text | All | Filter devices by hostname or group patterns (repeatable, supports wildcards) |
+| `--startup-dir` | | Path | `configs` | Directory containing startup configs (relative to output path or absolute) |
+| `--kind` | | Text | `ceos` | Containerlab node kind (e.g., `ceos`, `vr-arista_veos`) |
+| `--image` | | Text | None | Complete Docker image string (overrides registry/name/version) |
+| `--image-registry` | | Text | `arista` | Docker registry (used when --image not provided) |
+| `--image-name` | | Text | `ceos` | Image name (used when --image not provided) |
+| `--image-version` | | Text | `latest` | Image version/tag (used when --image not provided) |
+
+### What Gets Generated
+
+The command creates a Containerlab topology YAML file with:
+
+- **Nodes**: All devices from the AVD inventory (or filtered subset)
+  - Configurable node `kind` (default: `ceos`)
+  - Configurable Docker `image` (default: `arista/ceos:latest`)
+  - Includes management IP from `ansible_host` or `mgmt_ip`
+  - References startup-config files (relative paths for portability)
+
+- **Links**: Network connections from two sources:
+  - **Ethernet interfaces**: Extracted from `ethernet_interfaces` with `peer`/`peer_interface` defined
+  - **Uplink topology**: Extracted from AVD `l3leaf`/`l2leaf` structures using `uplink_interfaces`, `uplink_switches`, and `uplink_switch_interfaces` arrays
+  - Automatically deduplicated when the same link appears in both sources
+
+### Examples
+
+**Basic topology generation:**
+
+```bash
+avd-cli generate topology containerlab \
+  -i examples/eos-design-basics \
+  -o /tmp/containerlab-output
+```
+
+Output structure:
+```
+/tmp/containerlab-output/
+├── configs/                          # Startup config directory (default)
+│   ├── spine1.cfg
+│   ├── spine2.cfg
+│   ├── leaf1.cfg
+│   └── ...
+└── containerlab/
+    └── containerlab-topology.yml     # Main topology file
+```
+
+**Filter specific devices:**
+
+```bash
+# Only spine switches
+avd-cli generate topology containerlab -i ./inventory -o ./output -l "spine*"
+
+# Multiple patterns
+avd-cli generate topology containerlab -i ./inventory -o ./output \
+  -l "spine-0[1-2]" -l "leaf-[12]?"
+```
+
+**Custom startup config location:**
+
+```bash
+# Use absolute path
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --startup-dir /opt/arista/configs
+
+# Use relative path (relative to output-path)
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --startup-dir custom-configs
+```
+
+**Custom Docker image:**
+
+```bash
+# Use specific version
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --image-version 4.32.0F
+
+# Use GitHub Container Registry
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --image ghcr.io/aristanetworks/ceos:4.32.0F
+
+# Use private registry with custom image
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --image-registry harbor.example.com/network \
+  --image-name ceos-custom \
+  --image-version 1.2.3
+
+# Use alternative node kind (vrnetlab)
+avd-cli generate topology containerlab \
+  -i ./inventory \
+  -o ./output \
+  --kind vr-arista_veos \
+  --image vrnetlab/vr-arista_veos:4.32.0F
+```
+
+### Topology File Structure
+
+Generated `containerlab-topology.yml`:
+
+```yaml
+name: my-fabric
+topology:
+  nodes:
+    spine1:
+      kind: ceos
+      image: arista/ceos:latest
+      mgmt-ipv4: 192.168.0.11
+      startup-config: ../configs/spine1.cfg
+    leaf1:
+      kind: ceos
+      image: arista/ceos:latest
+      mgmt-ipv4: 192.168.0.21
+      startup-config: ../configs/leaf1.cfg
+
+  links:
+    # From ethernet_interfaces peer definitions
+    - endpoints:
+        - spine1:Ethernet1
+        - leaf1:Ethernet49
+
+    # From AVD uplink topology (l3leaf/l2leaf)
+    - endpoints:
+        - leaf1:Ethernet51
+        - spine1:Ethernet2
+```
+
+### Link Generation Details
+
+**Source 1: Ethernet Interfaces**
+
+Links are extracted from devices' `ethernet_interfaces` when both are defined:
+- `peer`: Remote device hostname
+- `peer_interface`: Remote interface name
+
+**Source 2: AVD Uplink Topology**
+
+For `l3leaf` and `l2leaf` devices, links are extracted from the AVD structure:
+
+```yaml
+# In group_vars/FABRIC.yml
+l3leaf:
+  defaults:
+    uplink_interfaces: [Ethernet1, Ethernet2]      # Local interfaces
+    uplink_switches: [spine1, spine2]              # Remote devices
+  node_groups:
+    - nodes:
+        - name: leaf1
+          uplink_switch_interfaces: [Ethernet1, Ethernet2]  # Remote interfaces
+```
+
+The command automatically:
+- Iterates through parallel arrays to create links
+- Validates array lengths match
+- Logs warnings for mismatched arrays
+- Deduplicates links between both sources
+
+### Containerlab Integration
+
+Once generated, deploy the topology with Containerlab:
+
+```bash
+# Deploy topology
+cd /tmp/containerlab-output/containerlab
+sudo containerlab deploy -t containerlab-topology.yml
+
+# Check status
+sudo containerlab inspect
+
+# Connect to a device
+sudo containerlab exec -t containerlab-topology.yml --label clab-node=spine1
+
+# Destroy topology
+sudo containerlab destroy -t containerlab-topology.yml
+```
+
+### Docker Image Configuration
+
+The Docker image is constructed based on option priority:
+
+**Priority 1: Complete image string**
+```bash
+--image ghcr.io/aristanetworks/ceos:4.32.0F
+# Result: image: ghcr.io/aristanetworks/ceos:4.32.0F
+```
+
+**Priority 2: Component options**
+```bash
+--image-registry harbor.example.com/network \
+--image-name ceos-custom \
+--image-version 1.2.3
+# Result: image: harbor.example.com/network/ceos-custom:1.2.3
+```
+
+**Default behavior** (no options):
+```bash
+# Result: image: arista/ceos:latest
+```
+
+**Common scenarios:**
+- Development/testing: `--image-version latest` (default)
+- Production validation: `--image-version 4.32.0F`
+- Private registry: `--image-registry my-registry.com/images`
+- Alternative platforms: `--kind vr-arista_veos --image vrnetlab/vr-arista_veos:4.32.0F`
+
+### Best Practices
+
+1. **Generate configs first**: Run `avd-cli generate configs` before topology generation to ensure startup configs exist
+
+2. **Use relative paths**: Default relative paths (`../configs/`) make topologies portable
+
+3. **Pin image versions**: Use specific versions (e.g., `4.32.0F`) for reproducible testing environments
+
+4. **Filter for testing**: Use `--limit` to create focused test topologies with subset of devices
+
+5. **Version control**: Commit topology files for reproducible test environments
+
+6. **CI/CD integration**: Generate topologies in pipelines for automated testing
+
+### Troubleshooting
+
+**No links generated:**
+
+- Ensure devices have either:
+  - `ethernet_interfaces` with `peer` and `peer_interface` defined, OR
+  - Proper `l3leaf`/`l2leaf` structure with uplink arrays in group_vars
+
+**Missing nodes:**
+
+- Check device filtering with `--limit`
+- Verify devices exist in AVD inventory
+
+**Wrong config paths:**
+
+- Default is `configs/` relative to output path
+- Use `--startup-dir` to customize location
+- Paths in topology file are always relative to the topology YAML file
 
 ---
 

@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Git pre-push hook to ensure 'make ci' passes before pushing
+# This helps catch issues before they reach the CI server
+
+echo "🔍 Running pre-push validation..."
+echo "⚠️  This may take a few moments. Please wait..."
+echo ""
+
+# Run make ci
+if make ci; then
+    echo ""
+    echo "✅ All checks passed! Proceeding with push..."
+    exit 0
+else
+    echo ""
+    echo "❌ Pre-push validation failed!"
+    echo ""
+    echo "Please fix the errors above before pushing."
+    echo "Run 'make ci' to see detailed error messages."
+    echo ""
+    echo "To skip this check (NOT RECOMMENDED), use:"
+    echo "  git push --no-verify"
+    echo ""
+    exit 1
+fi

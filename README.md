@@ -85,6 +85,44 @@ Deployment Plan (dry-run)
 └────────────────┴─────────┴──────────┴────────────┴───────┘
 ```
 
+## Containerlab topology generation
+
+Use `avd-cli generate topology containerlab` to emit a Containerlab topology from an
+AVD inventory for network testing and simulation. The command automatically:
+
+- **Auto-names topology** from inventory directory basename (e.g., `eos-design-basics`)
+- **Generates management network** section with auto-computed IPv4 subnet encompassing all device IPs
+- **Creates nodes** as `kind: ceos` with `mgmt-ipv4` from `ansible_host`
+- **Computes dynamic hierarchy** via uplink analysis for proper graph visualization
+- **Builds network links** from two sources:
+  - **Ethernet interfaces**: Links where both `peer` and `peer_interface` are defined in `ethernet_interfaces`
+  - **AVD uplink topology**: Links from `l3leaf`/`l2leaf` structures using `uplink_interfaces`, `uplink_switches`, and `uplink_switch_interfaces`
+
+Links are automatically deduplicated. Startup configuration paths are computed as
+**relative paths** from the topology file (e.g., `../configs/hostname.cfg`), ensuring
+portability. By default, configs are expected in `<output-path>/configs/`, customizable
+with `--startup-dir`.
+
+The generated topology file uses `.clab.yml` extension (e.g., `<topology-name>.clab.yml`)
+following Containerlab naming conventions, enabling CLI auto-discovery features. The format
+complies with the official [Containerlab topology definition](https://containerlab.dev/manual/topo-def-file/).
+
+**Example:**
+```bash
+# Generate configs and topology (auto-named from inventory path)
+avd-cli generate configs -i ./eos-design-basics -o ./output
+avd-cli generate topology containerlab -i ./eos-design-basics -o ./output
+# Creates: ./output/containerlab/eos-design-basics.clab.yml
+
+# Deploy with Containerlab
+cd ./output/containerlab
+sudo containerlab deploy -t eos-design-basics.clab.yml
+
+# Or use auto-discovery (Containerlab finds .clab.yml files)
+cd ./output/containerlab
+sudo containerlab deploy
+```
+
 ## Documentation
 
 Complete documentation is available at **[titom73.github.io/avd-cli](https://titom73.github.io/avd-cli/)**
@@ -101,6 +139,18 @@ Complete documentation is available at **[titom73.github.io/avd-cli](https://tit
 - [UV](https://github.com/astral-sh/uv) - Fast Python package management
 
 **Community:** Special thanks to the [Arista AVD community](https://avd.arista.com) and all contributors making network automation accessible and reliable.
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+**⚠️ Important**: Before pushing any code, always run:
+
+```bash
+make ci
+```
+
+This ensures all linting, type checking, and tests pass locally before CI runs on GitHub.
 
 ## License
 

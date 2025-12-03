@@ -14,6 +14,7 @@ A command-line interface for processing Arista AVD inventories and generating co
 
 - **Generate configurations** from AVD inventory files
 - **Create documentation** automatically
+- **Generate Containerlab topologies** for network testing
 - **Deploy configurations** to EOS devices via eAPI
 - **Validate inventory** structure and data
 - **Output ANTA tests** for network validation

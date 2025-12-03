@@ -682,6 +682,201 @@ def generate_tests(
         sys.exit(1)
 
 
+@generate.group()
+@click.pass_context
+def topology(ctx: click.Context) -> None:
+    """Generate topology artifacts from AVD inventory."""
+    pass
+
+
+@topology.command("containerlab")
+@click.option(
+    "--inventory-path",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    required=True,
+    envvar="AVD_CLI_INVENTORY_PATH",
+    show_envvar=True,
+    help="Path to AVD inventory directory",
+)
+@click.option(
+    "--output-path",
+    "-o",
+    type=click.Path(path_type=Path),
+    envvar="AVD_CLI_OUTPUT_PATH",
+    show_envvar=True,
+    help="Path for output files (default: <inventory>/intended)",
+)
+@click.option(
+    "--limit",
+    "-l",
+    "limit_patterns",
+    multiple=True,
+    envvar="AVD_CLI_LIMIT",
+    show_envvar=True,
+    help="Limit to specific devices (glob patterns, can be specified multiple times)",
+)
+@click.option(
+    "--show-deprecation-warnings",
+    is_flag=True,
+    envvar="AVD_CLI_SHOW_DEPRECATION_WARNINGS",
+    show_envvar=True,
+    help="Show pyavd deprecation warnings",
+)
+@click.option(
+    "--startup-dir",
+    type=click.Path(path_type=Path, exists=False),
+    default="configs",
+    show_default=True,
+    help="Path to startup configuration files (relative to output path or absolute)",
+)
+@click.option(
+    "--kind",
+    default="ceos",
+    show_default=True,
+    help="Containerlab node kind",
+)
+@click.option(
+    "--image",
+    default=None,
+    help="Complete Docker image string (e.g., 'ghcr.io/aristanetworks/ceos:4.32.0F'). "
+    "Overrides registry/name/version options.",
+)
+@click.option(
+    "--image-registry",
+    default="arista",
+    show_default=True,
+    help="Docker image registry (used when --image not provided)",
+)
+@click.option(
+    "--image-name",
+    default="ceos",
+    show_default=True,
+    help="Docker image name (used when --image not provided)",
+)
+@click.option(
+    "--image-version",
+    default="latest",
+    show_default=True,
+    help="Docker image version/tag (used when --image not provided)",
+)
+@click.option(
+    "--topology-name",
+    default="containerlab-topology",
+    show_default=True,
+    help="Name of the Containerlab topology",
+)
+@click.pass_context
+def generate_topology_containerlab(  # noqa: C901
+    ctx: click.Context,
+    inventory_path: Path,
+    output_path: Optional[Path],
+    limit_patterns: tuple[str, ...],
+    show_deprecation_warnings: bool,
+    startup_dir: Path,
+    kind: str,
+    image: Optional[str],
+    image_registry: str,
+    image_name: str,
+    image_version: str,
+    topology_name: str,
+) -> None:
+    """Generate a Containerlab topology YAML from the AVD inventory.
+
+    This command generates a Containerlab topology definition file from your AVD
+    inventory. The topology includes nodes with management IPs, startup configurations,
+    and links derived from the ethernet_interfaces configuration.
+
+    All options can be provided via environment variables with AVD_CLI_ prefix.
+    Command-line arguments take precedence over environment variables.
+
+    Examples
+    --------
+    Generate Containerlab topology:
+
+        $ avd-cli generate topology containerlab -i ./inventory
+
+    With custom output path and node kind:
+
+        $ avd-cli generate topology containerlab -i ./inventory -o ./output --kind ceos
+
+    Filter specific devices:
+
+        $ avd-cli generate topology containerlab -i ./inventory -l spine*
+    """
+    verbose = ctx.obj.get("verbose", False)
+    output_path = resolve_output_path(inventory_path, output_path)
+
+    if verbose:
+        console.print("[blue]ℹ[/blue] Generating Containerlab topology")
+        if limit_patterns:
+            console.print(f"[blue]ℹ[/blue] Filter patterns: {', '.join(limit_patterns)}")
+
+    suppress_pyavd_warnings(show_deprecation_warnings)
+
+    try:
+        from avd_cli.logics.loader import InventoryLoader
+        from avd_cli.logics.topology import ContainerlabTopologyGenerator
+        from avd_cli.utils.device_filter import DeviceFilter
+
+        console.print("[cyan]→[/cyan] Loading inventory...")
+        loader = InventoryLoader()
+        inventory = loader.load(inventory_path)
+        console.print(f"[green]✓[/green] Loaded {len(inventory.get_all_devices())} devices")
+
+        device_filter = DeviceFilter.from_patterns(list(limit_patterns)) if limit_patterns else None
+        if device_filter:
+            matching_devices = [
+                d for d in inventory.get_all_devices()
+                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
+            ]
+            if not matching_devices:
+                console.print(f"[red]✗[/red] No devices match patterns: {', '.join(limit_patterns)}")
+                sys.exit(1)
+            console.print(f"[blue]ℹ[/blue] Generating topology for {len(matching_devices)} filtered devices")
+
+        errors = inventory.validate()
+        if errors:
+            console.print("[red]✗[/red] Inventory validation failed:")
+            for error in errors:
+                console.print(f"  [red]•[/red] {error}")
+            sys.exit(1)
+
+        console.print("[cyan]→[/cyan] Generating Containerlab topology...")
+
+        # Derive topology name from inventory path if using default
+        generator = ContainerlabTopologyGenerator()
+        if topology_name == "containerlab-topology":
+            topology_name = generator._derive_topology_name(inventory_path)
+            if verbose:
+                console.print(f"[blue]ℹ[/blue] Derived topology name: {topology_name}")
+
+        # Construct image string based on priority: --image takes precedence
+        node_image = image if image else f"{image_registry}/{image_name}:{image_version}"
+
+        if verbose:
+            console.print(f"[blue]ℹ[/blue] Node kind: {kind}")
+            console.print(f"[blue]ℹ[/blue] Node image: {node_image}")
+
+        result = generator.generate(
+            inventory,
+            output_path,
+            device_filter=device_filter,
+            startup_dir=startup_dir,
+            node_kind=kind,
+            node_image=node_image,
+            topology_name=topology_name,
+        )
+
+        console.print(f"\n[green]✓[/green] Topology written to {result.topology_path}")
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        if verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
 @cli.command()
 @click.option(
     "--inventory-path",

@@ -45,13 +45,25 @@ We welcome suggestions for new features or improvements. Please create an issue 
    ```
 
 6. **Commit your changes** following our commit message convention
-7. **Push to your fork**:
+7. **⚠️ CRITICAL: Run CI checks before pushing**:
+
+   ```bash
+   make ci
+   ```
+
+   **This step is mandatory.** The `make ci` command runs all quality checks:
+   - Code formatting (flake8, pylint, mypy)
+   - Type checking
+   - All tests with coverage validation
+   - All checks must pass with 0 errors before pushing
+
+8. **Push to your fork**:
 
    ```bash
    git push origin feature/your-feature-name
    ```
 
-8. **Open a Pull Request** against the `main` branch
+9. **Open a Pull Request** against the `main` branch
 
 ## Development Setup
 
@@ -100,6 +112,22 @@ Run all checks:
 ```bash
 make check
 ```
+
+#### Pre-Push Validation
+
+**⚠️ MANDATORY**: Before every `git push`, you MUST run:
+
+```bash
+make ci
+```
+
+This command executes the complete CI pipeline locally:
+- Linting (flake8, pylint)
+- Type checking (mypy)
+- All test suites
+- Coverage validation (must be ≥80%)
+
+**Do NOT push code if `make ci` fails.** Fix all issues first.
 
 ### Testing
 
@@ -165,6 +193,37 @@ directory was empty. Now raises clear InvalidInventoryError.
 
 Fixes #456
 ```
+
+## Regenerating Example Topologies
+
+After making changes to the topology generation logic (e.g., in `avd_cli/logics/topology.py`), you should regenerate the example topologies to ensure they reflect the latest code:
+
+```bash
+# Regenerate eos-design-basics topology
+make run ARGS="generate topology containerlab -i examples/eos-design-basics -o examples/eos-design-basics/intended"
+
+# Regenerate eos-design-mpls topology
+make run ARGS="generate topology containerlab -i examples/eos-design-mpls -o examples/eos-design-mpls/intended"
+
+# Regenerate eos-design-complex topology
+make run ARGS="generate topology containerlab -i examples/eos-design-complex -o examples/eos-design-complex/intended"
+```
+
+After regeneration, verify the changes:
+
+```bash
+# Check that topology files exist with correct extension
+ls -la examples/*/intended/containerlab/*.clab.yml
+
+# Run topology validation tests
+make test-unit -k test_topology
+
+# If GitHub Actions workflow exists, validate locally
+# (requires Containerlab CLI installed)
+containerlab inspect --topo examples/eos-design-basics/intended/containerlab/eos-design-basics.clab.yml --offline
+```
+
+**Note**: Always regenerate example topologies before submitting a PR that modifies topology generation logic to ensure examples stay up-to-date.
 
 ## Project Structure
 

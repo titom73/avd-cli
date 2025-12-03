@@ -767,7 +767,7 @@ def topology(ctx: click.Context) -> None:
     help="Name of the Containerlab topology",
 )
 @click.pass_context
-def generate_topology_containerlab(
+def generate_topology_containerlab(  # noqa: C901
     ctx: click.Context,
     inventory_path: Path,
     output_path: Optional[Path],

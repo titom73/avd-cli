@@ -157,9 +157,11 @@ class ContainerlabTopologyGenerator:
 
         return [], [], []
 
-    def _build_links(self, inventory: InventoryData, devices: Iterable[DeviceDefinition]) -> List[Dict[str, Any]]:
+    def _build_links(  # noqa: C901
+        self, inventory: InventoryData, devices: Iterable[DeviceDefinition]
+    ) -> List[Dict[str, Any]]:
         links: List[Dict[str, Any]] = []
-        seen: Set[tuple[str, str]] = set()
+        seen: Set[tuple[str, ...]] = set()
         valid_hosts = {device.hostname for device in devices}
 
         for device in devices:
@@ -178,10 +180,10 @@ class ContainerlabTopologyGenerator:
 
                 endpoint_a = f"{device.hostname}:{name}"
                 endpoint_b = f"{peer}:{peer_interface}"
-                key = tuple(sorted((endpoint_a, endpoint_b)))
-                if key in seen:
+                link_key = tuple(sorted((endpoint_a, endpoint_b)))
+                if link_key in seen:
                     continue
-                seen.add(key)
+                seen.add(link_key)
 
                 link: Dict[str, Any] = {"endpoints": [endpoint_a, endpoint_b]}
                 description = interface.get("description")
@@ -193,7 +195,9 @@ class ContainerlabTopologyGenerator:
             uplink_interfaces, uplink_switches, uplink_switch_interfaces = self._extract_uplink_data(inventory, device)
 
             if uplink_interfaces and uplink_switches and uplink_switch_interfaces:
-                if not (len(uplink_interfaces) == len(uplink_switches) == len(uplink_switch_interfaces)):
+                if len(uplink_interfaces) != len(uplink_switches) or len(uplink_interfaces) != len(
+                    uplink_switch_interfaces
+                ):
                     self.logger.warning(
                         "Device %s has mismatched uplink array lengths: "
                         "interfaces=%d, switches=%d, switch_interfaces=%d",
@@ -212,13 +216,13 @@ class ContainerlabTopologyGenerator:
 
                     endpoint_a = f"{device.hostname}:{local_intf}"
                     endpoint_b = f"{uplink_switch}:{uplink_intf}"
-                    key = tuple(sorted((endpoint_a, endpoint_b)))
-                    if key in seen:
+                    uplink_key = tuple(sorted((endpoint_a, endpoint_b)))
+                    if uplink_key in seen:
                         continue
-                    seen.add(key)
+                    seen.add(uplink_key)
 
-                    link: Dict[str, Any] = {"endpoints": [endpoint_a, endpoint_b]}
-                    links.append(link)
+                    uplink_link: Dict[str, Any] = {"endpoints": [endpoint_a, endpoint_b]}
+                    links.append(uplink_link)
 
         return links
 
@@ -246,12 +250,13 @@ class ContainerlabTopologyGenerator:
             return relative.as_posix()
         except ValueError:
             import os
+
             from_resolved = from_path.resolve()
             to_resolved = to_path.resolve()
             rel_path = os.path.relpath(to_resolved, from_resolved.parent)
             return Path(rel_path).as_posix()
 
-    def _compute_topology_hierarchy(
+    def _compute_topology_hierarchy(  # noqa: C901
         self, inventory: InventoryData, devices: List[DeviceDefinition]
     ) -> Dict[str, int]:
         """Compute network hierarchy by analyzing uplink relationships.
@@ -284,7 +289,10 @@ class ContainerlabTopologyGenerator:
         root_nodes = [hostname for hostname, parents in children_to_parents.items() if not parents]
 
         if not root_nodes:
-            self.logger.warning("No root nodes found in topology (all devices have uplinks). Using device types as fallback.")
+            self.logger.warning(
+                "No root nodes found in topology (all devices have uplinks). "
+                "Using device types as fallback."
+            )
             return {}
 
         visited: Set[str] = set()
@@ -368,7 +376,7 @@ class ContainerlabTopologyGenerator:
         basename = path.name if path.name else path.stem
         return basename.lower() if basename else "topology"
 
-    def _compute_mgmt_subnet(self, inventory: InventoryData, devices: Iterable[DeviceDefinition]) -> str:
+    def _compute_mgmt_subnet(self, inventory: InventoryData, devices: Iterable[DeviceDefinition]) -> str:  # noqa: C901
         """Compute smallest IPv4 subnet containing all ansible_host IPs as valid hosts.
 
         Collects all ansible_host IP addresses from devices, computes the smallest
@@ -416,7 +424,6 @@ class ContainerlabTopologyGenerator:
 
         # Compute smallest network containing all IPs as valid hosts
         min_ip = min(ip_addresses)
-        max_ip = max(ip_addresses)
 
         # Find smallest network where all IPs are valid host addresses
         # Start with a conservative estimate and expand if needed

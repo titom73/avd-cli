@@ -197,9 +197,7 @@ def test_containerlab_topology_uplink_deduplication(tmp_path: Path) -> None:
         hostname="leaf1", platform="ceos", mgmt_ip="192.0.2.20", device_type="l3leaf", fabric="lab"
     )
 
-    fabric = FabricDefinition(
-        name="lab", design_type="l3ls-evpn", devices_by_type={"spine": [spine1], "leaf": [leaf1]}
-    )
+    fabric = FabricDefinition(name="lab", design_type="l3ls-evpn", devices_by_type={"spine": [spine1], "leaf": [leaf1]})
 
     inventory = InventoryData(
         root_path=inventory_root,
@@ -223,15 +221,11 @@ def test_containerlab_topology_uplink_deduplication(tmp_path: Path) -> None:
         host_vars={
             "spine1": {
                 "ansible_host": "192.168.0.1",
-                "ethernet_interfaces": [
-                    {"name": "Ethernet10", "peer": "leaf1", "peer_interface": "Ethernet1"}
-                ],
+                "ethernet_interfaces": [{"name": "Ethernet10", "peer": "leaf1", "peer_interface": "Ethernet1"}],
             },
             "leaf1": {
                 "ansible_host": "192.168.0.10",
-                "ethernet_interfaces": [
-                    {"name": "Ethernet1", "peer": "spine1", "peer_interface": "Ethernet10"}
-                ],
+                "ethernet_interfaces": [{"name": "Ethernet1", "peer": "spine1", "peer_interface": "Ethernet10"}],
             },
         },
     )
@@ -420,11 +414,7 @@ def test_compute_mgmt_subnet_basic(tmp_path: Path) -> None:
     # Create inventory with IP range 192.168.0.10-15 (6 IPs)
     devices = [
         DeviceDefinition(
-            hostname=f"leaf{i}",
-            platform="ceos",
-            mgmt_ip=f"192.168.0.{10+i-1}",
-            device_type="leaf",
-            fabric="lab"
+            hostname=f"leaf{i}", platform="ceos", mgmt_ip=f"192.168.0.{10+i-1}", device_type="leaf", fabric="lab"
         )
         for i in range(1, 7)
     ]
@@ -439,10 +429,7 @@ def test_compute_mgmt_subnet_basic(tmp_path: Path) -> None:
         root_path=inventory_root,
         fabrics=[fabric],
         group_vars={},
-        host_vars={
-            f"leaf{i}": {"ansible_host": f"192.168.0.{10+i-1}"}
-            for i in range(1, 7)
-        },
+        host_vars={f"leaf{i}": {"ansible_host": f"192.168.0.{10+i-1}"} for i in range(1, 7)},
     )
 
     generator = ContainerlabTopologyGenerator()
@@ -463,11 +450,7 @@ def test_compute_mgmt_subnet_wide_range(tmp_path: Path) -> None:
 
     devices = [
         DeviceDefinition(
-            hostname=f"device{i}",
-            platform="ceos",
-            mgmt_ip=f"10.0.0.{i}",
-            device_type="leaf",
-            fabric="lab"
+            hostname=f"device{i}", platform="ceos", mgmt_ip=f"10.0.0.{i}", device_type="leaf", fabric="lab"
         )
         for i in range(1, 101)
     ]
@@ -482,10 +465,7 @@ def test_compute_mgmt_subnet_wide_range(tmp_path: Path) -> None:
         root_path=inventory_root,
         fabrics=[fabric],
         group_vars={},
-        host_vars={
-            f"device{i}": {"ansible_host": f"10.0.0.{i}"}
-            for i in range(1, 101)
-        },
+        host_vars={f"device{i}": {"ansible_host": f"10.0.0.{i}"} for i in range(1, 101)},
     )
 
     generator = ContainerlabTopologyGenerator()
@@ -539,7 +519,9 @@ def test_mgmt_section_in_topology(tmp_path: Path) -> None:
     inventory_root = tmp_path / "inventory"
     inventory_root.mkdir()
 
-    spine = DeviceDefinition(hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab")
+    spine = DeviceDefinition(
+        hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab"
+    )
     leaf = DeviceDefinition(hostname="leaf1", platform="ceos", mgmt_ip="192.168.0.20", device_type="leaf", fabric="lab")
 
     fabric = FabricDefinition(
@@ -590,7 +572,9 @@ def test_topology_name_auto_derivation(tmp_path: Path) -> None:
     inventory_root = tmp_path / "eos-design-basics"
     inventory_root.mkdir()
 
-    spine = DeviceDefinition(hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab")
+    spine = DeviceDefinition(
+        hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab"
+    )
 
     fabric = FabricDefinition(
         name="lab",
@@ -633,7 +617,9 @@ def test_topology_file_extension(tmp_path: Path) -> None:
     inventory_root = tmp_path / "inventory"
     inventory_root.mkdir()
 
-    spine = DeviceDefinition(hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab")
+    spine = DeviceDefinition(
+        hostname="spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab"
+    )
 
     fabric = FabricDefinition(
         name="lab",
@@ -683,12 +669,24 @@ def test_compute_mgmt_subnet_eos_design_basics_range(tmp_path: Path) -> None:
 
     # Create 6 devices with IPs .10 through .15 (eos-design-basics scenario)
     devices = [
-        DeviceDefinition(hostname="s1-spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab"),
-        DeviceDefinition(hostname="s1-spine2", platform="ceos", mgmt_ip="192.168.0.11", device_type="spine", fabric="lab"),
-        DeviceDefinition(hostname="s1-leaf1", platform="ceos", mgmt_ip="192.168.0.12", device_type="leaf", fabric="lab"),
-        DeviceDefinition(hostname="s1-leaf2", platform="ceos", mgmt_ip="192.168.0.13", device_type="leaf", fabric="lab"),
-        DeviceDefinition(hostname="s1-leaf3", platform="ceos", mgmt_ip="192.168.0.14", device_type="leaf", fabric="lab"),
-        DeviceDefinition(hostname="s1-leaf4", platform="ceos", mgmt_ip="192.168.0.15", device_type="leaf", fabric="lab"),
+        DeviceDefinition(
+            hostname="s1-spine1", platform="ceos", mgmt_ip="192.168.0.10", device_type="spine", fabric="lab"
+        ),
+        DeviceDefinition(
+            hostname="s1-spine2", platform="ceos", mgmt_ip="192.168.0.11", device_type="spine", fabric="lab"
+        ),
+        DeviceDefinition(
+            hostname="s1-leaf1", platform="ceos", mgmt_ip="192.168.0.12", device_type="leaf", fabric="lab"
+        ),
+        DeviceDefinition(
+            hostname="s1-leaf2", platform="ceos", mgmt_ip="192.168.0.13", device_type="leaf", fabric="lab"
+        ),
+        DeviceDefinition(
+            hostname="s1-leaf3", platform="ceos", mgmt_ip="192.168.0.14", device_type="leaf", fabric="lab"
+        ),
+        DeviceDefinition(
+            hostname="s1-leaf4", platform="ceos", mgmt_ip="192.168.0.15", device_type="leaf", fabric="lab"
+        ),
     ]
 
     fabric = FabricDefinition(
@@ -731,5 +729,4 @@ def test_compute_mgmt_subnet_eos_design_basics_range(tmp_path: Path) -> None:
     # which has network=.8, broadcast=.15, hosts=.9-.14
     # So .10 would be a valid host, but .15 would be broadcast (invalid)
     # Correct implementation should return at least /28 or /27
-    assert network.prefixlen <= 28, f"Prefix {network.prefixlen} should be /28 or larger to accommodate 6 hosts"
-
+    assert network.prefixlen <= 28, f"Prefix {network.prefixlen} should be /28 or larger " "to accommodate 6 hosts"

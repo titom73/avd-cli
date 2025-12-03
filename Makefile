@@ -9,6 +9,13 @@ install: ## Install the package
 
 dev-install: ## Install the package with dev dependencies
 	uv sync --extra dev
+	@echo ""
+	@echo "📋 Development setup complete!"
+	@echo ""
+	@echo "⚠️  IMPORTANT: Install git hooks to enforce quality checks:"
+	@echo "    make pre-commit-install  # Install pre-commit hooks"
+	@echo "    make git-hooks-install   # Install pre-push hook (enforces 'make ci')"
+	@echo ""
 
 clean: ## Clean build artifacts and cache files
 	rm -rf build/ dist/ *.egg-info
@@ -62,6 +69,15 @@ pre-commit: ## Run pre-commit hooks on all files
 
 pre-commit-install: ## Install pre-commit hooks
 	uv run pre-commit install
+
+git-hooks-install: ## Install git pre-push hook to enforce 'make ci' before push
+	@echo "Installing git pre-push hook..."
+	@mkdir -p .git/hooks
+	@cp .githooks/pre-push .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-push
+	@echo "✓ Pre-push hook installed successfully"
+	@echo "  This hook will run 'make ci' before every push"
+	@echo "  To bypass (not recommended): git push --no-verify"
 
 run: ## Run the CLI (example: make run ARGS="--help")
 	uv run avd-cli $(ARGS)

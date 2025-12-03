@@ -140,6 +140,18 @@ Complete documentation is available at **[titom73.github.io/avd-cli](https://tit
 
 **Community:** Special thanks to the [Arista AVD community](https://avd.arista.com) and all contributors making network automation accessible and reliable.
 
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+**⚠️ Important**: Before pushing any code, always run:
+
+```bash
+make ci
+```
+
+This ensures all linting, type checking, and tests pass locally before CI runs on GitHub.
+
 ## License
 
 This project is licensed under the **Apache License 2.0**.

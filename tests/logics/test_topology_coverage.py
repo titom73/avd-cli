@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import Mock
 
-import pytest
-
 from avd_cli.logics.topology import ContainerlabTopologyGenerator
 from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
 

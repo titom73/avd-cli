@@ -45,13 +45,25 @@ We welcome suggestions for new features or improvements. Please create an issue 
    ```
 
 6. **Commit your changes** following our commit message convention
-7. **Push to your fork**:
+7. **⚠️ CRITICAL: Run CI checks before pushing**:
+
+   ```bash
+   make ci
+   ```
+
+   **This step is mandatory.** The `make ci` command runs all quality checks:
+   - Code formatting (flake8, pylint, mypy)
+   - Type checking
+   - All tests with coverage validation
+   - All checks must pass with 0 errors before pushing
+
+8. **Push to your fork**:
 
    ```bash
    git push origin feature/your-feature-name
    ```
 
-8. **Open a Pull Request** against the `main` branch
+9. **Open a Pull Request** against the `main` branch
 
 ## Development Setup
 
@@ -100,6 +112,22 @@ Run all checks:
 ```bash
 make check
 ```
+
+#### Pre-Push Validation
+
+**⚠️ MANDATORY**: Before every `git push`, you MUST run:
+
+```bash
+make ci
+```
+
+This command executes the complete CI pipeline locally:
+- Linting (flake8, pylint)
+- Type checking (mypy)
+- All test suites
+- Coverage validation (must be ≥80%)
+
+**Do NOT push code if `make ci` fails.** Fix all issues first.
 
 ### Testing
 

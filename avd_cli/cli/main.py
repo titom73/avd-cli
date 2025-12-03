@@ -726,15 +726,39 @@ def topology(ctx: click.Context) -> None:
 @click.option(
     "--startup-dir",
     type=click.Path(path_type=Path, exists=False),
-    default="intended/configs",
+    default="configs",
     show_default=True,
-    help="Path to startup configuration files (relative to inventory path or absolute)",
+    help="Path to startup configuration files (relative to output path or absolute)",
 )
 @click.option(
     "--kind",
     default="ceos",
     show_default=True,
     help="Containerlab node kind",
+)
+@click.option(
+    "--image",
+    default=None,
+    help="Complete Docker image string (e.g., 'ghcr.io/aristanetworks/ceos:4.32.0F'). "
+    "Overrides registry/name/version options.",
+)
+@click.option(
+    "--image-registry",
+    default="arista",
+    show_default=True,
+    help="Docker image registry (used when --image not provided)",
+)
+@click.option(
+    "--image-name",
+    default="ceos",
+    show_default=True,
+    help="Docker image name (used when --image not provided)",
+)
+@click.option(
+    "--image-version",
+    default="latest",
+    show_default=True,
+    help="Docker image version/tag (used when --image not provided)",
 )
 @click.option(
     "--topology-name",
@@ -751,6 +775,10 @@ def generate_topology_containerlab(
     show_deprecation_warnings: bool,
     startup_dir: Path,
     kind: str,
+    image: Optional[str],
+    image_registry: str,
+    image_name: str,
+    image_version: str,
     topology_name: str,
 ) -> None:
     """Generate a Containerlab topology YAML from the AVD inventory.
@@ -815,6 +843,14 @@ def generate_topology_containerlab(
             sys.exit(1)
 
         console.print("[cyan]→[/cyan] Generating Containerlab topology...")
+        
+        # Construct image string based on priority: --image takes precedence
+        node_image = image if image else f"{image_registry}/{image_name}:{image_version}"
+        
+        if verbose:
+            console.print(f"[blue]ℹ[/blue] Node kind: {kind}")
+            console.print(f"[blue]ℹ[/blue] Node image: {node_image}")
+        
         generator = ContainerlabTopologyGenerator()
         result = generator.generate(
             inventory,
@@ -822,6 +858,7 @@ def generate_topology_containerlab(
             device_filter=device_filter,
             startup_dir=startup_dir,
             node_kind=kind,
+            node_image=node_image,
             topology_name=topology_name,
         )
 

@@ -88,14 +88,31 @@ Deployment Plan (dry-run)
 ## Containerlab topology generation
 
 Use `avd-cli generate topology containerlab` to emit a Containerlab topology from an
-AVD inventory. The command reuses the resolved `group_vars` and `host_vars`
-produced by the `InventoryLoader`, writes every node as `kind: ceos` with
-`mgmt-ipv4` sourced from `ansible_host`, and generates `links` when both `peer`
-and `peer_interface` values are available on an `ethernet_interfaces` entry. The
-startup configuration is pulled from `<startup-dir>/{hostname}.cfg`, which defaults
-to `<inventory>/intended/configs` but can be overridden with `--startup-dir`.
-The generated YAML is written to `<output-path>/containerlab/{topology-name}.yml`
-so it can be committed directly to your Containerlab topology repository.
+AVD inventory for network testing and simulation. The command writes every node as
+`kind: ceos` with `mgmt-ipv4` sourced from `ansible_host`, and automatically generates
+network `links` from two sources:
+
+- **Ethernet interfaces**: Links where both `peer` and `peer_interface` are defined in `ethernet_interfaces`
+- **AVD uplink topology**: Links extracted from `l3leaf`/`l2leaf` structures using `uplink_interfaces`, `uplink_switches`, and `uplink_switch_interfaces` arrays
+
+Links from both sources are automatically deduplicated. Startup configuration paths
+are computed as **relative paths** from the topology file (e.g., `../configs/hostname.cfg`),
+ensuring portability. By default, configs are expected in `<output-path>/configs/`,
+but this can be customized with `--startup-dir`.
+
+The generated YAML is written to `<output-path>/containerlab/containerlab-topology.yml`
+and follows the official [Containerlab topology definition format](https://containerlab.dev/manual/topo-def-file/).
+
+**Example:**
+```bash
+# Generate configs and topology
+avd-cli generate configs -i ./inventory -o ./output
+avd-cli generate topology containerlab -i ./inventory -o ./output
+
+# Deploy with Containerlab
+cd ./output/containerlab
+sudo containerlab deploy -t containerlab-topology.yml
+```
 
 ## Documentation
 

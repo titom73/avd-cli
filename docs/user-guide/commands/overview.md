@@ -27,6 +27,8 @@ graph LR
     B --> G[configs]
     B --> H[docs]
     B --> I[tests]
+    B --> K[topology]
+    K --> L[containerlab]
     C --> J[eos]
 ```
 

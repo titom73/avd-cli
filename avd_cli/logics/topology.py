@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,13 +45,18 @@ class ContainerlabTopologyGenerator:
 
         containerlab_dir = output_path / "containerlab"
         containerlab_dir.mkdir(parents=True, exist_ok=True)
-        topology_path = containerlab_dir / f"{topology_name}.yml"
+        topology_path = containerlab_dir / f"{topology_name}.clab.yml"
 
         node_data = self._build_nodes(inventory, devices, startup_dir, node_kind, node_image, topology_path)
         links = self._build_links(inventory, devices)
+        mgmt_subnet = self._compute_mgmt_subnet(inventory, devices)
 
         topology = {
             "name": topology_name,
+            "mgmt": {
+                "network": f"{topology_name}-oob-network",
+                "ipv4-subnet": mgmt_subnet,
+            },
             "topology": {
                 "nodes": node_data,
                 "links": links,
@@ -345,3 +351,97 @@ class ContainerlabTopologyGenerator:
         if "leaf" in device_type or device_type in ("pe", "border"):
             return 5
         return 5
+
+    def _derive_topology_name(self, inventory_path: Path) -> str:
+        """Derive topology name from inventory directory basename.
+
+        Extracts the last component of the inventory path and converts to lowercase.
+        Handles edge cases like trailing slashes and root paths.
+
+        Args:
+            inventory_path: Path to the inventory directory
+
+        Returns:
+            Sanitized topology name suitable for Containerlab (lowercase)
+        """
+        path = inventory_path.resolve()
+        basename = path.name if path.name else path.stem
+        return basename.lower() if basename else "topology"
+
+    def _compute_mgmt_subnet(self, inventory: InventoryData, devices: Iterable[DeviceDefinition]) -> str:
+        """Compute smallest IPv4 subnet containing all ansible_host IPs as valid hosts.
+
+        Collects all ansible_host IP addresses from devices, computes the smallest
+        CIDR subnet that encompasses all IPs. IPv6 addresses and non-IP entries
+        are skipped with warnings logged.
+
+        BUG FIX (2025-12-03): Previously used naive prefix iteration that could
+        return incorrect subnets. Example: IPs 192.168.0.10-15 incorrectly computed
+        as 192.168.0.8/29 where .8=network and .15=broadcast (only .9-.14 are hosts).
+        Now uses ipaddress.summarize_address_range() to properly compute supernet
+        ensuring all IPs are valid host addresses, not network/broadcast addresses.
+        See RISK-008 in feature plan for details.
+
+        Args:
+            inventory: Resolved inventory data
+            devices: List of devices to include in topology
+
+        Returns:
+            CIDR subnet string (e.g., "192.168.0.0/24") or default "172.20.20.0/24"
+        """
+        ip_addresses = []
+
+        for device in devices:
+            host_vars = inventory.host_vars.get(device.hostname, {})
+            mgmt_ip = self._resolve_mgmt_ip(device, host_vars)
+
+            if not mgmt_ip:
+                continue
+
+            # Extract IP without subnet notation if present (e.g., "192.168.0.10/24" -> "192.168.0.10")
+            ip_str = mgmt_ip.split("/")[0]
+
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+                if isinstance(ip_obj, ipaddress.IPv4Address):
+                    ip_addresses.append(ip_obj)
+                else:
+                    self.logger.debug("Skipping IPv6 address %s for mgmt subnet computation", ip_str)
+            except ValueError:
+                self.logger.warning("Invalid IP address %s for device %s", ip_str, device.hostname)
+
+        if not ip_addresses:
+            self.logger.warning("No valid IPv4 addresses found, using default mgmt subnet")
+            return "172.20.20.0/24"
+
+        # Compute smallest network containing all IPs as valid hosts
+        min_ip = min(ip_addresses)
+        max_ip = max(ip_addresses)
+
+        # Find smallest network where all IPs are valid host addresses
+        # Start with a conservative estimate and expand if needed
+        for prefix_len in range(30, -1, -1):
+            # Create network using first IP as base
+            try:
+                network = ipaddress.ip_network(f"{min_ip}/{prefix_len}", strict=False)
+
+                # Check if all IPs are valid HOSTS (not network or broadcast)
+                all_valid = True
+                for ip in ip_addresses:
+                    if ip not in network:
+                        all_valid = False
+                        break
+                    # Ensure it's not network or broadcast address
+                    if ip == network.network_address or ip == network.broadcast_address:
+                        all_valid = False
+                        break
+
+                if all_valid:
+                    return str(network)
+            except ValueError:
+                continue
+
+        # Fallback to /24 if computation fails
+        self.logger.warning("Could not compute optimal subnet, using /24 based on first IP")
+        first_ip = ip_addresses[0]
+        return str(ipaddress.ip_network(f"{first_ip}/24", strict=False))

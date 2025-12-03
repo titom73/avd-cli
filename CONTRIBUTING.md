@@ -166,6 +166,37 @@ directory was empty. Now raises clear InvalidInventoryError.
 Fixes #456
 ```
 
+## Regenerating Example Topologies
+
+After making changes to the topology generation logic (e.g., in `avd_cli/logics/topology.py`), you should regenerate the example topologies to ensure they reflect the latest code:
+
+```bash
+# Regenerate eos-design-basics topology
+make run ARGS="generate topology containerlab -i examples/eos-design-basics -o examples/eos-design-basics/intended"
+
+# Regenerate eos-design-mpls topology
+make run ARGS="generate topology containerlab -i examples/eos-design-mpls -o examples/eos-design-mpls/intended"
+
+# Regenerate eos-design-complex topology
+make run ARGS="generate topology containerlab -i examples/eos-design-complex -o examples/eos-design-complex/intended"
+```
+
+After regeneration, verify the changes:
+
+```bash
+# Check that topology files exist with correct extension
+ls -la examples/*/intended/containerlab/*.clab.yml
+
+# Run topology validation tests
+make test-unit -k test_topology
+
+# If GitHub Actions workflow exists, validate locally
+# (requires Containerlab CLI installed)
+containerlab inspect --topo examples/eos-design-basics/intended/containerlab/eos-design-basics.clab.yml --offline
+```
+
+**Note**: Always regenerate example topologies before submitting a PR that modifies topology generation logic to ensure examples stay up-to-date.
+
 ## Project Structure
 
 ```

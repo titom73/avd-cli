@@ -843,15 +843,21 @@ def generate_topology_containerlab(
             sys.exit(1)
 
         console.print("[cyan]→[/cyan] Generating Containerlab topology...")
-        
+
+        # Derive topology name from inventory path if using default
+        generator = ContainerlabTopologyGenerator()
+        if topology_name == "containerlab-topology":
+            topology_name = generator._derive_topology_name(inventory_path)
+            if verbose:
+                console.print(f"[blue]ℹ[/blue] Derived topology name: {topology_name}")
+
         # Construct image string based on priority: --image takes precedence
         node_image = image if image else f"{image_registry}/{image_name}:{image_version}"
-        
+
         if verbose:
             console.print(f"[blue]ℹ[/blue] Node kind: {kind}")
             console.print(f"[blue]ℹ[/blue] Node image: {node_image}")
-        
-        generator = ContainerlabTopologyGenerator()
+
         result = generator.generate(
             inventory,
             output_path,

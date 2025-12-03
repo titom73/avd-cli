@@ -90,7 +90,8 @@ jobs:
 
           echo "Validating topology: $TOPO_FILE"
 
-          containerlab inspect --topo "$TOPO_FILE" --format yaml --offline || {
+          # Validate YAML syntax and structure with graph command
+          containerlab graph --topo "$TOPO_FILE" --static --srv ':0' || {
             echo "Error: Containerlab validation failed"
             exit 1
           }

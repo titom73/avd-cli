@@ -943,6 +943,79 @@ class TestGenerator:
 
         return yaml.dump(anta_inventory, default_flow_style=False, sort_keys=False)
 
+    def _serialize_anta_catalog(self, catalog_file_obj: Any) -> str:
+        """Serialize ANTA catalog to YAML, handling Python 3.10 Pydantic compatibility.
+
+        This method provides a workaround for Pydantic serialization issues that occur
+        with Python 3.10 and older ANTA versions (1.5.0). The standard yaml() method
+        uses model_dump_json() which can fail with 'Unable to serialize unknown type:
+        <class 'module'>' errors on Python 3.10.
+        """
+        import yaml
+        import math
+
+        try:
+            # Try the native ANTA yaml() method first (works on Python 3.11+)
+            result: str = catalog_file_obj.yaml()
+            return result
+        except Exception:
+            # Fallback for Python 3.10: manually serialize the catalog structure
+            self.logger.debug(
+                "Using fallback ANTA catalog serialization for Python 3.10 compatibility"
+            )
+            catalog_data = self._extract_catalog_data(catalog_file_obj)
+            yaml_str: str = yaml.dump(
+                catalog_data, default_flow_style=False, sort_keys=False, width=math.inf
+            )
+            return yaml_str
+
+    def _extract_catalog_data(self, catalog_file_obj: Any) -> Dict[str, Any]:
+        """Extract catalog data from AntaCatalogFile for manual serialization."""
+        catalog_data: Dict[str, Any] = {}
+        root_data = catalog_file_obj.root if hasattr(catalog_file_obj, 'root') else {}
+
+        for test_class, test_definitions in root_data.items():
+            test_class_path = self._get_test_class_path(test_class)
+            serialized_tests = [
+                self._serialize_test_definition(test_def) for test_def in test_definitions
+            ]
+            if serialized_tests:
+                catalog_data[test_class_path] = serialized_tests
+
+        return catalog_data
+
+    def _get_test_class_path(self, test_class: Any) -> str:
+        """Get the import path for a test class."""
+        if hasattr(test_class, '__module__') and hasattr(test_class, '__name__'):
+            return f"{test_class.__module__}.{test_class.__name__}"
+        return str(test_class)
+
+    def _serialize_test_definition(self, test_def: Any) -> Dict[str, Any]:
+        """Serialize a single test definition to a dictionary."""
+        if not hasattr(test_def, 'model_dump'):
+            return {}
+
+        try:
+            result: Dict[str, Any] = test_def.model_dump(mode='python', exclude_none=True)
+            return result
+        except Exception:
+            return self._serialize_test_inputs(test_def)
+
+    def _serialize_test_inputs(self, test_def: Any) -> Dict[str, Any]:
+        """Extract and serialize test inputs as fallback."""
+        if not hasattr(test_def, 'inputs') or test_def.inputs is None:
+            return {}
+
+        inputs_dict: Dict[str, Any] = {}
+        if hasattr(test_def.inputs, 'model_dump'):
+            try:
+                inputs_dict = test_def.inputs.model_dump(mode='python', exclude_none=True)
+            except Exception:
+                if hasattr(test_def.inputs, '__iter__'):
+                    inputs_dict = dict(test_def.inputs)
+
+        return {"inputs": inputs_dict} if inputs_dict else {}
+
     def _generate_structured_configs(
         self, pyavd: Any, all_inputs: Dict[str, Dict[str, Any]]
     ) -> Dict[str, Dict[str, Any]]:
@@ -991,9 +1064,12 @@ class TestGenerator:
             combined_catalog = AntaCatalog(tests=all_tests)
 
             # Use ANTA's dump method to get AntaCatalogFile, then serialize to YAML
+            # Note: We use a custom serialization approach to avoid Pydantic serialization
+            # issues with Python 3.10 and older ANTA versions
             catalog_file_obj = combined_catalog.dump()
+            yaml_content = self._serialize_anta_catalog(catalog_file_obj)
             with open(catalog_file, "w", encoding="utf-8") as f:
-                f.write(catalog_file_obj.yaml())
+                f.write(yaml_content)
 
         except (ImportError, AttributeError) as e:
             # Fall back to basic ANTA catalog generation if dependencies are missing

@@ -16,9 +16,32 @@ from rich.console import Console
 
 from avd_cli import __version__
 from avd_cli.constants import APP_NAME
+from avd_cli.utils.version import get_pyavd_version
+from avd_cli.cli.commands.pyavd import pyavd_cmd
 
 # Initialize Rich console for beautiful output
 console = Console()
+
+
+def version_callback(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Display version information for avd-cli and pyavd.
+
+    Parameters
+    ----------
+    ctx : click.Context
+        The Click context.
+    param : click.Parameter
+        The Click parameter.
+    value : bool
+        Whether the option was provided.
+    """
+    if not value or ctx.resilient_parsing:
+        return
+
+    pyavd_version = get_pyavd_version()
+    click.echo(f"{APP_NAME}, version {__version__}")
+    click.echo(f"pyavd, version {pyavd_version}")
+    ctx.exit()
 
 
 def suppress_pyavd_warnings(show_warnings: bool) -> None:
@@ -82,7 +105,14 @@ def display_generation_summary(category: str, count: int, output_path: Path, sub
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name=APP_NAME)
+@click.option(
+    "--version",
+    is_flag=True,
+    callback=version_callback,
+    expose_value=False,
+    is_eager=True,
+    help="Show version information for avd-cli and pyavd.",
+)
 @click.option(
     "--verbose",
     "-v",
@@ -1362,6 +1392,10 @@ def deploy_eos(
         if verbose:
             console.print_exception()
         sys.exit(1)
+
+
+# Register pyavd command group from commands module
+cli.add_command(pyavd_cmd, name="pyavd")
 
 
 def main() -> None:

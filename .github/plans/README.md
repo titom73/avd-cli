@@ -5,3 +5,4 @@ The `.github/plans/` directory contains structured implementation plans produced
 ## Available Plans
 
 - `feature-containerlab-topology-1.md` – Adds `avd-cli generate topology containerlab` that converts AVD inventories into Containerlab topology definitions aligned with the Containerlab schema and infrastructure requirements.
+- `feature-pyavd-version-management-1.md` – Adds pyavd version display in `--version` output and `avd-cli pyavd install <version>` command for managing pyavd versions.

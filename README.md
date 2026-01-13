@@ -123,6 +123,23 @@ cd ./output/containerlab
 sudo containerlab deploy
 ```
 
+## pyavd Version Management
+
+Manage your pyavd package version directly from the CLI:
+
+```bash
+# Check versions
+avd-cli --version
+# avd-cli, version 0.2.1
+# pyavd, version 5.7.2
+
+# Install a specific pyavd version
+avd-cli pyavd install 5.7.0
+
+# Preview command without executing
+avd-cli pyavd install 5.7.0 --dry-run
+```
+
 ## Documentation
 
 Complete documentation is available at **[titom73.github.io/avd-cli](https://titom73.github.io/avd-cli/)**

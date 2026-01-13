@@ -12,6 +12,7 @@ AVD CLI provides a comprehensive set of commands for managing your Arista AVD ne
 | **deploy** | Deploy configurations to network devices | [Details](deploy.md) |
 | **info** | Display inventory information | [Details](info.md) |
 | **validate** | Validate inventory structure | [Details](validate.md) |
+| **pyavd** | Manage pyavd package version | [Details](pyavd.md) |
 
 ---
 
@@ -23,6 +24,7 @@ graph LR
     A --> C[deploy]
     A --> D[info]
     A --> E[validate]
+    A --> M[pyavd]
     B --> F[all]
     B --> G[configs]
     B --> H[docs]
@@ -30,6 +32,8 @@ graph LR
     B --> K[topology]
     K --> L[containerlab]
     C --> J[eos]
+    M --> N[version]
+    M --> O[install]
 ```
 
 ---
@@ -65,3 +69,4 @@ avd-cli validate -i ./inventory
 - Learn about the [deploy command](deploy.md)
 - Learn about the [info command](info.md)
 - Learn about the [validate command](validate.md)
+- Learn about the [pyavd command](pyavd.md)

@@ -10,21 +10,25 @@
       
       
       
+        <link rel="prev" href="../deploy/">
       
       
-      <link rel="icon" href="../../imgs/avd-cli-favicon.jpg">
+        <link rel="next" href="../../environment-variables/">
+      
+      
+      <link rel="icon" href="../../../imgs/avd-cli-favicon.jpg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
       
-        <title>Multi fabric - AVD CLI</title>
+        <title>Manage pyavd Version - AVD CLI</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.84d31ad4.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -43,18 +47,18 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.material.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.material.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
     
     
     
-  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+  <link href="../../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
             html.glightbox-open { overflow: initial; height: 100%; }
             .gslide-title { margin-top: 0px; user-select: text; }
             .gslide-desc { color: #666; user-select: text; }
@@ -83,7 +87,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#multi-fabric-example" class="md-skip">
+        <a href="#pyavd-version-management" class="md-skip">
           Skip to content
         </a>
       
@@ -103,7 +107,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="AVD CLI" class="md-header__button md-logo" aria-label="AVD CLI" data-md-component="logo">
+    <a href="../../.." title="AVD CLI" class="md-header__button md-logo" aria-label="AVD CLI" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M9.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L146.7 256zM224 384h256c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32s14.3-32 32-32"></path></svg>
@@ -123,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi fabric
+              Manage pyavd Version
             
           </span>
         </div>
@@ -239,7 +243,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="AVD CLI" class="md-nav__button md-logo" aria-label="AVD CLI" data-md-component="logo">
+    <a href="../../.." title="AVD CLI" class="md-nav__button md-logo" aria-label="AVD CLI" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M9.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L146.7 256zM224 384h256c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32s14.3-32 32-32"></path></svg>
@@ -269,7 +273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -339,7 +343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/installation/" class="md-nav__link">
+      <a href="../../../getting-started/installation/" class="md-nav__link">
         
   
   
@@ -362,7 +366,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/quickstart/" class="md-nav__link">
+      <a href="../../../getting-started/quickstart/" class="md-nav__link">
         
   
   
@@ -385,7 +389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/basic-usage/" class="md-nav__link">
+      <a href="../../../getting-started/basic-usage/" class="md-nav__link">
         
   
   
@@ -408,7 +412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/docker/" class="md-nav__link">
+      <a href="../../../getting-started/docker/" class="md-nav__link">
         
   
   
@@ -435,8 +439,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -466,11 +472,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -486,7 +492,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             User Guide
@@ -500,7 +506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         
   
   
@@ -523,7 +529,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/inventory-structure/" class="md-nav__link">
+      <a href="../../inventory-structure/" class="md-nav__link">
         
   
   
@@ -546,7 +552,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/inventory-advanced/" class="md-nav__link">
+      <a href="../../inventory-advanced/" class="md-nav__link">
         
   
   
@@ -569,7 +575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/info/" class="md-nav__link">
+      <a href="../info/" class="md-nav__link">
         
   
   
@@ -592,7 +598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/validate/" class="md-nav__link">
+      <a href="../validate/" class="md-nav__link">
         
   
   
@@ -615,7 +621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/generate/" class="md-nav__link">
+      <a href="../generate/" class="md-nav__link">
         
   
   
@@ -638,7 +644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/commands/deploy/" class="md-nav__link">
+      <a href="../deploy/" class="md-nav__link">
         
   
   
@@ -658,10 +664,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../user-guide/commands/pyavd/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Manage pyavd Version
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -672,6 +698,141 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pyavd-version-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      pyavd Version Management
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="pyavd Version Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commands
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      install
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version Display
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#package-manager-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Package Manager Detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use Cases
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#downgrade-for-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Downgrade for Compatibility
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade-to-latest" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrade to Latest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-before-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check Before Install
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next Steps
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -684,7 +845,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/environment-variables/" class="md-nav__link">
+      <a href="../../environment-variables/" class="md-nav__link">
         
   
   
@@ -707,7 +868,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/workflows/" class="md-nav__link">
+      <a href="../../workflows/" class="md-nav__link">
         
   
   
@@ -730,7 +891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/configuration/" class="md-nav__link">
+      <a href="../../configuration/" class="md-nav__link">
         
   
   
@@ -812,7 +973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/cli/main/" class="md-nav__link">
+      <a href="../../../api/cli/main/" class="md-nav__link">
         
   
   
@@ -835,7 +996,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/models/inventory/" class="md-nav__link">
+      <a href="../../../api/models/inventory/" class="md-nav__link">
         
   
   
@@ -858,7 +1019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/logics/loader/" class="md-nav__link">
+      <a href="../../../api/logics/loader/" class="md-nav__link">
         
   
   
@@ -881,7 +1042,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/logics/generator/" class="md-nav__link">
+      <a href="../../../api/logics/generator/" class="md-nav__link">
         
   
   
@@ -904,7 +1065,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/logics/templating/" class="md-nav__link">
+      <a href="../../../api/logics/templating/" class="md-nav__link">
         
   
   
@@ -927,7 +1088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/utils/schema/" class="md-nav__link">
+      <a href="../../../api/utils/schema/" class="md-nav__link">
         
   
   
@@ -1003,7 +1164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/contributing/" class="md-nav__link">
+      <a href="../../../development/contributing/" class="md-nav__link">
         
   
   
@@ -1026,7 +1187,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/architecture/" class="md-nav__link">
+      <a href="../../../development/architecture/" class="md-nav__link">
         
   
   
@@ -1049,7 +1210,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/testing/" class="md-nav__link">
+      <a href="../../../development/testing/" class="md-nav__link">
         
   
   
@@ -1079,7 +1240,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../faq/" class="md-nav__link">
+      <a href="../../../faq/" class="md-nav__link">
         
   
   
@@ -1119,11 +1280,119 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#multi-fabric-example" class="md-nav__link">
+  <a href="#pyavd-version-management" class="md-nav__link">
     <span class="md-ellipsis">
-      Multi-Fabric Example
+      pyavd Version Management
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="pyavd Version Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commands
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      install
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version Display
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#package-manager-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Package Manager Detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use Cases
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#downgrade-for-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Downgrade for Compatibility
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade-to-latest" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrade to Latest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-before-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check Before Install
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next Steps
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1146,10 +1415,118 @@
   
 
 
-  <h1>Multi fabric</h1>
+  <h1>Manage pyavd Version</h1>
 
-<h2 id="multi-fabric-example">Multi-Fabric Example<a class="headerlink" href="#multi-fabric-example" title="Permanent link">¶</a></h2>
-<p>Coming soon. See <a href="https://github.com/titom73/avd-cli/tree/main/examples/atd-inventory">examples/atd-inventory</a> for reference.</p>
+<h2 id="pyavd-version-management">pyavd Version Management<a class="headerlink" href="#pyavd-version-management" title="Permanent link">¶</a></h2>
+<p>The <code>avd-cli pyavd</code> command group provides tools to manage your pyavd package version.</p>
+<hr>
+<h3 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">¶</a></h3>
+<h4 id="version">version<a class="headerlink" href="#version" title="Permanent link">¶</a></h4>
+<p>Display the currently installed pyavd version.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>version
+</span></code></pre></div>
+<p><strong>Example output:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pyavd version: 5.7.2
+</span></code></pre></div>
+<hr>
+<h4 id="install">install<a class="headerlink" href="#install" title="Permanent link">¶</a></h4>
+<p>Install a specific version of pyavd.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span>&lt;VERSION&gt;<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span>
+</span></code></pre></div>
+<p><strong>Arguments:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VERSION</code></td>
+<td>The pyavd version to install (e.g., <code>5.7.0</code>, <code>5.6.2</code>)</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--package-manager</code></td>
+<td>Package manager to use (<code>auto</code>, <code>pip</code>, <code>uv</code>)</td>
+<td><code>auto</code></td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Show command without executing</td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Examples:</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Install a specific version</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.7.0
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Use pip explicitly</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.7.0<span class="w"> </span>--package-manager<span class="w"> </span>pip
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Preview the command without executing</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.7.0<span class="w"> </span>--dry-run
+</span></code></pre></div>
+<hr>
+<h3 id="version-display">Version Display<a class="headerlink" href="#version-display" title="Permanent link">¶</a></h3>
+<p>The <code>avd-cli --version</code> command displays both the avd-cli version and the installed pyavd version:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>avd-cli<span class="w"> </span>--version
+</span></code></pre></div>
+<p><strong>Example output:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>avd-cli, version 0.2.1
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pyavd, version 5.7.2
+</span></code></pre></div>
+<hr>
+<h3 id="package-manager-detection">Package Manager Detection<a class="headerlink" href="#package-manager-detection" title="Permanent link">¶</a></h3>
+<p>When using <code>--package-manager auto</code> (default), avd-cli automatically detects:</p>
+<ol>
+<li><strong>uv-managed projects</strong>: If <code>uv.lock</code> exists, uses <code>uv add</code> to update <code>pyproject.toml</code> and lock file</li>
+<li><strong>uv available</strong>: Uses <code>uv pip install</code> for non-managed environments</li>
+<li><strong>pip fallback</strong>: Uses <code>pip install</code> if uv is not available</li>
+</ol>
+<div class="admonition tip">
+<p class="admonition-title">For uv-managed projects</p>
+<p>In projects with a <code>uv.lock</code> file, the install command uses <code>uv add</code> to ensure
+the version is properly recorded in <code>pyproject.toml</code> and persists across <code>uv sync</code>.</p>
+</div>
+<hr>
+<h3 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">¶</a></h3>
+<h4 id="downgrade-for-compatibility">Downgrade for Compatibility<a class="headerlink" href="#downgrade-for-compatibility" title="Permanent link">¶</a></h4>
+<p>If you need to use an older pyavd version for compatibility with existing configurations:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.6.0
+</span></code></pre></div>
+<h4 id="upgrade-to-latest">Upgrade to Latest<a class="headerlink" href="#upgrade-to-latest" title="Permanent link">¶</a></h4>
+<p>To upgrade to a specific newer version:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.7.2
+</span></code></pre></div>
+<h4 id="check-before-install">Check Before Install<a class="headerlink" href="#check-before-install" title="Permanent link">¶</a></h4>
+<p>Use <code>--dry-run</code> to see what command would be executed:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>avd-cli<span class="w"> </span>pyavd<span class="w"> </span>install<span class="w"> </span><span class="m">5</span>.7.0<span class="w"> </span>--dry-run
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Output: Dry run mode - command that would be executed:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">#   uv add pyavd==5.7.0</span>
+</span></code></pre></div>
+<hr>
+<h3 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">¶</a></h3>
+<ul>
+<li>Check <a href="https://pypi.org/project/pyavd/#history">pyavd releases on PyPI</a> for available versions</li>
+<li>Learn about the <a href="../generate/">generate command</a> to create configurations</li>
+<li>Learn about the <a href="../deploy/">deploy command</a> to deploy to devices</li>
+</ul>
 
 
 
@@ -1170,7 +1547,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 7, 2025 14:18:01 UTC">November 7, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="January 13, 2026 15:58:53 UTC">January 13, 2026</span>
   </span>
 
     
@@ -1258,10 +1635,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.top", "content.tabs.link", "content.code.copy", "toc.follow", "navigation.indexes"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": ["stable"], "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.instant", "navigation.top", "content.tabs.link", "content.code.copy", "toc.follow", "navigation.indexes"], "search": "../../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": ["stable"], "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js"></script>
       

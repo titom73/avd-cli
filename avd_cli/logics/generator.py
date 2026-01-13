@@ -956,16 +956,18 @@ class TestGenerator:
 
         try:
             # Try the native ANTA yaml() method first (works on Python 3.11+)
-            return catalog_file_obj.yaml()
+            result: str = catalog_file_obj.yaml()
+            return result
         except Exception:
             # Fallback for Python 3.10: manually serialize the catalog structure
             self.logger.debug(
                 "Using fallback ANTA catalog serialization for Python 3.10 compatibility"
             )
             catalog_data = self._extract_catalog_data(catalog_file_obj)
-            return yaml.dump(
+            yaml_str: str = yaml.dump(
                 catalog_data, default_flow_style=False, sort_keys=False, width=math.inf
             )
+            return yaml_str
 
     def _extract_catalog_data(self, catalog_file_obj: Any) -> Dict[str, Any]:
         """Extract catalog data from AntaCatalogFile for manual serialization."""
@@ -994,7 +996,8 @@ class TestGenerator:
             return {}
 
         try:
-            return test_def.model_dump(mode='python', exclude_none=True)
+            result: Dict[str, Any] = test_def.model_dump(mode='python', exclude_none=True)
+            return result
         except Exception:
             return self._serialize_test_inputs(test_def)
 

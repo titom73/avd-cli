@@ -17,6 +17,7 @@ from rich.console import Console
 from avd_cli import __version__
 from avd_cli.constants import APP_NAME
 from avd_cli.utils.version import get_pyavd_version
+from avd_cli.cli.commands.pyavd import pyavd_cmd
 
 # Initialize Rich console for beautiful output
 console = Console()
@@ -1394,8 +1395,6 @@ def deploy_eos(
 
 
 # Register pyavd command group from commands module
-from avd_cli.cli.commands.pyavd import pyavd_cmd
-
 cli.add_command(pyavd_cmd, name="pyavd")
 
 

@@ -190,7 +190,7 @@ def deploy_eos(
     if configs_path is None:
         configs_path = inventory_path / "intended" / "configs"
         if verbose:
-            console.print(f"[blue]\u2139[/blue] Using default configs path: {configs_path}")
+            console.print(f"[blue]ℹ[/blue] Using default configs path: {configs_path}")
 
     # Always use config sessions for atomic commit/rollback
     from avd_cli.utils.eapi_client import DeploymentMode

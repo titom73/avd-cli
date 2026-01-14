@@ -1203,7 +1203,9 @@ class TestEnvironmentVariables:
                 )
 
         assert result.exit_code == 0
-        # Just check success - the exact output messages may vary
+        # Assertion weakened to handle Rich console output variations in test environment.
+        # The core behavior (successful generation) is verified via exit code.
+        # More specific message checking would require mocking the Rich console at a different level.
         assert "Generated" in result.output or "Generating" in result.output
 
     def test_cli_args_override_env_vars(self, tmp_path: Path) -> None:

@@ -322,8 +322,12 @@ Device is configured with basic management interface.
         # Command should fail when no devices match
         assert result.exit_code == 1, "Command should exit with error code when no devices match"
 
-        # Check for error message if output is available (may be "I/O operation on closed file" due to Rich)
-        # The exit code is the key verification here
+        # NOTE: Error message verification is unreliable due to Rich console output issues in tests.
+        # When using CliRunner with Rich console, we encounter "I/O operation on closed file" errors
+        # that prevent reliable capture of error messages. Exit code verification is the primary
+        # indicator of correct behavior here. Consider using Click's catch_exceptions=False or
+        # mocking Rich console at a different level for more detailed error message verification.
+        # See: https://github.com/Textualize/rich/issues/3084
 
     def test_docs_only_workflow_triggers_summary(self, sample_inventory, output_directory):
         """Test docs-only command invokes the generator and displays summary table."""

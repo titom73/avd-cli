@@ -91,8 +91,6 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip=None
         )
         mock_inventory.host_vars = {"device1": {}}
@@ -108,8 +106,6 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"device1": {"ansible_host": "192.168.0.10"}}
@@ -129,8 +125,6 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname=f"device{i}",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
                 mgmt_ip=f"192.168.0.{10+i}"
             )
             for i in range(4)
@@ -155,15 +149,11 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname="device1",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
                 mgmt_ip="192.168.0.10"
             ),
             DeviceDefinition(
                 hostname="device2",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
                 mgmt_ip="2001:db8::1"
             ),
         ]
@@ -184,8 +174,6 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip="192.168.0.10"  # DeviceDefinition doesn't accept /24 notation
         )
         # But ansible_host can have /24 notation
@@ -210,8 +198,6 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname=f"device{i}",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
                 mgmt_ip=f"192.168.0.{i}"
             )
             for i in range(10, 16)  # 10, 11, 12, 13, 14, 15
@@ -274,8 +260,6 @@ class TestBuildNodes:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip=None
         )
         mock_inventory.host_vars = {"device1": {}}
@@ -298,8 +282,6 @@ class TestBuildNodes:
         device = DeviceDefinition(
             hostname="spine1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"spine1": {"ansible_host": "192.168.0.10"}}
@@ -358,8 +340,6 @@ class TestBuildLinks:
         device = DeviceDefinition(
             hostname="spine1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-
-
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"spine1": {}}

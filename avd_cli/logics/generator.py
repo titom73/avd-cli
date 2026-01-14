@@ -20,6 +20,7 @@ from avd_cli.exceptions import (ConfigurationGenerationError,
                                 DocumentationGenerationError,
                                 TestGenerationError)
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
+from avd_cli.utils.merge import deep_merge
 
 # Conditional import for DeviceFilter (used in type hints)
 from typing import TYPE_CHECKING
@@ -155,7 +156,7 @@ class ConfigurationGenerator:
                 # that are specific to eos_cli_config_gen schema (not part of eos_designs)
                 # We deep merge to ensure structured_config from eos_designs takes precedence
                 # but eos_cli_config_gen variables are added where not present
-                structured_configs[hostname] = self._deep_merge(inputs, structured_config)
+                structured_configs[hostname] = deep_merge(inputs, structured_config)
         else:
             # Config-only workflow (cli-config)
             self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
@@ -364,7 +365,7 @@ class ConfigurationGenerator:
             device_groups = set(device.groups + [device.fabric])
             for group_name in sorted(device_groups):
                 if group_name in inventory.group_vars:
-                    device_vars = self._deep_merge(device_vars, inventory.group_vars[group_name])
+                    device_vars = deep_merge(device_vars, inventory.group_vars[group_name])
 
             # Capture AVD 'type' from group_vars before host_vars merge
             # The 'type' in group_vars (l2leaf, l3leaf, spine, etc.) takes precedence
@@ -373,7 +374,7 @@ class ConfigurationGenerator:
 
             # Merge host-specific variables (highest priority, already resolved)
             if device.hostname in inventory.host_vars:
-                device_vars = self._deep_merge(device_vars, inventory.host_vars[device.hostname])
+                device_vars = deep_merge(device_vars, inventory.host_vars[device.hostname])
 
             # Convert numeric strings to actual numbers (for pyavd schema validation)
             # This handles Jinja2 templates that resolve to string numbers
@@ -594,31 +595,6 @@ class ConfigurationGenerator:
                             return self._validate_node_id(node_id, hostname)
 
         return None
-
-    def _deep_merge(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merge two dictionaries, update takes precedence.
-
-        Parameters
-        ----------
-        base : Dict[str, Any]
-            Base dictionary
-        update : Dict[str, Any]
-            Dictionary to merge into base
-
-        Returns
-        -------
-        Dict[str, Any]
-            Merged dictionary
-        """
-        result = deepcopy(base)
-
-        for key, value in update.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._deep_merge(result[key], value)
-            else:
-                result[key] = deepcopy(value)
-
-        return result
 
 
 class DocumentationGenerator:

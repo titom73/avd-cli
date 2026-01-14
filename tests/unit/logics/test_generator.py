@@ -16,6 +16,7 @@ import pytest
 from avd_cli.exceptions import ConfigurationGenerationError, DocumentationGenerationError, TestGenerationError
 from avd_cli.logics.generator import ConfigurationGenerator, DocumentationGenerator, TestGenerator, generate_all
 from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
+from avd_cli.utils.merge import deep_merge
 
 
 @pytest.fixture
@@ -372,18 +373,16 @@ class TestConfigurationGenerator:
         assert result_edge["leading_zero_int"] == "01.5"  # Must remain string
 
     def test_deep_merge(self) -> None:
-        """Test _deep_merge method.
+        """Test deep_merge utility function.
 
         Given: Two dictionaries
         When: Deep merging them
         Then: Returns properly merged dictionary
         """
-        generator = ConfigurationGenerator()
-
         base = {"a": 1, "b": {"c": 2, "d": 3}, "e": 5}
         update = {"b": {"c": 20, "f": 4}, "g": 6}
 
-        result = generator._deep_merge(base, update)
+        result = deep_merge(base, update)
 
         assert result["a"] == 1
         assert result["b"]["c"] == 20  # Updated
@@ -1029,7 +1028,7 @@ class TestDeepMerge:
     - eos_designs: High-level fabric topology
     - eos_cli_config_gen: Low-level CLI configurations
 
-    The _deep_merge method ensures both schemas are properly merged,
+    The deep_merge function ensures both schemas are properly merged,
     with structured_config from eos_designs taking precedence over
     inputs containing eos_cli_config_gen variables.
     """
@@ -1041,12 +1040,10 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Result contains all keys from both dicts
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"a": 1, "b": 2}
         dict2 = {"c": 3, "d": 4}
 
-        result = gen._deep_merge(dict1, dict2)
+        result = deep_merge(dict1, dict2)
 
         assert result == {"a": 1, "b": 2, "c": 3, "d": 4}
 
@@ -1057,12 +1054,10 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Second dict values take precedence
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"a": 1, "b": 2}
         dict2 = {"b": 20, "c": 3}
 
-        result = gen._deep_merge(dict1, dict2)
+        result = deep_merge(dict1, dict2)
 
         assert result == {"a": 1, "b": 20, "c": 3}
 
@@ -1073,8 +1068,6 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Nested dicts are merged recursively
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {
             "level1": {
                 "level2": {
@@ -1093,7 +1086,7 @@ class TestDeepMerge:
             }
         }
 
-        result = gen._deep_merge(dict1, dict2)
+        result = deep_merge(dict1, dict2)
 
         expected = {
             "level1": {
@@ -1114,12 +1107,10 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Second list replaces first list entirely
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"items": [1, 2, 3]}
         dict2 = {"items": [4, 5]}
 
-        result = gen._deep_merge(dict1, dict2)
+        result = deep_merge(dict1, dict2)
 
         assert result == {"items": [4, 5]}
 
@@ -1138,8 +1129,6 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Both types of variables are present
         """
-        gen = ConfigurationGenerator()
-
         # Simulate eos_cli_config_gen variables from group_vars
         inputs = {
             "aliases": ["sib show ip bgp summary", "sir show ip route"],
@@ -1178,7 +1167,7 @@ class TestDeepMerge:
             }
         }
 
-        result = gen._deep_merge(inputs, structured_config)
+        result = deep_merge(inputs, structured_config)
 
         # Verify eos_cli_config_gen variables are present
         assert "aliases" in result
@@ -1199,12 +1188,10 @@ class TestDeepMerge:
         When: Deep merging them
         Then: None values are not ignored
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"a": 1, "b": None}
         dict2 = {"c": None, "d": 4}
 
-        result = gen._deep_merge(dict1, dict2)
+        result = deep_merge(dict1, dict2)
 
         assert result == {"a": 1, "b": None, "c": None, "d": 4}
 
@@ -1215,13 +1202,11 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Non-empty dict is returned
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"a": 1}
         dict2 = {}
 
-        result1 = gen._deep_merge(dict1, dict2)
-        result2 = gen._deep_merge(dict2, dict1)
+        result1 = deep_merge(dict1, dict2)
+        result2 = deep_merge(dict2, dict1)
 
         assert result1 == {"a": 1}
         assert result2 == {"a": 1}
@@ -1233,12 +1218,10 @@ class TestDeepMerge:
         When: Deep merging them
         Then: Original dicts remain unchanged
         """
-        gen = ConfigurationGenerator()
-
         dict1 = {"a": 1, "nested": {"x": 10}}
         dict2 = {"b": 2, "nested": {"y": 20}}
 
-        gen._deep_merge(dict1, dict2)
+        deep_merge(dict1, dict2)
 
         # Verify originals are unchanged (shallow check)
         assert "b" not in dict1
@@ -1254,8 +1237,6 @@ class TestDeepMerge:
         When: Deep merging them
         Then: All variables are properly merged
         """
-        gen = ConfigurationGenerator()
-
         # Simulate complex eos_cli_config_gen from multiple group_vars
         inputs = {
             "vlans": [
@@ -1291,7 +1272,7 @@ class TestDeepMerge:
             }
         }
 
-        result = gen._deep_merge(inputs, structured_config)
+        result = deep_merge(inputs, structured_config)
 
         # Verify VLAN list was replaced (not merged)
         assert len(result["vlans"]) == 1

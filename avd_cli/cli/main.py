@@ -17,8 +17,8 @@ from rich.console import Console
 from avd_cli import __version__
 from avd_cli.constants import APP_NAME
 from avd_cli.utils.version import get_pyavd_version
-from avd_cli.cli.commands.deploy import deploy as deploy_cmd
-from avd_cli.cli.commands.generate import generate as generate_cmd
+from avd_cli.cli.commands.deploy import deploy
+from avd_cli.cli.commands.generate import generate
 from avd_cli.cli.commands.pyavd import pyavd_cmd
 
 # Initialize Rich console for beautiful output
@@ -483,8 +483,8 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
 
 
 # Register command groups from commands module
-cli.add_command(deploy_cmd, name="deploy")
-cli.add_command(generate_cmd, name="generate")
+cli.add_command(deploy, name="deploy")
+cli.add_command(generate, name="generate")
 cli.add_command(pyavd_cmd, name="pyavd")
 
 

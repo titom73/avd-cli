@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import yaml
 
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
+from avd_cli.utils.device_filter import filter_devices
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ class ContainerlabTopologyGenerator:
     ) -> ContainerlabTopologyGenerationResult:
         """Build Containerlab topology from inventory and write to disk."""
 
-        devices = self._filter_devices(inventory, device_filter)
+        devices = filter_devices(inventory, device_filter)
+        if device_filter:
+            self.logger.info("Filtering topology to %d devices", len(devices))
         startup_dir = self._normalize_startup_dir(output_path, startup_dir)
 
         containerlab_dir = output_path / "containerlab"
@@ -67,19 +70,6 @@ class ContainerlabTopologyGenerator:
             yaml.safe_dump(topology, topology_file, sort_keys=False)
 
         return ContainerlabTopologyGenerationResult(topology_path=topology_path, nodes=node_data, links=links)
-
-    def _filter_devices(self, inventory: InventoryData, device_filter: Optional[Any]) -> List[DeviceDefinition]:
-        devices = inventory.get_all_devices()
-        if not device_filter:
-            return devices
-
-        filtered = [
-            device
-            for device in devices
-            if device_filter.matches_device(device.hostname, device.groups + [device.fabric])
-        ]
-        self.logger.info("Filtering topology to %d devices", len(filtered))
-        return filtered
 
     def _normalize_startup_dir(self, root_path: Path, startup_dir: Path | str | None) -> Path:
         if startup_dir is None:

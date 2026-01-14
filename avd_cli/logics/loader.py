@@ -18,6 +18,7 @@ from avd_cli.constants import INVENTORY_GROUP_VARS_DIR, INVENTORY_HOST_VARS_DIR
 from avd_cli.exceptions import FileSystemError, InvalidInventoryError
 from avd_cli.logics.templating import TemplateResolver, build_template_context
 from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
+from avd_cli.utils.merge import deep_merge
 
 logger = logging.getLogger(__name__)
 
@@ -727,47 +728,10 @@ class InventoryLoader:
 
         for yaml_file in yaml_files:
             file_data = self._load_yaml_file(yaml_file)
-            merged_data = self._deep_merge(merged_data, file_data)
+            merged_data = deep_merge(merged_data, file_data, copy=False)
             self.logger.debug("  Merged: %s", yaml_file.name)
 
         return merged_data
-
-    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merge two dictionaries.
-
-        Recursively merges nested dictionaries. Later values override earlier ones.
-        Lists are replaced, not merged.
-
-        Parameters
-        ----------
-        base : Dict[str, Any]
-            Base dictionary (earlier file)
-        override : Dict[str, Any]
-            Override dictionary (later file)
-
-        Returns
-        -------
-        Dict[str, Any]
-            Merged dictionary
-
-        Examples
-        --------
-        >>> base = {"a": 1, "b": {"c": 2, "d": 3}}
-        >>> override = {"b": {"d": 4, "e": 5}, "f": 6}
-        >>> deep_merge(base, override)
-        {"a": 1, "b": {"c": 2, "d": 4, "e": 5}, "f": 6}
-        """
-        result = base.copy()
-
-        for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                # Recursively merge nested dictionaries
-                result[key] = self._deep_merge(result[key], value)
-            else:
-                # Override or add new key (lists are replaced, not merged)
-                result[key] = value
-
-        return result
 
     def _discover_node_type_keys(self, group_vars: Dict[str, Dict[str, Any]]) -> List[str]:
         """Discover node type keys from inventory data.
@@ -915,9 +879,10 @@ class InventoryLoader:
                     )
 
                     # Merge custom settings into device's custom_variables
-                    device.custom_variables = self._deep_merge(
+                    device.custom_variables = deep_merge(
                         device.custom_variables,
-                        {"custom_platform_settings": setting}
+                        {"custom_platform_settings": setting},
+                        copy=False,
                     )
                     break
 
@@ -956,9 +921,10 @@ class InventoryLoader:
                 )
 
                 # Deep merge custom config into device's structured_config
-                device.structured_config = self._deep_merge(
+                device.structured_config = deep_merge(
                     device.structured_config,
-                    custom_config
+                    custom_config,
+                    copy=False,
                 )
 
         return device
@@ -1251,7 +1217,7 @@ class InventoryLoader:
         if "nodes" in topology_data and "node_groups" not in topology_data:
             for node_data in topology_data.get("nodes", []):
                 # Merge topology defaults with node data
-                merged_data = self._deep_merge(topology_defaults, node_data)
+                merged_data = deep_merge(topology_defaults, node_data, copy=False)
 
                 device = self._parse_device_node(
                     merged_data, device_type, fabric_name, host_vars
@@ -1275,10 +1241,10 @@ class InventoryLoader:
 
             for node_data in node_group.get("nodes", []):
                 # Merge in order: topology defaults -> group-level vars -> group defaults -> node data
-                merged_data = self._deep_merge(topology_defaults, {})
-                merged_data = self._deep_merge(merged_data, group_level_vars)
-                merged_data = self._deep_merge(merged_data, group_defaults)
-                merged_data = self._deep_merge(merged_data, node_data)
+                merged_data = deep_merge(topology_defaults, {}, copy=False)
+                merged_data = deep_merge(merged_data, group_level_vars, copy=False)
+                merged_data = deep_merge(merged_data, group_defaults, copy=False)
+                merged_data = deep_merge(merged_data, node_data, copy=False)
 
                 device = self._parse_device_node(
                     merged_data, device_type, fabric_name, host_vars
@@ -1319,7 +1285,7 @@ class InventoryLoader:
 
         # Merge with host vars if available
         if hostname in host_vars:
-            node_data = self._deep_merge(node_data, host_vars[hostname])
+            node_data = deep_merge(node_data, host_vars[hostname], copy=False)
 
         # Extract management IP
         mgmt_ip_str = node_data.get("mgmt_ip", node_data.get("ansible_host"))

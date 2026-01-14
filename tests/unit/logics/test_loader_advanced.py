@@ -8,6 +8,7 @@ import pytest
 
 from avd_cli.logics.loader import InventoryLoader
 from avd_cli.exceptions import InvalidInventoryError, FileSystemError
+from avd_cli.utils.merge import deep_merge
 
 
 class TestInventoryLoaderAdvanced:
@@ -530,8 +531,6 @@ class TestInventoryLoaderAdvanced:
 
     def test_deep_merge_with_complex_data(self):
         """Test deep merge functionality with complex data structures."""
-        loader = InventoryLoader()
-
         base_data = {
             "level1": {
                 "level2": {
@@ -553,7 +552,7 @@ class TestInventoryLoaderAdvanced:
             }
         }
 
-        result = loader._deep_merge(base_data, override_data)
+        result = deep_merge(base_data, override_data)
 
         # Verify merge behavior
         assert result["level1"]["level2"]["list_data"] == [4, 5, 6]

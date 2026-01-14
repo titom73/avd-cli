@@ -20,9 +20,13 @@ from avd_cli.exceptions import (ConfigurationGenerationError,
                                 DocumentationGenerationError,
                                 TestGenerationError)
 from avd_cli.models.inventory import DeviceDefinition, InventoryData
+from avd_cli.utils.merge import deep_merge
 
 # Conditional import for DeviceFilter (used in type hints)
 from typing import TYPE_CHECKING
+
+from avd_cli.utils.device_filter import filter_devices
+
 if TYPE_CHECKING:
     from avd_cli.utils.device_filter import DeviceFilter
 
@@ -71,56 +75,6 @@ class ConfigurationGenerator:
         configs_dir.mkdir(parents=True, exist_ok=True)
         return configs_dir
 
-    def _filter_devices(
-        self,
-        inventory: InventoryData,
-        device_filter: Optional["DeviceFilter"] = None
-    ) -> List[DeviceDefinition]:
-        """Filter devices from inventory using an optional DeviceFilter.
-
-        This method determines which device configuration files to generate
-        by applying the provided DeviceFilter. All devices are still included
-        in avd_facts calculation for proper topology context (BGP neighbors,
-        links, etc.).
-
-        Parameters
-        ----------
-        inventory : InventoryData
-            Loaded inventory data containing device definitions.
-        device_filter : Optional[DeviceFilter], optional
-            Device filter to apply, by default None. If provided, only devices
-            matching the filter (by hostname or group patterns) will be included.
-
-        Returns
-        -------
-        List[DeviceDefinition]
-            List of devices matching the filter, or all devices if no filter is provided.
-
-        Examples
-        --------
-        >>> generator = ConfigurationGenerator()
-        >>> filtered_devices = generator._filter_devices(inventory, device_filter)
-        >>> print(f"Filtered {len(filtered_devices)} devices for config generation")
-
-        Notes
-        -----
-        - This method is used ONLY for determining which config files to write.
-        - All devices are still included in avd_facts calculation for proper topology context.
-
-        See Also
-        --------
-        ConfigurationGenerator.generate : Main configuration generation method
-        """
-        devices = inventory.get_all_devices()
-        if device_filter:
-            # Filter using DeviceFilter (hostname or group patterns)
-            devices = [
-                d for d in devices
-                if device_filter.matches_device(d.hostname, d.groups + [d.fabric])
-            ]
-            self.logger.info("Will generate configs for %d filtered devices", len(devices))
-        return devices
-
     def _generate_structured_configs(self, all_inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Generate structured configurations based on workflow."""
         structured_configs: Dict[str, Dict[str, Any]] = {}
@@ -155,7 +109,7 @@ class ConfigurationGenerator:
                 # that are specific to eos_cli_config_gen schema (not part of eos_designs)
                 # We deep merge to ensure structured_config from eos_designs takes precedence
                 # but eos_cli_config_gen variables are added where not present
-                structured_configs[hostname] = self._deep_merge(inputs, structured_config)
+                structured_configs[hostname] = deep_merge(inputs, structured_config)
         else:
             # Config-only workflow (cli-config)
             self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
@@ -252,8 +206,10 @@ class ConfigurationGenerator:
 
         try:
             # Get filtered device list (for determining which files to write)
-            filtered_devices = self._filter_devices(inventory, device_filter)
+            filtered_devices = filter_devices(inventory, device_filter)
             filtered_hostnames = [d.hostname for d in filtered_devices] if device_filter else None
+            if device_filter:
+                self.logger.info("Will generate configs for %d filtered devices", len(filtered_devices))
 
             # Build pyavd inputs from ALL devices in inventory (for proper AVD context)
             # This ensures avd_facts calculation has complete topology information
@@ -364,7 +320,7 @@ class ConfigurationGenerator:
             device_groups = set(device.groups + [device.fabric])
             for group_name in sorted(device_groups):
                 if group_name in inventory.group_vars:
-                    device_vars = self._deep_merge(device_vars, inventory.group_vars[group_name])
+                    device_vars = deep_merge(device_vars, inventory.group_vars[group_name])
 
             # Capture AVD 'type' from group_vars before host_vars merge
             # The 'type' in group_vars (l2leaf, l3leaf, spine, etc.) takes precedence
@@ -373,7 +329,7 @@ class ConfigurationGenerator:
 
             # Merge host-specific variables (highest priority, already resolved)
             if device.hostname in inventory.host_vars:
-                device_vars = self._deep_merge(device_vars, inventory.host_vars[device.hostname])
+                device_vars = deep_merge(device_vars, inventory.host_vars[device.hostname])
 
             # Convert numeric strings to actual numbers (for pyavd schema validation)
             # This handles Jinja2 templates that resolve to string numbers
@@ -594,31 +550,6 @@ class ConfigurationGenerator:
                             return self._validate_node_id(node_id, hostname)
 
         return None
-
-    def _deep_merge(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merge two dictionaries, update takes precedence.
-
-        Parameters
-        ----------
-        base : Dict[str, Any]
-            Base dictionary
-        update : Dict[str, Any]
-            Dictionary to merge into base
-
-        Returns
-        -------
-        Dict[str, Any]
-            Merged dictionary
-        """
-        result = deepcopy(base)
-
-        for key, value in update.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._deep_merge(result[key], value)
-            else:
-                result[key] = deepcopy(value)
-
-        return result
 
 
 class DocumentationGenerator:

@@ -9,7 +9,10 @@ based on hostname or group name patterns using glob-style wildcards.
 
 from dataclasses import dataclass
 from fnmatch import fnmatch
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from avd_cli.models.inventory import DeviceDefinition, InventoryData
 
 
 @dataclass
@@ -131,3 +134,44 @@ class DeviceFilter:
             String representation showing patterns
         """
         return f"DeviceFilter(patterns={self.patterns})"
+
+
+def filter_devices(
+    inventory: "InventoryData",
+    device_filter: Optional[DeviceFilter] = None,
+) -> List["DeviceDefinition"]:
+    """Filter devices from inventory using optional DeviceFilter.
+
+    This function provides a standardized way to filter devices from an
+    inventory based on hostname or group patterns. It is used by both
+    the configuration generator and topology generator.
+
+    Parameters
+    ----------
+    inventory : InventoryData
+        Loaded inventory data containing device definitions.
+    device_filter : Optional[DeviceFilter], optional
+        Filter to apply. If None, returns all devices.
+
+    Returns
+    -------
+    List[DeviceDefinition]
+        Filtered list of devices. Returns all devices if no filter provided.
+
+    Examples
+    --------
+    >>> from avd_cli.utils.device_filter import DeviceFilter, filter_devices
+    >>> device_filter = DeviceFilter.from_patterns(["leaf-*"])
+    >>> filtered = filter_devices(inventory, device_filter)
+    >>> print(f"Filtered to {len(filtered)} devices")
+    """
+    devices = inventory.get_all_devices()
+
+    if device_filter is None:
+        return devices
+
+    return [
+        device
+        for device in devices
+        if device_filter.matches_device(device.hostname, device.groups + [device.fabric])
+    ]

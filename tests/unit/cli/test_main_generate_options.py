@@ -48,7 +48,7 @@ class TestGenerateConfigsWithLimitGroups:
             fabrics=[fabric],
         )
 
-        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+        with patch("avd_cli.cli.commands.generate.InventoryLoader") as mock_loader_class:
             mock_loader = MagicMock()
             mock_loader.load.return_value = mock_inventory
             mock_loader_class.return_value = mock_loader
@@ -108,7 +108,7 @@ class TestGenerateWorkflowVariants:
         )
         mock_inventory.validate = MagicMock(return_value=[])
 
-        with patch("avd_cli.logics.loader.InventoryLoader") as mock_loader_class:
+        with patch("avd_cli.cli.commands.generate.InventoryLoader") as mock_loader_class:
             mock_loader = MagicMock()
             mock_loader.load.return_value = mock_inventory
             mock_loader_class.return_value = mock_loader

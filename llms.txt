@@ -1,0 +1,72 @@
+# AVD CLI
+
+> A Python command-line interface for processing Arista AVD inventories and generating EOS device configurations, documentation, and ANTA tests using pyavd. Supports configuration deployment to EOS devices via eAPI.
+
+This is a personal project and is not an official development of the Arista AVD team or Arista Networks. For official AVD tools, visit [avd.arista.com](https://avd.arista.com/).
+
+**Key Features:**
+
+- Generate EOS device configurations from AVD inventory files using pyavd
+- Create comprehensive network documentation in Markdown format
+- Generate ANTA test catalogs for network validation
+- Deploy configurations to EOS devices via eAPI with diff statistics
+- Generate Containerlab topologies for network testing and simulation
+- Support for multiple AVD design types: L3LS-EVPN, MPLS, L2LS
+
+**Supported Workflows:**
+
+- **eos-design workflow**: Full pipeline executing eos_design followed by eos_cli_config_gen to generate configs from fabric definitions
+- **cli-config workflow**: Direct configuration generation using eos_cli_config_gen only, consuming existing structured configurations
+
+**Architecture:**
+
+The CLI follows a layered architecture: CLI layer (Click commands with Rich output) → Logic layer (pure business logic with pyavd) → Models layer (dataclasses for inventory and device definitions). All CLI options support environment variables with the `AVD_CLI_` prefix.
+
+## Documentation
+
+- [README](README.md): Project overview, features, installation, and basic usage examples
+- [CLAUDE.md](CLAUDE.md): Architecture overview, essential commands, code standards, and development guidance
+- [Contributing Guide](CONTRIBUTING.md): Guidelines for contributing, pull request process, and coding standards
+- [Documentation Index](docs/index.md): Main documentation entry point with feature overview
+
+## Getting Started
+
+- [Installation Guide](docs/getting-started/installation.md): How to install avd-cli using pipx, pip, or from source
+- [Quick Start](docs/getting-started/quickstart.md): Step-by-step guide to generate your first network configuration
+- [Basic Usage](docs/getting-started/basic-usage.md): Common commands and workflows for everyday use
+- [Docker Usage](docs/getting-started/docker.md): Running avd-cli in Docker containers
+
+## User Guide
+
+- [Inventory Structure](docs/user-guide/inventory-structure.md): AVD inventory directory layout and YAML file organization
+- [Advanced Inventory](docs/user-guide/inventory-advanced.md): Multi-fabric support, variable inheritance, and complex scenarios
+- [Workflows](docs/user-guide/workflows.md): Understanding eos-design vs cli-config workflows
+- [Configuration Options](docs/user-guide/configuration.md): CLI options, flags, and customization
+- [Environment Variables](docs/user-guide/environment-variables.md): Configuring avd-cli via environment variables (AVD_CLI_ prefix)
+- [Deploy Replace Mode](docs/user-guide/deploy-replace-mode.md): Configuration deployment strategies and replace mode
+
+## Specifications
+
+- [Specifications Index](spec/README.md): Overview of all technical specifications
+- [Architecture Specification](spec/tool-avd-cli-architecture.md): CLI design, layered architecture, technology stack, and quality requirements
+- [AVD Workflow Processing](spec/process-avd-workflow.md): Workflow state machine, execution stages, and validation gates
+- [Inventory Data Schema](spec/data-avd-inventory-schema.md): Data structures, validation rules, and type definitions for AVD inventories
+- [Testing Strategy](spec/infrastructure-testing-strategy.md): Unit, integration, and E2E testing approaches with pytest
+- [Deploy EOS Command](spec/tool-deploy-eos-command.md): Specification for eAPI deployment functionality
+- [Device Filtering](spec/feature-limit-filter.md): Glob-based device filtering specification
+
+## Examples
+
+- [Basic Example Inventory](examples/eos-design-basics/inventory.yml): Simple L3LS-EVPN fabric inventory structure
+- [Complex Example Inventory](examples/eos-design-complex/inventory.yml): Advanced multi-pod fabric with tenants
+- [MPLS Example Inventory](examples/eos-design-mpls/inventory.yml): MPLS design with P and PE routers
+
+## Optional
+
+- [FAQ](docs/faq.md): Frequently asked questions and troubleshooting
+- [Architecture Documentation](docs/development/architecture.md): Detailed system architecture for contributors
+- [Development Tools](docs/development/development-tools.md): Tooling setup for development (UV, pre-commit, etc.)
+- [Testing Guide](docs/development/testing.md): How to write and run tests for the project
+- [Basic Examples Documentation](docs/examples/basic.md): Basic usage example walkthroughs
+- [Advanced Examples Documentation](docs/examples/advanced.md): Complex usage patterns and scenarios
+- [Multi-Fabric Examples](docs/examples/multi-fabric.md): Working with multiple fabrics

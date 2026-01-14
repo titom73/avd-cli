@@ -2,6 +2,7 @@
 # coding: utf-8 -*-
 
 """Unit tests for deep_merge utility."""
+import pytest
 from avd_cli.utils.merge import deep_merge
 
 

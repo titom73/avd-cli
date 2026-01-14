@@ -29,7 +29,7 @@ class TestBaseGenerator:
     def test_base_generator_can_be_subclassed(self) -> None:
         """Test that BaseGenerator can be properly subclassed."""
         from pathlib import Path
-        from typing import List, Optional
+        from typing import List
 
         class CompleteGenerator(BaseGenerator):
             """Complete generator with all required methods."""

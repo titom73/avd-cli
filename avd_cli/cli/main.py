@@ -225,7 +225,6 @@ def common_generate_options(func: Callable[..., Any]) -> Callable[..., Any]:
     return func
 
 
-
 @cli.command()
 @click.option(
     "--inventory-path",

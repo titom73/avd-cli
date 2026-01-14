@@ -1,9 +1,9 @@
 """Unit tests for deploy command."""
 import pytest
 from click.testing import CliRunner
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
-from avd_cli.cli.commands.deploy import deploy, deploy_eos
+from avd_cli.cli.commands.deploy import deploy
 
 
 class TestDeployCommand:

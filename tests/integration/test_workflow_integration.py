@@ -11,7 +11,6 @@ infrastructure testing strategy specification.
 
 import shutil
 import tempfile
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -19,7 +18,6 @@ import pytest
 from click.testing import CliRunner
 
 from avd_cli.cli.main import cli
-from tests.integration import test_utils
 from tests.integration.test_utils import safe_click_invoke
 
 
@@ -313,7 +311,7 @@ Device is configured with basic management interface.
     def test_limit_filter_without_matches_exits(self, sample_inventory, output_directory):
         """Test that limit patterns failing to match devices exit with clear feedback."""
         runner = CliRunner()
-        
+
         result = safe_click_invoke(runner, cli, [
             'generate', 'configs',
             '--inventory-path', str(sample_inventory),
@@ -323,7 +321,7 @@ Device is configured with basic management interface.
 
         # Command should fail when no devices match
         assert result.exit_code == 1, "Command should exit with error code when no devices match"
-        
+
         # Check for error message if output is available (may be "I/O operation on closed file" due to Rich)
         # The exit code is the key verification here
 

@@ -91,8 +91,8 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip=None
         )
         mock_inventory.host_vars = {"device1": {}}
@@ -108,8 +108,8 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"device1": {"ansible_host": "192.168.0.10"}}
@@ -129,8 +129,8 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname=f"device{i}",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-                
-                
+
+
                 mgmt_ip=f"192.168.0.{10+i}"
             )
             for i in range(4)
@@ -155,15 +155,15 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname="device1",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-                
-                
+
+
                 mgmt_ip="192.168.0.10"
             ),
             DeviceDefinition(
                 hostname="device2",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-                
-                
+
+
                 mgmt_ip="2001:db8::1"
             ),
         ]
@@ -184,8 +184,8 @@ class TestComputeMgmtSubnet:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip="192.168.0.10"  # DeviceDefinition doesn't accept /24 notation
         )
         # But ansible_host can have /24 notation
@@ -210,8 +210,8 @@ class TestComputeMgmtSubnet:
             DeviceDefinition(
                 hostname=f"device{i}",
                 device_type="spine", platform="cEOSLab", fabric="TEST",
-                
-                
+
+
                 mgmt_ip=f"192.168.0.{i}"
             )
             for i in range(10, 16)  # 10, 11, 12, 13, 14, 15
@@ -274,8 +274,8 @@ class TestBuildNodes:
         device = DeviceDefinition(
             hostname="device1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip=None
         )
         mock_inventory.host_vars = {"device1": {}}
@@ -298,8 +298,8 @@ class TestBuildNodes:
         device = DeviceDefinition(
             hostname="spine1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"spine1": {"ansible_host": "192.168.0.10"}}
@@ -358,8 +358,8 @@ class TestBuildLinks:
         device = DeviceDefinition(
             hostname="spine1",
             device_type="spine", platform="cEOSLab", fabric="TEST",
-            
-            
+
+
             mgmt_ip="192.168.0.10"
         )
         mock_inventory.host_vars = {"spine1": {}}
@@ -372,8 +372,12 @@ class TestBuildLinks:
         self, generator: ContainerlabTopologyGenerator, mock_inventory: InventoryData
     ) -> None:
         """Test that links are created from ethernet_interfaces with peer info."""
-        spine1 = DeviceDefinition(hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST",   mgmt_ip="192.168.0.10")
-        leaf1 = DeviceDefinition(hostname="leaf1", device_type="leaf", platform="cEOSLab", fabric="TEST",   mgmt_ip="192.168.0.20")
+        spine1 = DeviceDefinition(
+            hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST", mgmt_ip="192.168.0.10"
+        )
+        leaf1 = DeviceDefinition(
+            hostname="leaf1", device_type="leaf", platform="cEOSLab", fabric="TEST", mgmt_ip="192.168.0.20"
+        )
 
         mock_inventory.host_vars = {
             "spine1": {
@@ -404,8 +408,12 @@ class TestBuildLinks:
         self, generator: ContainerlabTopologyGenerator, mock_inventory: InventoryData
     ) -> None:
         """Test that bidirectional links are deduplicated."""
-        spine1 = DeviceDefinition(hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST",   mgmt_ip="192.168.0.10")
-        leaf1 = DeviceDefinition(hostname="leaf1", device_type="leaf", platform="cEOSLab", fabric="TEST",   mgmt_ip="192.168.0.20")
+        spine1 = DeviceDefinition(
+            hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST", mgmt_ip="192.168.0.10"
+        )
+        leaf1 = DeviceDefinition(
+            hostname="leaf1", device_type="leaf", platform="cEOSLab", fabric="TEST", mgmt_ip="192.168.0.20"
+        )
 
         # Both devices have the same link defined
         mock_inventory.host_vars = {
@@ -430,7 +438,9 @@ class TestBuildLinks:
         self, generator: ContainerlabTopologyGenerator, mock_inventory: InventoryData
     ) -> None:
         """Test that links to peers not in device list are skipped."""
-        spine1 = DeviceDefinition(hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST",   mgmt_ip="192.168.0.10")
+        spine1 = DeviceDefinition(
+            hostname="spine1", device_type="spine", platform="cEOSLab", fabric="TEST", mgmt_ip="192.168.0.10"
+        )
 
         mock_inventory.host_vars = {
             "spine1": {

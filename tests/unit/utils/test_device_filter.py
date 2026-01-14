@@ -3,7 +3,9 @@
 
 """Unit tests for DeviceFilter utility class."""
 
-from avd_cli.utils.device_filter import DeviceFilter
+from unittest.mock import MagicMock
+
+from avd_cli.utils.device_filter import DeviceFilter, filter_devices
 
 
 class TestDeviceFilterCreation:
@@ -196,3 +198,115 @@ class TestDeviceFilterRepr:
         """Test __repr__ method."""
         device_filter = DeviceFilter(patterns=["leaf-*", "spine-1"])
         assert repr(device_filter) == "DeviceFilter(patterns=['leaf-*', 'spine-1'])"
+
+
+class TestFilterDevicesFunction:
+    """Test the standalone filter_devices() function."""
+
+    def _create_mock_device(self, hostname: str, groups: list, fabric: str) -> MagicMock:
+        """Create a mock DeviceDefinition."""
+        device = MagicMock()
+        device.hostname = hostname
+        device.groups = groups
+        device.fabric = fabric
+        return device
+
+    def _create_mock_inventory(self, devices: list) -> MagicMock:
+        """Create a mock InventoryData with given devices."""
+        inventory = MagicMock()
+        inventory.get_all_devices.return_value = devices
+        return inventory
+
+    def test_filter_devices_returns_all_when_no_filter(self) -> None:
+        """Test filter_devices returns all devices when filter is None."""
+        devices = [
+            self._create_mock_device("leaf-1a", ["LEAFS"], "FABRIC_A"),
+            self._create_mock_device("spine-1", ["SPINES"], "FABRIC_A"),
+        ]
+        inventory = self._create_mock_inventory(devices)
+
+        result = filter_devices(inventory, device_filter=None)
+
+        assert len(result) == 2
+        assert result == devices
+        inventory.get_all_devices.assert_called_once()
+
+    def test_filter_devices_applies_filter(self) -> None:
+        """Test filter_devices applies DeviceFilter correctly."""
+        devices = [
+            self._create_mock_device("leaf-1a", ["LEAFS"], "FABRIC_A"),
+            self._create_mock_device("leaf-1b", ["LEAFS"], "FABRIC_A"),
+            self._create_mock_device("spine-1", ["SPINES"], "FABRIC_A"),
+            self._create_mock_device("spine-2", ["SPINES"], "FABRIC_A"),
+        ]
+        inventory = self._create_mock_inventory(devices)
+        device_filter = DeviceFilter(patterns=["leaf-*"])
+
+        result = filter_devices(inventory, device_filter)
+
+        assert len(result) == 2
+        assert all(d.hostname.startswith("leaf-") for d in result)
+
+    def test_filter_devices_with_empty_inventory(self) -> None:
+        """Test filter_devices with empty inventory."""
+        inventory = self._create_mock_inventory([])
+
+        result = filter_devices(inventory, device_filter=None)
+
+        assert result == []
+
+    def test_filter_devices_with_empty_inventory_and_filter(self) -> None:
+        """Test filter_devices with empty inventory and active filter."""
+        inventory = self._create_mock_inventory([])
+        device_filter = DeviceFilter(patterns=["leaf-*"])
+
+        result = filter_devices(inventory, device_filter)
+
+        assert result == []
+
+    def test_filter_devices_matches_by_group(self) -> None:
+        """Test filter_devices matches devices by group membership."""
+        devices = [
+            self._create_mock_device("leaf-1a", ["DC1_LEAFS"], "FABRIC_A"),
+            self._create_mock_device("spine-1", ["DC1_SPINES"], "FABRIC_A"),
+            self._create_mock_device("leaf-2a", ["DC2_LEAFS"], "FABRIC_B"),
+        ]
+        inventory = self._create_mock_inventory(devices)
+        device_filter = DeviceFilter(patterns=["DC1_*"])
+
+        result = filter_devices(inventory, device_filter)
+
+        assert len(result) == 2
+        hostnames = [d.hostname for d in result]
+        assert "leaf-1a" in hostnames
+        assert "spine-1" in hostnames
+
+    def test_filter_devices_matches_by_fabric(self) -> None:
+        """Test filter_devices matches devices by fabric name."""
+        devices = [
+            self._create_mock_device("leaf-1a", ["LEAFS"], "FABRIC_A"),
+            self._create_mock_device("spine-1", ["SPINES"], "FABRIC_A"),
+            self._create_mock_device("leaf-2a", ["LEAFS"], "FABRIC_B"),
+        ]
+        inventory = self._create_mock_inventory(devices)
+        device_filter = DeviceFilter(patterns=["FABRIC_A"])
+
+        result = filter_devices(inventory, device_filter)
+
+        assert len(result) == 2
+        hostnames = [d.hostname for d in result]
+        assert "leaf-1a" in hostnames
+        assert "spine-1" in hostnames
+
+    def test_filter_devices_no_matches_returns_empty(self) -> None:
+        """Test filter_devices returns empty list when no devices match."""
+        devices = [
+            self._create_mock_device("leaf-1a", ["LEAFS"], "FABRIC_A"),
+            self._create_mock_device("spine-1", ["SPINES"], "FABRIC_A"),
+        ]
+        inventory = self._create_mock_inventory(devices)
+        device_filter = DeviceFilter(patterns=["border-*"])
+
+        result = filter_devices(inventory, device_filter)
+
+        assert result == []

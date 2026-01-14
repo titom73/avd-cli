@@ -1,14 +1,14 @@
 """Additional tests to improve coverage of topology module."""
 
 from pathlib import Path
-from unittest.mock import Mock
 
 from avd_cli.logics.topology import ContainerlabTopologyGenerator
 from avd_cli.models.inventory import DeviceDefinition, FabricDefinition, InventoryData
+from avd_cli.utils.device_filter import DeviceFilter, filter_devices
 
 
-def test_filter_devices_with_device_filter(tmp_path):
-    """Test _filter_devices when device_filter is provided."""
+def test_filter_devices_with_device_filter_topology_integration(tmp_path):
+    """Test filter_devices function works correctly with topology inventory structures."""
     device1 = DeviceDefinition(
         hostname="spine1",
         platform="ceos",
@@ -37,12 +37,9 @@ def test_filter_devices_with_device_filter(tmp_path):
         host_vars={},
     )
 
-    # Create a mock device filter
-    device_filter = Mock()
-    device_filter.matches_device.side_effect = lambda hostname, groups: hostname == "spine1"
-
-    generator = ContainerlabTopologyGenerator()
-    filtered = generator._filter_devices(inventory, device_filter)
+    # Create a DeviceFilter that matches only spine1
+    device_filter = DeviceFilter(patterns=["spine1"])
+    filtered = filter_devices(inventory, device_filter)
 
     assert len(filtered) == 1
     assert filtered[0].hostname == "spine1"

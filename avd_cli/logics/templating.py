@@ -132,11 +132,11 @@ class TemplateResolver:
         """
         try:
             if plugin == 'file':
-                return self._lookup_file(*args, **kwargs)
+                return self._lookup_file(*args, errors=errors, **kwargs)
             if plugin == 'env':
-                return self._lookup_env(*args, **kwargs)
+                return self._lookup_env(*args, errors=errors, **kwargs)
             if plugin == 'vars':
-                return self._lookup_vars(*args, **kwargs)
+                return self._lookup_vars(*args, errors=errors, **kwargs)
 
             # Unsupported plugin
             error_msg = f"Lookup plugin '{plugin}' is not supported. Supported plugins: file, env, vars"
@@ -146,9 +146,13 @@ class TemplateResolver:
                 self.logger.warning(error_msg)
             return ""
 
-        except AvdTemplateError:
-            # Re-raise our own errors
-            raise
+        except AvdTemplateError as e:
+            # Re-raise our own errors if in strict mode
+            if errors == 'strict':
+                raise
+            if errors == 'warn':
+                self.logger.warning(str(e))
+            return ""
         except Exception as e:
             error_msg = f"Lookup plugin '{plugin}' failed: {e}"
             if errors == 'strict':
@@ -157,13 +161,15 @@ class TemplateResolver:
                 self.logger.warning(error_msg)
             return ""
 
-    def _lookup_file(self, file_path: str, **kwargs: Any) -> str:
+    def _lookup_file(self, file_path: str, errors: str = 'strict', **kwargs: Any) -> str:
         """Lookup plugin: file - Read file contents.
 
         Parameters
         ----------
         file_path : str
             Path to file (relative to inventory directory or absolute)
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
 
         Returns
         -------
@@ -201,13 +207,15 @@ class TemplateResolver:
         except Exception as e:
             raise AvdTemplateError(f"Error reading file '{path}': {e}") from e
 
-    def _lookup_env(self, var_name: str, **kwargs: Any) -> str:
+    def _lookup_env(self, var_name: str, errors: str = 'strict', **kwargs: Any) -> str:
         """Lookup plugin: env - Read environment variable.
 
         Parameters
         ----------
         var_name : str
             Environment variable name
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
 
         Returns
         -------
@@ -219,13 +227,15 @@ class TemplateResolver:
         self.logger.debug("Looked up environment variable '%s': %s", var_name, masked_value)
         return value
 
-    def _lookup_vars(self, var_name: str, **kwargs: Any) -> Any:
+    def _lookup_vars(self, var_name: str, errors: str = 'strict', **kwargs: Any) -> Any:
         """Lookup plugin: vars - Look up variable by name.
 
         Parameters
         ----------
         var_name : str
             Variable name to look up
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
 
         Returns
         -------

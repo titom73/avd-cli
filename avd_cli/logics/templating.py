@@ -9,8 +9,10 @@ references and filters.
 """
 
 import logging
+import os
 import re
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment, Undefined
 from jinja2 import TemplateError as Jinja2TemplateError
@@ -47,15 +49,18 @@ class TemplateResolver:
     # Pattern to detect both Jinja2 variables {{ }} and statements {% %}
     TEMPLATE_PATTERN = re.compile(r'\{\{.*?\}\}|\{%.*?%\}')
 
-    def __init__(self, context: Dict[str, Any]) -> None:
+    def __init__(self, context: Dict[str, Any], inventory_path: Optional[Path] = None) -> None:
         """Initialize template resolver with context.
 
         Parameters
         ----------
         context : Dict[str, Any]
             Variables available for template resolution
+        inventory_path : Optional[Path]
+            Path to inventory directory (used for resolving relative file paths in lookup())
         """
         self.context = context
+        self.inventory_path = inventory_path
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         # Create Jinja2 environment with default undefined behavior
@@ -69,6 +74,9 @@ class TemplateResolver:
 
         # Add custom filters (Ansible-compatible)
         self.env.filters['bool'] = self._filter_bool
+
+        # Add Ansible-compatible lookup function
+        self.env.globals['lookup'] = self._lookup_function
 
     @staticmethod
     def _filter_bool(value: Any) -> bool:
@@ -89,6 +97,149 @@ class TemplateResolver:
         if isinstance(value, str):
             return value.lower() in ('yes', 'true', '1', 'on')
         return bool(value)
+
+    def _lookup_function(self, plugin: str, *args: Any, errors: str = 'strict', **kwargs: Any) -> str:
+        """Ansible-compatible lookup function.
+
+        Supports a subset of Ansible lookup plugins commonly used in AVD inventories.
+
+        Parameters
+        ----------
+        plugin : str
+            Lookup plugin name (e.g., 'file', 'env', 'vars')
+        *args : Any
+            Positional arguments for the lookup plugin
+        errors : str
+            Error handling mode: 'strict' (default), 'warn', or 'ignore'
+        **kwargs : Any
+            Keyword arguments for the lookup plugin
+
+        Returns
+        -------
+        str
+            Result of the lookup operation
+
+        Raises
+        ------
+        TemplateError
+            If lookup fails and errors='strict'
+
+        Examples
+        --------
+        >>> # In Jinja2 template:
+        >>> # {{ lookup('file', 'config.txt') }}
+        >>> # {{ lookup('env', 'HOME') }}
+        """
+        try:
+            if plugin == 'file':
+                return self._lookup_file(*args, **kwargs)
+            if plugin == 'env':
+                return self._lookup_env(*args, **kwargs)
+            if plugin == 'vars':
+                return self._lookup_vars(*args, **kwargs)
+
+            # Unsupported plugin
+            error_msg = f"Lookup plugin '{plugin}' is not supported. Supported plugins: file, env, vars"
+            if errors == 'strict':
+                raise AvdTemplateError(error_msg)
+            if errors == 'warn':
+                self.logger.warning(error_msg)
+            return ""
+
+        except AvdTemplateError:
+            # Re-raise our own errors
+            raise
+        except Exception as e:
+            error_msg = f"Lookup plugin '{plugin}' failed: {e}"
+            if errors == 'strict':
+                raise AvdTemplateError(error_msg) from e
+            if errors == 'warn':
+                self.logger.warning(error_msg)
+            return ""
+
+    def _lookup_file(self, file_path: str, **kwargs: Any) -> str:
+        """Lookup plugin: file - Read file contents.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to file (relative to inventory directory or absolute)
+
+        Returns
+        -------
+        str
+            File contents
+
+        Raises
+        ------
+        TemplateError
+            If file cannot be read
+        """
+        # Convert to Path object
+        path = Path(file_path)
+
+        # If path is relative and we have inventory_path, resolve relative to inventory
+        if not path.is_absolute() and self.inventory_path:
+            path = self.inventory_path / path
+
+        # Resolve to absolute path and normalize
+        try:
+            path = path.resolve()
+        except (OSError, RuntimeError) as e:
+            raise AvdTemplateError(f"Cannot resolve file path '{file_path}': {e}") from e
+
+        # Read file
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.logger.debug("Loaded file via lookup('file'): %s", path)
+            return content
+        except FileNotFoundError as e:
+            raise AvdTemplateError(f"File not found: {path}") from e
+        except PermissionError as e:
+            raise AvdTemplateError(f"Permission denied reading file: {path}") from e
+        except Exception as e:
+            raise AvdTemplateError(f"Error reading file '{path}': {e}") from e
+
+    def _lookup_env(self, var_name: str, **kwargs: Any) -> str:
+        """Lookup plugin: env - Read environment variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Environment variable name
+
+        Returns
+        -------
+        str
+            Environment variable value (empty string if not set)
+        """
+        value = os.environ.get(var_name, "")
+        masked_value = "***" if "password" in var_name.lower() or "token" in var_name.lower() else value
+        self.logger.debug("Looked up environment variable '%s': %s", var_name, masked_value)
+        return value
+
+    def _lookup_vars(self, var_name: str, **kwargs: Any) -> Any:
+        """Lookup plugin: vars - Look up variable by name.
+
+        Parameters
+        ----------
+        var_name : str
+            Variable name to look up
+
+        Returns
+        -------
+        Any
+            Variable value from context
+
+        Raises
+        ------
+        TemplateError
+            If variable not found in context
+        """
+        if var_name in self.context:
+            return self.context[var_name]
+        raise AvdTemplateError(f"Variable '{var_name}' not found in context")
 
     def has_template(self, value: str) -> bool:
         """Check if string contains Jinja2 template syntax.

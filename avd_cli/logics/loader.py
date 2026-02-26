@@ -128,7 +128,7 @@ class InventoryLoader:
         for pass_num in range(max_passes):
             # Rebuild context with partially resolved variables
             context = build_template_context(global_vars, group_vars, host_vars)
-            resolver = TemplateResolver(context)
+            resolver = TemplateResolver(context, inventory_path=inventory_path)
 
             # Resolve templates in all variable dictionaries
             new_global_vars = resolver.resolve_recursive(global_vars)

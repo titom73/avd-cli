@@ -102,7 +102,7 @@ class TemplateResolver:
             return value.lower() in ('yes', 'true', '1', 'on')
         return bool(value)
 
-    def _dispatch_lookup(self, plugin: str, *args: Any, errors: str, **kwargs: Any) -> str:
+    def _dispatch_lookup(self, plugin: str, *args: Any, **kwargs: Any) -> str:
         """Dispatch lookup to the appropriate handler method.
 
         Parameters
@@ -111,25 +111,20 @@ class TemplateResolver:
             Lookup plugin name
         *args : Any
             Positional arguments
-        errors : str
-            Error handling mode
         **kwargs : Any
-            Keyword arguments (excluding 'errors')
+            Keyword arguments (including 'errors')
 
         Returns
         -------
         str
             Result from the lookup handler
         """
-        # Remove 'errors' from kwargs if present to avoid duplicate keyword argument
-        kwargs.pop('errors', None)
-
         if plugin == 'file':
-            return self._lookup_file(*args, errors=errors, **kwargs)
+            return self._lookup_file(*args, **kwargs)
         if plugin == 'env':
-            return self._lookup_env(*args, errors=errors, **kwargs)
+            return self._lookup_env(*args, **kwargs)
         # plugin == 'vars'
-        result = self._lookup_vars(*args, errors=errors, **kwargs)
+        result = self._lookup_vars(*args, **kwargs)
         return str(result) if result is not None else ""
 
     def _handle_lookup_error(self, error_msg: str, errors: str, cause: Optional[Exception] = None) -> str:

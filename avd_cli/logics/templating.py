@@ -78,12 +78,9 @@ class TemplateResolver:
         # Add Ansible-compatible lookup function
         self.env.globals['lookup'] = self._lookup_function
 
-        # Lookup plugin registry (reduces complexity in _lookup_function)
-        self._lookup_plugins = {
-            'file': self._lookup_file,
-            'env': self._lookup_env,
-            'vars': self._lookup_vars,
-        }
+        # Lookup plugin registry - maps plugin names to handler methods
+        # Note: We don't store method references directly to avoid MyPy type issues
+        self._supported_plugins = {'file', 'env', 'vars'}
 
     @staticmethod
     def _filter_bool(value: Any) -> bool:
@@ -104,6 +101,63 @@ class TemplateResolver:
         if isinstance(value, str):
             return value.lower() in ('yes', 'true', '1', 'on')
         return bool(value)
+
+    def _dispatch_lookup(self, plugin: str, *args: Any, errors: str, **kwargs: Any) -> str:
+        """Dispatch lookup to the appropriate handler method.
+
+        Parameters
+        ----------
+        plugin : str
+            Lookup plugin name
+        *args : Any
+            Positional arguments
+        errors : str
+            Error handling mode
+        **kwargs : Any
+            Keyword arguments
+
+        Returns
+        -------
+        str
+            Result from the lookup handler
+        """
+        if plugin == 'file':
+            return self._lookup_file(*args, errors=errors, **kwargs)
+        if plugin == 'env':
+            return self._lookup_env(*args, errors=errors, **kwargs)
+        # plugin == 'vars'
+        result = self._lookup_vars(*args, errors=errors, **kwargs)
+        return str(result) if result is not None else ""
+
+    def _handle_lookup_error(self, error_msg: str, errors: str, cause: Optional[Exception] = None) -> str:
+        """Handle lookup errors based on error mode.
+
+        Parameters
+        ----------
+        error_msg : str
+            Error message
+        errors : str
+            Error handling mode
+        cause : Optional[Exception]
+            Original exception if any
+
+        Returns
+        -------
+        str
+            Empty string for warn/ignore modes
+
+        Raises
+        ------
+        AvdTemplateError
+            If errors='strict'
+        """
+        if errors == 'strict':
+            if cause:
+                raise AvdTemplateError(error_msg) from cause
+            raise AvdTemplateError(error_msg)
+        if errors == 'warn':
+            self.logger.warning(error_msg)
+        return ""
 
     def _lookup_function(self, plugin: str, *args: Any, errors: str = 'strict', **kwargs: Any) -> str:
         """Ansible-compatible lookup function.
@@ -137,36 +191,24 @@ class TemplateResolver:
         >>> # {{ lookup('file', 'config.txt') }}
         >>> # {{ lookup('env', 'HOME') }}
         """
+        # Check if plugin is supported
+        if plugin not in self._supported_plugins:
+            return self._handle_lookup_error(
+                f"Lookup plugin '{plugin}' is not supported. Supported plugins: file, env, vars",
+                errors
+            )
+
+        # Dispatch to appropriate handler
         try:
-            if plugin == 'file':
-                return self._lookup_file(*args, errors=errors, **kwargs)
-            if plugin == 'env':
-                return self._lookup_env(*args, errors=errors, **kwargs)
-            if plugin == 'vars':
-                return self._lookup_vars(*args, errors=errors, **kwargs)
-
-            # Unsupported plugin
-            error_msg = f"Lookup plugin '{plugin}' is not supported. Supported plugins: file, env, vars"
-            if errors == 'strict':
-                raise AvdTemplateError(error_msg)
-            if errors == 'warn':
-                self.logger.warning(error_msg)
-            return ""
-
-        except AvdTemplateError as e:
-            # Re-raise our own errors if in strict mode
+            return self._dispatch_lookup(plugin, *args, errors=errors, **kwargs)
+        except AvdTemplateError:
             if errors == 'strict':
                 raise
             if errors == 'warn':
-                self.logger.warning(str(e))
+                self.logger.warning("Lookup plugin '%s' failed", plugin)
             return ""
         except Exception as e:
-            error_msg = f"Lookup plugin '{plugin}' failed: {e}"
-            if errors == 'strict':
-                raise AvdTemplateError(error_msg) from e
-            if errors == 'warn':
-                self.logger.warning(error_msg)
-            return ""
+            return self._handle_lookup_error(f"Lookup plugin '{plugin}' failed: {e}", errors, e)
 
     def _lookup_file(self, file_path: str, errors: str = 'strict', **kwargs: Any) -> str:
         """Lookup plugin: file - Read file contents.

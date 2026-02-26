@@ -114,13 +114,16 @@ class TemplateResolver:
         errors : str
             Error handling mode
         **kwargs : Any
-            Keyword arguments
+            Keyword arguments (excluding 'errors')
 
         Returns
         -------
         str
             Result from the lookup handler
         """
+        # Remove 'errors' from kwargs if present to avoid duplicate keyword argument
+        kwargs.pop('errors', None)
+
         if plugin == 'file':
             return self._lookup_file(*args, errors=errors, **kwargs)
         if plugin == 'env':

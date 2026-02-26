@@ -293,7 +293,7 @@ class TemplateResolver:
             return result
         except Jinja2TemplateError as e:
             error_msg = f"Template error: {e}"
-            self.logger.error(error_msg)
+            self.logger.error(f"{error_msg}\nTemplate string was: {template_str[:200]}")
             raise AvdTemplateError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error resolving template '{template_str}': {e}"
@@ -337,6 +337,9 @@ class TemplateResolver:
         Walks through the dictionary structure recursively, resolving templates
         in all string values while preserving the structure and non-string types.
 
+        Variables starting with 'raw_' are skipped to preserve pyavd-specific
+        templates (e.g., raw_eos_cli with {{ switch.* }} variables).
+
         Parameters
         ----------
         data : Dict[str, Any]
@@ -358,7 +361,13 @@ class TemplateResolver:
         """
         result = {}
         for key, value in data.items():
-            result[key] = self.resolve_recursive(value)
+            # Skip variables starting with 'raw_' - these contain pyavd-specific templates
+            # that should not be resolved during inventory loading (e.g., {{ switch.router_id }})
+            if isinstance(key, str) and key.startswith('raw_'):
+                self.logger.debug("Skipping template resolution for variable '%s' (raw_ prefix)", key)
+                result[key] = value
+            else:
+                result[key] = self.resolve_recursive(value)
         return result
 
     def resolve_list(self, data: List[Any]) -> List[Any]:

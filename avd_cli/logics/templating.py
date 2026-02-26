@@ -78,6 +78,13 @@ class TemplateResolver:
         # Add Ansible-compatible lookup function
         self.env.globals['lookup'] = self._lookup_function
 
+        # Lookup plugin registry (reduces complexity in _lookup_function)
+        self._lookup_plugins = {
+            'file': self._lookup_file,
+            'env': self._lookup_env,
+            'vars': self._lookup_vars,
+        }
+
     @staticmethod
     def _filter_bool(value: Any) -> bool:
         """Convert value to boolean (Ansible-style).
@@ -303,11 +310,11 @@ class TemplateResolver:
             return result
         except Jinja2TemplateError as e:
             error_msg = f"Template error: {e}"
-            self.logger.error(f"{error_msg}\nTemplate string was: {template_str[:200]}")
+            self.logger.error("%s\nTemplate string was: %s", error_msg, template_str[:200])
             raise AvdTemplateError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error resolving template '{template_str}': {e}"
-            self.logger.error(error_msg)
+            self.logger.error("%s", error_msg)
             raise AvdTemplateError(error_msg) from e
 
     def resolve_value(self, value: Any) -> Any:
@@ -374,7 +381,7 @@ class TemplateResolver:
                     return result
                 except Jinja2TemplateError as e:
                     error_msg = f"Template error: {e}"
-                    self.logger.error(f"{error_msg}\nTemplate string was: {value[:200]}")
+                    self.logger.error("%s\nTemplate string was: %s", error_msg, value[:200])
                     raise AvdTemplateError(error_msg) from e
                 except Exception as e:
                     error_msg = f"Unexpected error resolving template '{value}': {e}"

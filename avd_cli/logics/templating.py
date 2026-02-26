@@ -316,6 +316,12 @@ class TemplateResolver:
         Only string values are processed for templates. Other types are returned
         unchanged to preserve type information.
 
+        Special behavior (Ansible-compatible):
+        - If the string contains ONLY a Jinja2 template (e.g., "{{ var }}"),
+          the type of the resolved value is preserved (dict, list, int, etc.)
+        - If the string contains text + template (e.g., "prefix_{{ var }}"),
+          the result is always converted to string
+
         Parameters
         ----------
         value : Any
@@ -324,22 +330,59 @@ class TemplateResolver:
         Returns
         -------
         Any
-            Resolved value (same type as input for non-strings)
+            Resolved value (same type as input for non-strings, or type of
+            template result if string contains only a template)
 
         Examples
         --------
-        >>> resolver = TemplateResolver({"mtu": 9214})
+        >>> resolver = TemplateResolver({"mtu": 9214, "config": {"key": "value"}})
         >>> resolver.resolve_value("{{ mtu }}")
-        '9214'
+        9214  # Preserves int type
+        >>> resolver.resolve_value("{{ config }}")
+        {"key": "value"}  # Preserves dict type
+        >>> resolver.resolve_value("mtu_{{ mtu }}")
+        'mtu_9214'  # String because of prefix
         >>> resolver.resolve_value(123)
         123
         >>> resolver.resolve_value(True)
         True
         """
         # Only resolve templates in strings
-        if isinstance(value, str):
-            return self.resolve(value)
-        return value
+        if not isinstance(value, str):
+            return value
+
+        # Check if string contains ONLY a Jinja2 template (Ansible behavior)
+        # Pattern: optional whitespace, {{...}}, optional whitespace, nothing else
+        stripped = value.strip()
+        if stripped.startswith('{{') and stripped.endswith('}}'):
+            # Check if there's only ONE template and nothing else
+            # This preserves the type of the resolved value (dict, list, int, etc.)
+            template_count = len(self.TEMPLATE_PATTERN.findall(value))
+            if template_count == 1 and value.strip() == stripped:
+                # Extract the expression (remove {{ and }})
+                expression = stripped[2:-2].strip()
+
+                # Resolve and return the actual type using compile_expression
+                # This preserves dict/list/int types instead of converting to string
+                try:
+                    compiled_expr = self.env.compile_expression(expression)
+                    result = compiled_expr(**self.context)
+                    self.logger.info(
+                        "Type-preserving resolution: '%s' -> %s (type: %s)",
+                        value[:80], str(result)[:80], type(result).__name__
+                    )
+                    return result
+                except Jinja2TemplateError as e:
+                    error_msg = f"Template error: {e}"
+                    self.logger.error(f"{error_msg}\nTemplate string was: {value[:200]}")
+                    raise AvdTemplateError(error_msg) from e
+                except Exception as e:
+                    error_msg = f"Unexpected error resolving template '{value}': {e}"
+                    self.logger.error(error_msg)
+                    raise AvdTemplateError(error_msg) from e
+
+        # Otherwise, resolve as string (may contain multiple templates or text + template)
+        return self.resolve(value)
 
     def resolve_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively resolve templates in a dictionary.
@@ -431,7 +474,7 @@ class TemplateResolver:
         if isinstance(data, list):
             return self.resolve_list(data)
         if isinstance(data, str):
-            return self.resolve(data)
+            return self.resolve_value(data)  # Use resolve_value to preserve types
         # Preserve non-string types (int, bool, None, etc.)
         return data
 

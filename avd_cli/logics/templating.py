@@ -9,8 +9,10 @@ references and filters.
 """
 
 import logging
+import os
 import re
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment, Undefined
 from jinja2 import TemplateError as Jinja2TemplateError
@@ -47,15 +49,18 @@ class TemplateResolver:
     # Pattern to detect both Jinja2 variables {{ }} and statements {% %}
     TEMPLATE_PATTERN = re.compile(r'\{\{.*?\}\}|\{%.*?%\}')
 
-    def __init__(self, context: Dict[str, Any]) -> None:
+    def __init__(self, context: Dict[str, Any], inventory_path: Optional[Path] = None) -> None:
         """Initialize template resolver with context.
 
         Parameters
         ----------
         context : Dict[str, Any]
             Variables available for template resolution
+        inventory_path : Optional[Path]
+            Path to inventory directory (used for resolving relative file paths in lookup())
         """
         self.context = context
+        self.inventory_path = inventory_path
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         # Create Jinja2 environment with default undefined behavior
@@ -69,6 +74,13 @@ class TemplateResolver:
 
         # Add custom filters (Ansible-compatible)
         self.env.filters['bool'] = self._filter_bool
+
+        # Add Ansible-compatible lookup function
+        self.env.globals['lookup'] = self._lookup_function
+
+        # Lookup plugin registry - maps plugin names to handler methods
+        # Note: We don't store method references directly to avoid MyPy type issues
+        self._supported_plugins = {'file', 'env', 'vars'}
 
     @staticmethod
     def _filter_bool(value: Any) -> bool:
@@ -89,6 +101,202 @@ class TemplateResolver:
         if isinstance(value, str):
             return value.lower() in ('yes', 'true', '1', 'on')
         return bool(value)
+
+    def _dispatch_lookup(self, plugin: str, *args: Any, **kwargs: Any) -> str:
+        """Dispatch lookup to the appropriate handler method.
+
+        Parameters
+        ----------
+        plugin : str
+            Lookup plugin name
+        *args : Any
+            Positional arguments
+        **kwargs : Any
+            Keyword arguments (including 'errors')
+
+        Returns
+        -------
+        str
+            Result from the lookup handler
+        """
+        if plugin == 'file':
+            return self._lookup_file(*args, **kwargs)
+        if plugin == 'env':
+            return self._lookup_env(*args, **kwargs)
+        # plugin == 'vars'
+        result = self._lookup_vars(*args, **kwargs)
+        return str(result) if result is not None else ""
+
+    def _handle_lookup_error(self, error_msg: str, errors: str, cause: Optional[Exception] = None) -> str:
+        """Handle lookup errors based on error mode.
+
+        Parameters
+        ----------
+        error_msg : str
+            Error message
+        errors : str
+            Error handling mode
+        cause : Optional[Exception]
+            Original exception if any
+
+        Returns
+        -------
+        str
+            Empty string for warn/ignore modes
+
+        Raises
+        ------
+        AvdTemplateError
+            If errors='strict'
+        """
+        if errors == 'strict':
+            if cause:
+                raise AvdTemplateError(error_msg) from cause
+            raise AvdTemplateError(error_msg)
+        if errors == 'warn':
+            self.logger.warning(error_msg)
+        return ""
+
+    def _lookup_function(self, plugin: str, *args: Any, errors: str = 'strict', **kwargs: Any) -> str:
+        """Ansible-compatible lookup function.
+
+        Supports a subset of Ansible lookup plugins commonly used in AVD inventories.
+
+        Parameters
+        ----------
+        plugin : str
+            Lookup plugin name (e.g., 'file', 'env', 'vars')
+        *args : Any
+            Positional arguments for the lookup plugin
+        errors : str
+            Error handling mode: 'strict' (default), 'warn', or 'ignore'
+        **kwargs : Any
+            Keyword arguments for the lookup plugin
+
+        Returns
+        -------
+        str
+            Result of the lookup operation
+
+        Raises
+        ------
+        TemplateError
+            If lookup fails and errors='strict'
+
+        Examples
+        --------
+        >>> # In Jinja2 template:
+        >>> # {{ lookup('file', 'config.txt') }}
+        >>> # {{ lookup('env', 'HOME') }}
+        """
+        # Check if plugin is supported
+        if plugin not in self._supported_plugins:
+            return self._handle_lookup_error(
+                f"Lookup plugin '{plugin}' is not supported. Supported plugins: file, env, vars",
+                errors
+            )
+
+        # Dispatch to appropriate handler
+        try:
+            return self._dispatch_lookup(plugin, *args, errors=errors, **kwargs)
+        except AvdTemplateError:
+            if errors == 'strict':
+                raise
+            if errors == 'warn':
+                self.logger.warning("Lookup plugin '%s' failed", plugin)
+            return ""
+        except Exception as e:
+            return self._handle_lookup_error(f"Lookup plugin '{plugin}' failed: {e}", errors, e)
+
+    def _lookup_file(self, file_path: str, errors: str = 'strict', **kwargs: Any) -> str:
+        """Lookup plugin: file - Read file contents.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to file (relative to inventory directory or absolute)
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
+
+        Returns
+        -------
+        str
+            File contents
+
+        Raises
+        ------
+        TemplateError
+            If file cannot be read
+        """
+        # Convert to Path object
+        path = Path(file_path)
+
+        # If path is relative and we have inventory_path, resolve relative to inventory
+        if not path.is_absolute() and self.inventory_path:
+            path = self.inventory_path / path
+
+        # Resolve to absolute path and normalize
+        try:
+            path = path.resolve()
+        except (OSError, RuntimeError) as e:
+            raise AvdTemplateError(f"Cannot resolve file path '{file_path}': {e}") from e
+
+        # Read file
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.logger.debug("Loaded file via lookup('file'): %s", path)
+            return content
+        except FileNotFoundError as e:
+            raise AvdTemplateError(f"File not found: {path}") from e
+        except PermissionError as e:
+            raise AvdTemplateError(f"Permission denied reading file: {path}") from e
+        except Exception as e:
+            raise AvdTemplateError(f"Error reading file '{path}': {e}") from e
+
+    def _lookup_env(self, var_name: str, errors: str = 'strict', **kwargs: Any) -> str:
+        """Lookup plugin: env - Read environment variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Environment variable name
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
+
+        Returns
+        -------
+        str
+            Environment variable value (empty string if not set)
+        """
+        value = os.environ.get(var_name, "")
+        masked_value = "***" if "password" in var_name.lower() or "token" in var_name.lower() else value
+        self.logger.debug("Looked up environment variable '%s': %s", var_name, masked_value)
+        return value
+
+    def _lookup_vars(self, var_name: str, errors: str = 'strict', **kwargs: Any) -> Any:
+        """Lookup plugin: vars - Look up variable by name.
+
+        Parameters
+        ----------
+        var_name : str
+            Variable name to look up
+        errors : str
+            Error handling mode (handled by caller, included for signature compatibility)
+
+        Returns
+        -------
+        Any
+            Variable value from context
+
+        Raises
+        ------
+        TemplateError
+            If variable not found in context
+        """
+        if var_name in self.context:
+            return self.context[var_name]
+        raise AvdTemplateError(f"Variable '{var_name}' not found in context")
 
     def has_template(self, value: str) -> bool:
         """Check if string contains Jinja2 template syntax.
@@ -142,11 +350,11 @@ class TemplateResolver:
             return result
         except Jinja2TemplateError as e:
             error_msg = f"Template error: {e}"
-            self.logger.error(error_msg)
+            self.logger.error("%s\nTemplate string was: %s", error_msg, template_str[:200])
             raise AvdTemplateError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error resolving template '{template_str}': {e}"
-            self.logger.error(error_msg)
+            self.logger.error("%s", error_msg)
             raise AvdTemplateError(error_msg) from e
 
     def resolve_value(self, value: Any) -> Any:
@@ -154,6 +362,12 @@ class TemplateResolver:
 
         Only string values are processed for templates. Other types are returned
         unchanged to preserve type information.
+
+        Special behavior (Ansible-compatible):
+        - If the string contains ONLY a Jinja2 template (e.g., "{{ var }}"),
+          the type of the resolved value is preserved (dict, list, int, etc.)
+        - If the string contains text + template (e.g., "prefix_{{ var }}"),
+          the result is always converted to string
 
         Parameters
         ----------
@@ -163,28 +377,68 @@ class TemplateResolver:
         Returns
         -------
         Any
-            Resolved value (same type as input for non-strings)
+            Resolved value (same type as input for non-strings, or type of
+            template result if string contains only a template)
 
         Examples
         --------
-        >>> resolver = TemplateResolver({"mtu": 9214})
+        >>> resolver = TemplateResolver({"mtu": 9214, "config": {"key": "value"}})
         >>> resolver.resolve_value("{{ mtu }}")
-        '9214'
+        9214  # Preserves int type
+        >>> resolver.resolve_value("{{ config }}")
+        {"key": "value"}  # Preserves dict type
+        >>> resolver.resolve_value("mtu_{{ mtu }}")
+        'mtu_9214'  # String because of prefix
         >>> resolver.resolve_value(123)
         123
         >>> resolver.resolve_value(True)
         True
         """
         # Only resolve templates in strings
-        if isinstance(value, str):
-            return self.resolve(value)
-        return value
+        if not isinstance(value, str):
+            return value
+
+        # Check if string contains ONLY a Jinja2 template (Ansible behavior)
+        # Pattern: optional whitespace, {{...}}, optional whitespace, nothing else
+        stripped = value.strip()
+        if stripped.startswith('{{') and stripped.endswith('}}'):
+            # Check if there's only ONE template and nothing else
+            # This preserves the type of the resolved value (dict, list, int, etc.)
+            template_count = len(self.TEMPLATE_PATTERN.findall(value))
+            if template_count == 1 and value.strip() == stripped:
+                # Extract the expression (remove {{ and }})
+                expression = stripped[2:-2].strip()
+
+                # Resolve and return the actual type using compile_expression
+                # This preserves dict/list/int types instead of converting to string
+                try:
+                    compiled_expr = self.env.compile_expression(expression)
+                    result = compiled_expr(**self.context)
+                    self.logger.info(
+                        "Type-preserving resolution: '%s' -> %s (type: %s)",
+                        value[:80], str(result)[:80], type(result).__name__
+                    )
+                    return result
+                except Jinja2TemplateError as e:
+                    error_msg = f"Template error: {e}"
+                    self.logger.error("%s\nTemplate string was: %s", error_msg, value[:200])
+                    raise AvdTemplateError(error_msg) from e
+                except Exception as e:
+                    error_msg = f"Unexpected error resolving template '{value}': {e}"
+                    self.logger.error(error_msg)
+                    raise AvdTemplateError(error_msg) from e
+
+        # Otherwise, resolve as string (may contain multiple templates or text + template)
+        return self.resolve(value)
 
     def resolve_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively resolve templates in a dictionary.
 
         Walks through the dictionary structure recursively, resolving templates
         in all string values while preserving the structure and non-string types.
+
+        Variables starting with 'raw_' are skipped to preserve pyavd-specific
+        templates (e.g., raw_eos_cli with {{ switch.* }} variables).
 
         Parameters
         ----------
@@ -207,7 +461,13 @@ class TemplateResolver:
         """
         result = {}
         for key, value in data.items():
-            result[key] = self.resolve_recursive(value)
+            # Skip variables starting with 'raw_' - these contain pyavd-specific templates
+            # that should not be resolved during inventory loading (e.g., {{ switch.router_id }})
+            if isinstance(key, str) and key.startswith('raw_'):
+                self.logger.debug("Skipping template resolution for variable '%s' (raw_ prefix)", key)
+                result[key] = value
+            else:
+                result[key] = self.resolve_recursive(value)
         return result
 
     def resolve_list(self, data: List[Any]) -> List[Any]:
@@ -261,7 +521,7 @@ class TemplateResolver:
         if isinstance(data, list):
             return self.resolve_list(data)
         if isinstance(data, str):
-            return self.resolve(data)
+            return self.resolve_value(data)  # Use resolve_value to preserve types
         # Preserve non-string types (int, bool, None, etc.)
         return data
 

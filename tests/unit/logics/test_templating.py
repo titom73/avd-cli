@@ -7,6 +7,8 @@ Tests cover template variable resolution, hostvars access, filters,
 and error handling as specified in AC-036 to AC-045.
 """
 
+import os
+
 import pytest
 
 from avd_cli.exceptions import TemplateError
@@ -338,3 +340,200 @@ class TestTemplateIntegration:
         mgmt_ip = resolved["l2leaf"]["node_groups"][0]["nodes"][0]["mgmt_ip"]
 
         assert mgmt_ip == "192.168.0.14/24"
+
+
+class TestLookupFunction:
+    """Tests for Ansible-compatible lookup() function."""
+
+    def test_lookup_file_success(self, tmp_path):
+        """Test lookup('file', path) reads file contents successfully."""
+        # Create a temporary file
+        test_file = tmp_path / "test_config.txt"
+        test_content = "interface Ethernet1\n  description Test Interface\n"
+        test_file.write_text(test_content)
+
+        context = {}
+        resolver = TemplateResolver(context, inventory_path=tmp_path)
+
+        result = resolver.resolve("{{ lookup('file', 'test_config.txt') }}")
+        assert result == test_content
+
+    def test_lookup_file_absolute_path(self, tmp_path):
+        """Test lookup('file', path) with absolute path."""
+        test_file = tmp_path / "absolute_test.txt"
+        test_content = "Absolute path content"
+        test_file.write_text(test_content)
+
+        context = {}
+        resolver = TemplateResolver(context)
+
+        result = resolver.resolve(f"{{{{ lookup('file', '{test_file}') }}}}")
+        assert result == test_content
+
+    def test_lookup_file_not_found(self, tmp_path):
+        """Test lookup('file', path) raises error when file not found."""
+        context = {}
+        resolver = TemplateResolver(context, inventory_path=tmp_path)
+
+        with pytest.raises(TemplateError, match="File not found"):
+            resolver.resolve("{{ lookup('file', 'nonexistent.txt') }}")
+
+    def test_lookup_file_errors_ignore(self, tmp_path):
+        """Test lookup('file', path, errors='ignore') returns empty string on error."""
+        context = {}
+        resolver = TemplateResolver(context, inventory_path=tmp_path)
+
+        result = resolver.resolve("{{ lookup('file', 'missing.txt', errors='ignore') }}")
+        assert result == ""
+
+    def test_lookup_env_success(self):
+        """Test lookup('env', var) reads environment variable."""
+        os.environ['TEST_AVD_VAR'] = 'test_value_123'
+        try:
+            context = {}
+            resolver = TemplateResolver(context)
+
+            result = resolver.resolve("{{ lookup('env', 'TEST_AVD_VAR') }}")
+            assert result == "test_value_123"
+        finally:
+            del os.environ['TEST_AVD_VAR']
+
+    def test_lookup_env_missing(self):
+        """Test lookup('env', var) returns empty string when var not set."""
+        context = {}
+        resolver = TemplateResolver(context)
+
+        # Make sure the variable doesn't exist
+        if 'NONEXISTENT_AVD_VAR' in os.environ:
+            del os.environ['NONEXISTENT_AVD_VAR']
+
+        result = resolver.resolve("{{ lookup('env', 'NONEXISTENT_AVD_VAR') }}")
+        assert result == ""
+
+    def test_lookup_vars_success(self):
+        """Test lookup('vars', var_name) accesses variable dynamically."""
+        context = {"my_variable": "dynamic_value", "var_name": "my_variable"}
+        resolver = TemplateResolver(context)
+
+        result = resolver.resolve("{{ lookup('vars', 'my_variable') }}")
+        assert result == "dynamic_value"
+
+    def test_lookup_vars_not_found(self):
+        """Test lookup('vars', var_name) raises error when variable not found."""
+        context = {}
+        resolver = TemplateResolver(context)
+
+        with pytest.raises(TemplateError, match="Variable 'missing_var' not found"):
+            resolver.resolve("{{ lookup('vars', 'missing_var') }}")
+
+    def test_lookup_unsupported_plugin(self):
+        """Test lookup() with unsupported plugin raises error."""
+        context = {}
+        resolver = TemplateResolver(context)
+
+        with pytest.raises(TemplateError, match="Lookup plugin 'unsupported' is not supported"):
+            resolver.resolve("{{ lookup('unsupported', 'arg') }}")
+
+    def test_lookup_unsupported_plugin_errors_warn(self, caplog):
+        """Test lookup() with unsupported plugin and errors='warn' logs warning."""
+        context = {}
+        resolver = TemplateResolver(context)
+
+        result = resolver.resolve("{{ lookup('unsupported', 'arg', errors='warn') }}")
+        assert result == ""
+        assert "Lookup plugin 'unsupported' is not supported" in caplog.text
+
+    def test_lookup_in_nested_structure(self, tmp_path):
+        """Test lookup() works in nested data structures."""
+        config_file = tmp_path / "nested_config.txt"
+        config_file.write_text("nested content")
+
+        context = {}
+        resolver = TemplateResolver(context, inventory_path=tmp_path)
+
+        data = {
+            "structured_config": {
+                "tcam_profile": {
+                    "config": "{{ lookup('file', 'nested_config.txt') }}"
+                }
+            }
+        }
+
+        result = resolver.resolve_recursive(data)
+        assert result["structured_config"]["tcam_profile"]["config"] == "nested content"
+
+
+class TestRawVariablesSkip:
+    """Tests for skipping template resolution in raw_* variables."""
+
+    def test_raw_variable_not_resolved(self):
+        """Test that variables starting with 'raw_' are not resolved."""
+        context = {"switch": {"router_id": "10.0.0.1"}}
+        resolver = TemplateResolver(context)
+
+        data = {
+            "raw_eos_cli": "interface Loopback0\n  ip address {{ switch.router_id }}/32",
+            "normal_var": "{{ switch.router_id }}"
+        }
+
+        result = resolver.resolve_recursive(data)
+
+        # raw_eos_cli should NOT be resolved (keep template)
+        assert "{{ switch.router_id }}" in result["raw_eos_cli"]
+
+        # normal_var should be resolved
+        assert result["normal_var"] == "10.0.0.1"
+
+    def test_raw_int_variable_preserved(self):
+        """Test that raw_int variable with pyavd templates is preserved."""
+        context = {}
+        resolver = TemplateResolver(context)
+
+        data = {
+            "raw_int": "device-id 0x{{ '%02x' | format(switch.id) }}",
+            "raw_greent": "source {{ switch.router_id }}",
+            "processed": "{{ 'test' }}"
+        }
+
+        result = resolver.resolve_recursive(data)
+
+        # All raw_* variables should be preserved
+        assert "{{ '%02x' | format(switch.id) }}" in result["raw_int"]
+        assert "{{ switch.router_id }}" in result["raw_greent"]
+
+        # Normal variables should be resolved
+        assert result["processed"] == "test"
+
+    def test_raw_variable_in_nested_dict(self):
+        """Test raw_* variables are skipped even in nested structures."""
+        context = {"var": "value"}
+        resolver = TemplateResolver(context)
+
+        data = {
+            "telemetry": {
+                "raw_cli": "monitor telemetry {{ switch.name }}",
+                "normal": "{{ var }}"
+            }
+        }
+
+        result = resolver.resolve_recursive(data)
+
+        assert "{{ switch.name }}" in result["telemetry"]["raw_cli"]
+        assert result["telemetry"]["normal"] == "value"
+
+    def test_non_raw_variable_with_raw_in_name(self):
+        """Test that variables containing 'raw' but not starting with 'raw_' are resolved."""
+        context = {"value": "test"}
+        resolver = TemplateResolver(context)
+
+        data = {
+            "not_raw_var": "{{ value }}",
+            "raw_var": "{{ value }}",  # This should NOT be resolved
+            "my_raw_data": "{{ value }}"  # This SHOULD be resolved (doesn't start with raw_)
+        }
+
+        result = resolver.resolve_recursive(data)
+
+        assert result["not_raw_var"] == "test"
+        assert "{{ value }}" in result["raw_var"]
+        assert result["my_raw_data"] == "test"

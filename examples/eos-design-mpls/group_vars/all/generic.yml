@@ -5,9 +5,10 @@ management_vrf_name: "MGMT"
 dns_domain: atd.lab
 
 # dns servers.
-name_servers:
-  - 192.168.2.1
-  - 8.8.8.8
+dns_settings:
+  servers:
+    - ip_address: 192.168.2.1
+    - ip_address: 8.8.8.8
 
 # Timezone settings
 timezone: Europe/Paris

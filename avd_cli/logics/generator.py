@@ -112,7 +112,10 @@ class ConfigurationGenerator:
                 # that are specific to eos_cli_config_gen schema (not part of eos_designs)
                 # We deep merge to ensure structured_config from eos_designs takes precedence
                 # but eos_cli_config_gen variables are added where not present
-                structured_configs[hostname] = deep_merge(inputs, structured_config)
+                structured_configs[hostname] = deep_merge(
+                    inputs,
+                    structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config,
+                )
         else:
             # Config-only workflow (cli-config)
             self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
@@ -661,7 +664,9 @@ class DocumentationGenerator:
                 structured_config = pyavd.get_device_structured_config(
                     hostname=hostname, inputs=inputs, avd_facts=avd_facts
                 )
-                structured_configs[hostname] = structured_config
+                structured_configs[hostname] = (
+                    structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config
+                )
 
             # Generate device documentation ONLY for filtered devices
             hostnames_to_document = (
@@ -966,7 +971,9 @@ class TestGenerator:
             structured_config = pyavd.get_device_structured_config(
                 hostname=hostname, inputs=inputs, avd_facts=avd_facts
             )
-            structured_configs[hostname] = structured_config
+            structured_configs[hostname] = (
+                structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config
+            )
         return structured_configs
 
     def _write_anta_catalog(self, tests_dir: Path, structured_configs: Dict[str, Dict[str, Any]]) -> Path:
@@ -977,11 +984,11 @@ class TestGenerator:
 
         try:
             # Try to use pyavd.get_device_test_catalog if anta/pydantic are available
-            from pyavd.api._anta import get_minimal_structured_configs
+            from pyavd.api.anta import AVDFabricData
             import pyavd
 
-            # Get minimal structured configs for cross-device test generation
-            minimal_structured_configs = get_minimal_structured_configs(structured_configs)
+            # Build fabric data once for cross-device test generation
+            fabric_data = AVDFabricData.from_structured_configs(structured_configs)
 
             # Generate per-device catalogs and combine them
             all_tests = []
@@ -989,7 +996,7 @@ class TestGenerator:
                 device_catalog = pyavd.get_device_test_catalog(
                     hostname=hostname,
                     structured_config=struct_config,
-                    minimal_structured_configs=minimal_structured_configs
+                    fabric_data=fabric_data,
                 )
                 all_tests.extend(device_catalog.tests)
 

@@ -84,14 +84,17 @@ class ConfigurationGenerator:
             self.logger.info("Validating inputs against eos_designs schema")
             for hostname, inputs in all_inputs.items():
                 validation_result = self.pyavd.validate_inputs(inputs)
-                if validation_result.failed:
-                    errors = "\n".join(str(e) for e in validation_result.validation_errors)
+                if validation_result.validated_data is None:
+                    errors = "\n".join(
+                        f"{'.'.join(str(p) for p in v.path)}: {v.message}"
+                        for v in validation_result.validation_result.violations
+                    )
                     raise ConfigurationGenerationError(
                         f"Input validation failed for {hostname}:\n{errors}"
                     )
-                if validation_result.deprecation_warnings:
-                    for warning in validation_result.deprecation_warnings:
-                        self.logger.warning("Deprecation warning for %s: %s", hostname, warning)
+                if validation_result.validation_result.deprecations:
+                    for deprecation in validation_result.validation_result.deprecations:
+                        self.logger.warning("Deprecation warning for %s: %s", hostname, deprecation.message)
 
             # Generate AVD facts and structured configs
             self.logger.info("Generating AVD facts for %d devices", len(all_inputs))
@@ -109,7 +112,10 @@ class ConfigurationGenerator:
                 # that are specific to eos_cli_config_gen schema (not part of eos_designs)
                 # We deep merge to ensure structured_config from eos_designs takes precedence
                 # but eos_cli_config_gen variables are added where not present
-                structured_configs[hostname] = deep_merge(inputs, structured_config)
+                structured_configs[hostname] = deep_merge(
+                    inputs,
+                    structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config,
+                )
         else:
             # Config-only workflow (cli-config)
             self.logger.info("Using cli-config workflow (eos_cli_config_gen only)")
@@ -150,8 +156,11 @@ class ConfigurationGenerator:
         self.logger.info("Validating structured configurations for %d devices", len(structured_configs))
         for hostname, structured_config in structured_configs.items():
             validation_result = self.pyavd.validate_structured_config(structured_config)
-            if validation_result.failed:
-                errors = "\n".join(str(e) for e in validation_result.validation_errors)
+            if validation_result.validated_data is None:
+                errors = "\n".join(
+                    f"{'.'.join(str(p) for p in v.path)}: {v.message}"
+                    for v in validation_result.validation_result.violations
+                )
                 raise ConfigurationGenerationError(
                     f"Structured config validation failed for {hostname}:\n{errors}"
                 )
@@ -655,7 +664,9 @@ class DocumentationGenerator:
                 structured_config = pyavd.get_device_structured_config(
                     hostname=hostname, inputs=inputs, avd_facts=avd_facts
                 )
-                structured_configs[hostname] = structured_config
+                structured_configs[hostname] = (
+                    structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config
+                )
 
             # Generate device documentation ONLY for filtered devices
             hostnames_to_document = (
@@ -960,7 +971,9 @@ class TestGenerator:
             structured_config = pyavd.get_device_structured_config(
                 hostname=hostname, inputs=inputs, avd_facts=avd_facts
             )
-            structured_configs[hostname] = structured_config
+            structured_configs[hostname] = (
+                structured_config._as_dict() if hasattr(structured_config, "_as_dict") else structured_config
+            )
         return structured_configs
 
     def _write_anta_catalog(self, tests_dir: Path, structured_configs: Dict[str, Dict[str, Any]]) -> Path:
@@ -971,11 +984,11 @@ class TestGenerator:
 
         try:
             # Try to use pyavd.get_device_test_catalog if anta/pydantic are available
-            from pyavd.api._anta import get_minimal_structured_configs
+            from pyavd.api.anta import AVDFabricData
             import pyavd
 
-            # Get minimal structured configs for cross-device test generation
-            minimal_structured_configs = get_minimal_structured_configs(structured_configs)
+            # Build fabric data once for cross-device test generation
+            fabric_data = AVDFabricData.from_structured_configs(structured_configs)
 
             # Generate per-device catalogs and combine them
             all_tests = []
@@ -983,7 +996,7 @@ class TestGenerator:
                 device_catalog = pyavd.get_device_test_catalog(
                     hostname=hostname,
                     structured_config=struct_config,
-                    minimal_structured_configs=minimal_structured_configs
+                    fabric_data=fabric_data,
                 )
                 all_tests.extend(device_catalog.tests)
 
@@ -1002,10 +1015,13 @@ class TestGenerator:
             with open(catalog_file, "w", encoding="utf-8") as f:
                 f.write(yaml_content)
 
-        except (ImportError, AttributeError) as e:
-            # Fall back to basic ANTA catalog generation if dependencies are missing
+        except Exception as e:
+            # Fall back to basic ANTA catalog generation if pyavd ANTA factory is unavailable
+            # or if structured configs are in a format that pyavd cannot parse (e.g., mock dicts
+            # in tests, or schema differences between pyavd versions).
             self.logger.warning(
-                "Could not use pyavd ANTA factory (missing dependencies: %s). Generating basic catalog.", str(e)
+                "Could not use pyavd ANTA factory (%s: %s). Generating basic catalog.",
+                type(e).__name__, str(e)
             )
             self.logger.info("Writing basic ANTA catalog to: %s", catalog_file)
             with open(catalog_file, "w", encoding="utf-8") as f:

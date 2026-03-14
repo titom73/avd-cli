@@ -234,10 +234,17 @@ class TestConfigurationGenerator:
         """
         from unittest.mock import MagicMock
 
-        # Configure mock to return failed validation
+        # Configure mock to return failed validation (pyavd 6.x API)
+        mock_violation_1 = MagicMock()
+        mock_violation_1.message = "Error 1: Invalid input"
+        mock_violation_1.path = ["inputs"]
+        mock_violation_2 = MagicMock()
+        mock_violation_2.message = "Error 2: Missing field"
+        mock_violation_2.path = ["inputs", "required_field"]
+
         mock_validation = MagicMock()
-        mock_validation.failed = True
-        mock_validation.validation_errors = ["Error 1: Invalid input", "Error 2: Missing field"]
+        mock_validation.validated_data = None
+        mock_validation.validation_result.violations = [mock_violation_1, mock_violation_2]
         mock_pyavd.validate_inputs.return_value = mock_validation
 
         generator = ConfigurationGenerator(workflow="eos-design")
@@ -257,16 +264,20 @@ class TestConfigurationGenerator:
         """
         from unittest.mock import MagicMock
 
-        # Input validation succeeds
+        # Input validation succeeds (pyavd 6.x API)
         mock_input_validation = MagicMock()
-        mock_input_validation.failed = False
-        mock_input_validation.deprecation_warnings = []
+        mock_input_validation.validated_data = {}
+        mock_input_validation.validation_result.violations = []
+        mock_input_validation.validation_result.deprecations = []
         mock_pyavd.validate_inputs.return_value = mock_input_validation
 
-        # Structured config validation fails
+        # Structured config validation fails (pyavd 6.x API)
+        mock_struct_violation = MagicMock()
+        mock_struct_violation.message = "Structured config error"
+        mock_struct_violation.path = ["structured_config"]
         mock_structured_validation = MagicMock()
-        mock_structured_validation.failed = True
-        mock_structured_validation.validation_errors = ["Structured config error"]
+        mock_structured_validation.validated_data = None
+        mock_structured_validation.validation_result.violations = [mock_struct_violation]
         mock_pyavd.validate_structured_config.return_value = mock_structured_validation
 
         generator = ConfigurationGenerator(workflow="eos-design")
@@ -286,15 +297,21 @@ class TestConfigurationGenerator:
         """
         from unittest.mock import MagicMock
 
-        # Configure mock to return warnings
+        # Configure mock to return warnings (pyavd 6.x API)
+        mock_deprecation_1 = MagicMock()
+        mock_deprecation_1.message = "Warning 1: Old syntax"
+        mock_deprecation_2 = MagicMock()
+        mock_deprecation_2.message = "Warning 2: Deprecated field"
         mock_validation = MagicMock()
-        mock_validation.failed = False
-        mock_validation.deprecation_warnings = ["Warning 1: Old syntax", "Warning 2: Deprecated field"]
+        mock_validation.validated_data = {}
+        mock_validation.validation_result.violations = []
+        mock_validation.validation_result.deprecations = [mock_deprecation_1, mock_deprecation_2]
         mock_pyavd.validate_inputs.return_value = mock_validation
 
         # Structured config validation succeeds
         mock_structured_validation = MagicMock()
-        mock_structured_validation.failed = False
+        mock_structured_validation.validated_data = {}
+        mock_structured_validation.validation_result.violations = []
         mock_pyavd.validate_structured_config.return_value = mock_structured_validation
 
         generator = ConfigurationGenerator(workflow="eos-design")

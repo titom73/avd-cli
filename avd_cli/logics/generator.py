@@ -1015,10 +1015,13 @@ class TestGenerator:
             with open(catalog_file, "w", encoding="utf-8") as f:
                 f.write(yaml_content)
 
-        except (ImportError, AttributeError) as e:
-            # Fall back to basic ANTA catalog generation if dependencies are missing
+        except Exception as e:
+            # Fall back to basic ANTA catalog generation if pyavd ANTA factory is unavailable
+            # or if structured configs are in a format that pyavd cannot parse (e.g., mock dicts
+            # in tests, or schema differences between pyavd versions).
             self.logger.warning(
-                "Could not use pyavd ANTA factory (missing dependencies: %s). Generating basic catalog.", str(e)
+                "Could not use pyavd ANTA factory (%s: %s). Generating basic catalog.",
+                type(e).__name__, str(e)
             )
             self.logger.info("Writing basic ANTA catalog to: %s", catalog_file)
             with open(catalog_file, "w", encoding="utf-8") as f:

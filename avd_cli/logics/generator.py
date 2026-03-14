@@ -84,14 +84,17 @@ class ConfigurationGenerator:
             self.logger.info("Validating inputs against eos_designs schema")
             for hostname, inputs in all_inputs.items():
                 validation_result = self.pyavd.validate_inputs(inputs)
-                if validation_result.failed:
-                    errors = "\n".join(str(e) for e in validation_result.validation_errors)
+                if validation_result.validated_data is None:
+                    errors = "\n".join(
+                        f"{'.'.join(str(p) for p in v.path)}: {v.message}"
+                        for v in validation_result.validation_result.violations
+                    )
                     raise ConfigurationGenerationError(
                         f"Input validation failed for {hostname}:\n{errors}"
                     )
-                if validation_result.deprecation_warnings:
-                    for warning in validation_result.deprecation_warnings:
-                        self.logger.warning("Deprecation warning for %s: %s", hostname, warning)
+                if validation_result.validation_result.deprecations:
+                    for deprecation in validation_result.validation_result.deprecations:
+                        self.logger.warning("Deprecation warning for %s: %s", hostname, deprecation.message)
 
             # Generate AVD facts and structured configs
             self.logger.info("Generating AVD facts for %d devices", len(all_inputs))
@@ -150,8 +153,11 @@ class ConfigurationGenerator:
         self.logger.info("Validating structured configurations for %d devices", len(structured_configs))
         for hostname, structured_config in structured_configs.items():
             validation_result = self.pyavd.validate_structured_config(structured_config)
-            if validation_result.failed:
-                errors = "\n".join(str(e) for e in validation_result.validation_errors)
+            if validation_result.validated_data is None:
+                errors = "\n".join(
+                    f"{'.'.join(str(p) for p in v.path)}: {v.message}"
+                    for v in validation_result.validation_result.violations
+                )
                 raise ConfigurationGenerationError(
                     f"Structured config validation failed for {hostname}:\n{errors}"
                 )

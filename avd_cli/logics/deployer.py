@@ -391,7 +391,7 @@ class Deployer:
         """
         connection_loader = ConnectionInventoryLoader()
         try:
-            connection_inventory = connection_loader.load(self.inventory_path, strict=False)
+            connection_inventory = connection_loader.load(self.inventory_path)
         except Exception as e:
             raise DeploymentError(str(e)) from e
 
@@ -400,9 +400,6 @@ class Deployer:
         for host in connection_inventory.hosts:
             if not self._host_passes_filter(host):
                 continue
-
-            if connection_inventory.schema == "flat":
-                self._assert_flat_host_complete(host)
 
             target = self._build_deployment_target(host)
             if target is not None:
@@ -424,15 +421,6 @@ class Deployer:
                 self.logger.debug("Skipping %s: groups %s not in limit_to_groups", host.hostname, host.groups)
                 return False
         return True
-
-    def _assert_flat_host_complete(self, host: "ResolvedHostConnection") -> None:
-        """Raise DeploymentError if a flat-schema host is missing required fields."""
-        if not host.kind:
-            raise DeploymentError(f"Host '{host.hostname}' has no resolved kind (required for flat schema)")
-        if not host.address:
-            raise DeploymentError(f"Host '{host.hostname}' has no resolved address (address/ansible_host required)")
-        if host.credentials is None:
-            raise DeploymentError(f"Host '{host.hostname}' has incomplete credentials (username/password required)")
 
     def _build_deployment_target(
         self, host: "ResolvedHostConnection"

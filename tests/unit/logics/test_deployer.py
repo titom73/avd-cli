@@ -450,35 +450,25 @@ class TestDeployer:
     def test_build_targets_flat_schema_first_group_credentials(
         self, tmp_path: Path
     ) -> None:
-        """Flat schema: first host group wins for credentials, with per-host tls override."""
+        """Ansible inventory: host-level vars override group vars; tls resolved per host."""
         inventory_dir = tmp_path / "inventory"
         inventory_dir.mkdir()
         (inventory_dir / "inventory.yml").write_text(
             """---
-globals:
-  credentials:
-    username: global
-    password: global
-  tls_verify: true
-
-groups:
-  leaf_eos:
-    kind: arista_eos
-    tls_verify: false
-    credentials:
-      username: leaf_user
-      password: leaf_pass
-  demo:
-    credentials:
-      username: demo_user
-      password: demo_pass
-
-hosts:
-  leaf1:
-    address: 192.0.2.10
-    groups:
-      - leaf_eos
-      - demo
+all:
+  vars:
+    ansible_user: global
+    ansible_password: global
+    ansible_httpapi_validate_certs: true
+  children:
+    leaf_eos:
+      vars:
+        ansible_user: leaf_user
+        ansible_password: leaf_pass
+        ansible_httpapi_validate_certs: false
+      hosts:
+        leaf1:
+          ansible_host: 192.0.2.10
 """,
             encoding="utf-8",
         )
@@ -496,35 +486,27 @@ hosts:
         assert target.credentials.ansible_user == "leaf_user"
         assert target.credentials.ansible_password == "leaf_pass"
         assert target.tls_verify is False
-        assert target.groups == ["leaf_eos", "demo"]
+        assert "leaf_eos" in target.groups
 
     def test_build_targets_flat_schema_filter_demo_group_keeps_leaf_credentials(
         self, tmp_path: Path
     ) -> None:
-        """Host matched by demo group should still inherit credentials from first group."""
+        """Host matched by device_filter via group name retains credentials."""
         inventory_dir = tmp_path / "inventory"
         inventory_dir.mkdir()
         (inventory_dir / "inventory.yml").write_text(
             """---
-globals:
-  credentials:
-    username: global
-    password: global
-
-groups:
-  leaf_eos:
-    kind: arista_eos
-    credentials:
-      username: leaf_user
-      password: leaf_pass
-  demo: {}
-
-hosts:
-  leaf1:
-    address: 192.0.2.10
-    groups:
-      - leaf_eos
-      - demo
+all:
+  children:
+    leaf_eos:
+      vars:
+        ansible_user: leaf_user
+        ansible_password: leaf_pass
+      children:
+        demo:
+          hosts:
+            leaf1:
+              ansible_host: 192.0.2.10
 """,
             encoding="utf-8",
         )
@@ -546,29 +528,26 @@ hosts:
     def test_build_targets_flat_schema_skips_non_eos_kind(
         self, tmp_path: Path
     ) -> None:
-        """deploy eos should skip hosts with non-arista_eos kind."""
+        """deploy eos must skip hosts with ansible_network_os != arista.eos.eos."""
         inventory_dir = tmp_path / "inventory"
         inventory_dir.mkdir()
         (inventory_dir / "inventory.yml").write_text(
             """---
-globals:
-  credentials:
-    username: admin
-    password: admin
-
-groups:
-  eos_group:
-    kind: arista_eos
-  srl_group:
-    kind: nokia_srl
-
-hosts:
-  eos1:
-    address: 192.0.2.11
-    groups: [eos_group]
-  srl1:
-    address: 192.0.2.12
-    groups: [srl_group]
+all:
+  vars:
+    ansible_user: admin
+    ansible_password: admin
+  children:
+    eos_group:
+      hosts:
+        eos1:
+          ansible_host: 192.0.2.11
+          ansible_network_os: arista.eos.eos
+    srl_group:
+      hosts:
+        srl1:
+          ansible_host: 192.0.2.12
+          ansible_network_os: nokia.srl.srl
 """,
             encoding="utf-8",
         )

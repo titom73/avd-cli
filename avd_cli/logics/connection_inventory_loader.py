@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8 -*-
 
-"""Inventory loader focused on host connection resolution for deploy/info/validate."""
+"""Inventory loader that resolves host connection data from Ansible-standard inventories."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -20,359 +20,299 @@ from avd_cli.models.connection_inventory import (
 
 logger = logging.getLogger(__name__)
 
+# ansible_network_os value that identifies Arista EOS devices
+_ARISTA_EOS_NETWORK_OS = "arista.eos.eos"
+
+# Keys that delimit a group entry — not themselves sub-groups
+_RESERVED_GROUP_KEYS = {"vars", "hosts", "children"}
+
 
 class ConnectionInventoryLoader:
-    """Load and normalize connection data from supported inventory schemas."""
+    """Resolve per-host connection data from a standard Ansible inventory file.
 
-    FLAT_SCHEMA_KEYS = {"globals", "groups", "hosts"}
-    RESERVED_ANSIBLE_KEYS = {"vars", "hosts", "children"}
+    Reads ``inventory.yml`` (or ``inventory.yaml``) under the supplied path and
+    extracts the variables needed by ``deploy eos``, ``info``, and ``validate``:
+
+    - ``ansible_host``               — IP address / FQDN (required)
+    - ``ansible_user``               — eAPI username (required)
+    - ``ansible_password``           — eAPI password (required)
+    - ``ansible_network_os``         — device OS; only ``arista.eos.eos`` hosts
+                                       are included; absent → treated as EOS
+    - ``ansible_httpapi_validate_certs`` — SSL certificate validation (optional)
+    - ``ansible_httpapi_use_ssl``    — must be ``true``; ``false`` triggers a
+                                       warning because HTTP eAPI is not supported
+
+    Variable precedence follows Ansible conventions: host variables override
+    group variables, which override parent-group variables.  A host that appears
+    under multiple ``children`` references is deduplicated; the first resolved
+    connection data is kept and group memberships are accumulated.
+    """
 
     def __init__(self) -> None:
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def load(self, inventory_path: Path, strict: bool = True) -> ConnectionInventory:
-        """Load connection inventory from a directory or inventory YAML file."""
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def load(self, inventory_path: Path) -> ConnectionInventory:
+        """Load and resolve all host connections from an Ansible inventory.
+
+        Parameters
+        ----------
+        inventory_path : Path
+            Path to an inventory file **or** a directory containing
+            ``inventory.yml`` / ``inventory.yaml``.
+
+        Returns
+        -------
+        ConnectionInventory
+            Resolved host connections ready for use by deployment commands.
+
+        Raises
+        ------
+        InvalidInventoryError
+            If the inventory file is missing, malformed, or contains
+            unresolvable references.
+        """
         inventory_file = self._resolve_inventory_file(inventory_path, required=True)
-        assert inventory_file is not None  # mypy/runtime guard
-
+        assert inventory_file is not None  # mypy guard
         data = self._load_yaml_file(inventory_file)
-        schema = self.detect_schema_from_data(data)
-
-        if schema == "flat":
-            return self._parse_flat_inventory(data, strict=strict)
         return self._parse_ansible_inventory(data)
 
-    def detect_schema(self, inventory_path: Path) -> str:
-        """Detect input schema from inventory data on disk.
+    # ------------------------------------------------------------------
+    # Ansible inventory parsing
+    # ------------------------------------------------------------------
 
-        Returns ``ansible`` if no inventory file exists (for compatibility with
-        directory-style inventories based on group_vars/host_vars only).
-        """
-        inventory_file = self._resolve_inventory_file(inventory_path, required=False)
-        if inventory_file is None:
-            return "ansible"
-
-        data = self._load_yaml_file(inventory_file)
-        return self.detect_schema_from_data(data)
-
-    def is_flat_schema(self, inventory_path: Path) -> bool:
-        """Return True when the inventory file uses flat globals/groups/hosts format."""
-        return self.detect_schema(inventory_path) == "flat"
-
-    def detect_schema_from_data(self, data: Dict[str, Any]) -> str:
-        """Detect schema based on loaded YAML data."""
+    def _parse_ansible_inventory(self, data: Dict[str, Any]) -> ConnectionInventory:
+        """Parse a top-level Ansible inventory mapping into resolved hosts."""
         if not isinstance(data, dict):
             raise InvalidInventoryError("Inventory YAML root must be a mapping")
 
-        has_flat_keys = any(key in data for key in self.FLAT_SCHEMA_KEYS)
-        if not has_flat_keys:
-            return "ansible"
-
-        extra_keys = set(data.keys()) - self.FLAT_SCHEMA_KEYS
-        if extra_keys:
-            raise InvalidInventoryError(
-                "Ambiguous inventory schema: flat keys (globals/groups/hosts) cannot be mixed "
-                f"with other top-level keys: {', '.join(sorted(extra_keys))}"
-            )
-
-        return "flat"
-
-    def _parse_flat_inventory(self, data: Dict[str, Any], strict: bool) -> ConnectionInventory:
-        globals_data = data.get("globals", {}) or {}
-        groups_data = data.get("groups", {}) or {}
-        hosts_data = data.get("hosts", {}) or {}
-
-        if not isinstance(globals_data, dict):
-            raise InvalidInventoryError("Invalid flat schema: 'globals' must be a mapping")
-        if not isinstance(groups_data, dict):
-            raise InvalidInventoryError("Invalid flat schema: 'groups' must be a mapping")
-        if not isinstance(hosts_data, dict):
-            raise InvalidInventoryError("Invalid flat schema: 'hosts' must be a mapping")
-
-        resolved_hosts = [
-            self._resolve_flat_host(hostname, host_data, groups_data, globals_data, strict)
-            for hostname, host_data in hosts_data.items()
-        ]
-
-        return ConnectionInventory(
-            schema="flat",
-            hosts=resolved_hosts,
-            globals_data=globals_data,
-            groups_data=groups_data,
-        )
-
-    def _resolve_flat_host(
-        self,
-        hostname: str,
-        host_data: Any,
-        groups_data: Dict[str, Any],
-        globals_data: Dict[str, Any],
-        strict: bool,
-    ) -> ResolvedHostConnection:
-        """Resolve a single host entry from flat schema data."""
-        if not isinstance(host_data, dict):
-            raise InvalidInventoryError(f"Host '{hostname}' must be a mapping")
-
-        host_groups = host_data.get("groups") or []
-        if not isinstance(host_groups, list) or any(not isinstance(g, str) for g in host_groups):
-            raise InvalidInventoryError(f"Host '{hostname}' has invalid 'groups'. Expected a list of group names.")
-
-        missing_groups = [g for g in host_groups if g not in groups_data]
-        if missing_groups:
-            raise InvalidInventoryError(
-                f"Host '{hostname}' references unknown groups: {', '.join(missing_groups)}"
-            )
-
-        address = self._resolve_address(host_data)
-        kind = self._resolve_kind(
-            host_data=host_data, host_groups=host_groups, groups_data=groups_data, globals_data=globals_data
-        )
-        tls_verify = self._resolve_tls_verify(
-            host_data=host_data, host_groups=host_groups, groups_data=groups_data,
-            globals_data=globals_data, strict=strict,
-        )
-        credentials = self._resolve_credentials(
-            host_data=host_data, host_groups=host_groups, groups_data=groups_data,
-            globals_data=globals_data, strict=strict,
-        )
-
-        if strict and not address:
-            raise InvalidInventoryError(f"Host '{hostname}' is missing address (use 'address' or 'ansible_host')")
-        if strict and not kind:
-            raise InvalidInventoryError(f"Host '{hostname}' is missing kind (host > groups > globals resolution)")
-        if strict and credentials is None:
-            raise InvalidInventoryError(
-                f"Host '{hostname}' is missing complete credentials "
-                "(username/password via credentials.* or ansible_user/ansible_password)"
-            )
-
-        return ResolvedHostConnection(
-            hostname=hostname, address=address, groups=host_groups,
-            kind=kind, credentials=credentials, tls_verify=tls_verify,
-        )
-
-    def _parse_ansible_inventory(self, data: Dict[str, Any]) -> ConnectionInventory:
+        # Standard Ansible layout: all.vars + all.children
         all_group = data.get("all", {}) if isinstance(data, dict) else {}
+        all_vars: Dict[str, Any] = {}
+        if isinstance(all_group, dict):
+            raw_vars = all_group.get("vars")
+            if isinstance(raw_vars, dict):
+                all_vars = raw_vars
+
         children = all_group.get("children", {}) if isinstance(all_group, dict) else {}
         roots = children if isinstance(children, dict) and children else data
 
-        resolved_hosts: List[ResolvedHostConnection] = []
-        if not isinstance(roots, dict):
-            return ConnectionInventory(schema="ansible", hosts=resolved_hosts)
+        # seen tracks hostname → ResolvedHostConnection for deduplication.
+        # When a host appears under multiple parent groups (e.g. ATD_LEAFS
+        # referenced under ATD_FABRIC, ATD_TENANTS_NETWORKS, ATD_SERVERS),
+        # connection data from the first encounter is kept; subsequent
+        # encounters only append new group names.
+        seen: Dict[str, ResolvedHostConnection] = {}
 
-        for group_name, group_data in roots.items():
-            if not isinstance(group_data, dict):
-                continue
-            self._extract_ansible_hosts_recursive(
-                group_data=group_data,
-                group_name=group_name,
-                parent_vars={},
-                result=resolved_hosts,
-            )
+        if isinstance(roots, dict):
+            for group_name, group_data in roots.items():
+                if not isinstance(group_data, dict):
+                    continue
+                self._extract_hosts_recursive(
+                    group_data=group_data,
+                    group_name=group_name,
+                    parent_vars=all_vars,
+                    seen=seen,
+                )
 
-        return ConnectionInventory(schema="ansible", hosts=resolved_hosts)
+        return ConnectionInventory(hosts=list(seen.values()))
 
-    def _extract_ansible_hosts_recursive(
+    def _extract_hosts_recursive(
         self,
         group_data: Dict[str, Any],
         group_name: str,
         parent_vars: Dict[str, Any],
-        result: List[ResolvedHostConnection],
+        seen: Dict[str, ResolvedHostConnection],
     ) -> None:
+        """Walk a group tree depth-first, resolving hosts along the way."""
         if not isinstance(group_data, dict):
             return
 
-        current_vars = dict(parent_vars)
-        group_vars = group_data.get("vars")
-        if isinstance(group_vars, dict):
-            current_vars.update(group_vars)
+        # Merge group vars on top of inherited vars (child wins over parent)
+        effective_vars = dict(parent_vars)
+        raw_vars = group_data.get("vars")
+        if isinstance(raw_vars, dict):
+            effective_vars.update(raw_vars)
 
+        # Process hosts declared directly in this group
         hosts = group_data.get("hosts", {})
         if isinstance(hosts, dict):
             for hostname, host_data in hosts.items():
-                host = self._resolve_ansible_host(hostname, host_data, group_name, current_vars)
-                if host is not None:
-                    result.append(host)
+                self._register_host(hostname, host_data, group_name, effective_vars, seen)
 
-        self._recurse_ansible_children(group_data, current_vars, result)
+        # Recurse into children
+        self._recurse_children(group_data, effective_vars, seen)
 
-    def _resolve_ansible_host(
+    def _register_host(
         self,
         hostname: str,
         host_data: Any,
         group_name: str,
-        current_vars: Dict[str, Any],
+        effective_vars: Dict[str, Any],
+        seen: Dict[str, ResolvedHostConnection],
+    ) -> None:
+        """Add a host to *seen*, or merge group membership if already present."""
+        if hostname in seen:
+            # Host already resolved from a previous group traversal path.
+            # Only accumulate the new group name to record full membership.
+            existing = seen[hostname]
+            if group_name not in existing.groups:
+                existing.groups.append(group_name)
+            return
+
+        resolved = self._resolve_host(hostname, host_data, group_name, effective_vars)
+        if resolved is not None:
+            seen[hostname] = resolved
+
+    def _resolve_host(
+        self,
+        hostname: str,
+        host_data: Any,
+        group_name: str,
+        effective_vars: Dict[str, Any],
     ) -> Optional[ResolvedHostConnection]:
-        """Resolve a single ansible-style host entry. Returns None if it should be skipped."""
-        host_mapping = host_data if isinstance(host_data, dict) else {}
-        address = self._resolve_address(host_mapping)
+        """Build a ResolvedHostConnection for one host.  Returns None to skip."""
+        host_mapping: Dict[str, Any] = host_data if isinstance(host_data, dict) else {}
+
+        # Merge: effective_vars (group chain) ← host_mapping (host wins)
+        merged: Dict[str, Any] = {**effective_vars, **host_mapping}
+
+        address = self._resolve_address(merged)
         if not address:
-            self.logger.warning("Skipping %s: missing ansible_host/address", hostname)
+            self.logger.warning("Skipping %s: ansible_host not set", hostname)
             return None
 
-        username, password = self._credentials_from_mapping(host_mapping)
-        if not username or not password:
-            group_username, group_password = self._credentials_from_mapping(current_vars)
-            username = username or group_username
-            password = password or group_password
+        kind = self._resolve_network_os(hostname, merged)
+        if kind is None:
+            # Non-EOS device — skip silently (warning already logged)
+            return None
 
-        credentials: Optional[ResolvedCredentials] = None
-        if username and password:
-            credentials = ResolvedCredentials(username=username, password=password)
-
-        kind = self._first_defined([host_mapping.get("kind"), current_vars.get("kind")]) or "arista_eos"
-        tls_verify = self._resolve_tls_from_levels(levels=[host_mapping, current_vars], strict=False)
+        credentials = self._resolve_credentials(hostname, merged)
+        tls_verify = self._resolve_tls_verify(merged)
 
         return ResolvedHostConnection(
-            hostname=hostname, address=address, groups=[group_name],
-            kind=str(kind), credentials=credentials, tls_verify=tls_verify,
+            hostname=hostname,
+            address=address,
+            groups=[group_name],
+            kind=kind,
+            credentials=credentials,
+            tls_verify=tls_verify,
         )
 
-    def _recurse_ansible_children(
+    def _recurse_children(
         self,
         group_data: Dict[str, Any],
-        current_vars: Dict[str, Any],
-        result: List[ResolvedHostConnection],
+        effective_vars: Dict[str, Any],
+        seen: Dict[str, ResolvedHostConnection],
     ) -> None:
-        """Recurse into explicit 'children' and implicit nested group keys."""
+        """Recurse into explicit ``children`` and implicit nested group keys."""
         children = group_data.get("children", {})
         if isinstance(children, dict):
             for child_name, child_data in children.items():
-                self._extract_ansible_hosts_recursive(
+                self._extract_hosts_recursive(
                     group_data=child_data if isinstance(child_data, dict) else {},
                     group_name=child_name,
-                    parent_vars=current_vars,
-                    result=result,
+                    parent_vars=effective_vars,
+                    seen=seen,
                 )
 
-        # Compatibility path: nested groups can appear outside "children".
+        # Some inventories nest groups directly without an explicit "children" key
         for key, value in group_data.items():
-            if key in self.RESERVED_ANSIBLE_KEYS or not isinstance(value, dict):
+            if key in _RESERVED_GROUP_KEYS or not isinstance(value, dict):
                 continue
-            self._extract_ansible_hosts_recursive(
-                group_data=value, group_name=key, parent_vars=current_vars, result=result
+            self._extract_hosts_recursive(
+                group_data=value,
+                group_name=key,
+                parent_vars=effective_vars,
+                seen=seen,
             )
 
-    def _resolve_kind(
-        self,
-        host_data: Dict[str, Any],
-        host_groups: List[str],
-        groups_data: Dict[str, Dict[str, Any]],
-        globals_data: Dict[str, Any],
-    ) -> Optional[str]:
-        if "kind" in host_data:
-            return str(host_data["kind"])
+    # ------------------------------------------------------------------
+    # Per-variable resolution helpers
+    # ------------------------------------------------------------------
 
-        for group in host_groups:
-            group_data = groups_data.get(group, {})
-            if isinstance(group_data, dict) and "kind" in group_data:
-                return str(group_data["kind"])
+    def _resolve_network_os(self, hostname: str, merged: Dict[str, Any]) -> Optional[str]:
+        """Derive the internal ``kind`` from ``ansible_network_os``.
 
-        if "kind" in globals_data:
-            return str(globals_data["kind"])
+        Returns
+        -------
+        str
+            ``"arista_eos"`` when the host should be deployed.
+        None
+            When ``ansible_network_os`` is explicitly set to a non-EOS value;
+            the host is skipped with a warning.
+        """
+        network_os = merged.get("ansible_network_os")
+        if network_os is None:
+            # Variable absent: assume EOS for backward compatibility
+            return "arista_eos"
 
+        if str(network_os).strip().lower() == _ARISTA_EOS_NETWORK_OS:
+            return "arista_eos"
+
+        self.logger.warning(
+            "Skipping %s: ansible_network_os='%s' is not supported by 'deploy eos' "
+            "(expected '%s')",
+            hostname,
+            network_os,
+            _ARISTA_EOS_NETWORK_OS,
+        )
         return None
 
     def _resolve_credentials(
-        self,
-        host_data: Dict[str, Any],
-        host_groups: List[str],
-        groups_data: Dict[str, Dict[str, Any]],
-        globals_data: Dict[str, Any],
-        strict: bool,
+        self, hostname: str, merged: Dict[str, Any]
     ) -> Optional[ResolvedCredentials]:
-        username = None
-        password = None
-
-        host_username, host_password = self._credentials_from_mapping(host_data)
-        username = host_username or username
-        password = host_password or password
-
-        for group in host_groups:
-            group_data = groups_data.get(group, {})
-            if not isinstance(group_data, dict):
-                continue
-
-            group_username, group_password = self._credentials_from_mapping(group_data)
-            if username is None and group_username is not None:
-                username = group_username
-            if password is None and group_password is not None:
-                password = group_password
-
-            if username is not None and password is not None:
-                break
-
-        global_username, global_password = self._credentials_from_mapping(globals_data)
-        if username is None:
-            username = global_username
-        if password is None:
-            password = global_password
-
-        if strict:
-            self._assert_string_or_none(username, "credentials.username")
-            self._assert_string_or_none(password, "credentials.password")
+        """Extract username and password from merged host variables."""
+        username = merged.get("ansible_user")
+        password = merged.get("ansible_password")
 
         if username is None or password is None:
+            self.logger.warning(
+                "Host %s is missing ansible_user / ansible_password — credentials unavailable",
+                hostname,
+            )
             return None
+
         return ResolvedCredentials(username=str(username), password=str(password))
 
-    def _resolve_tls_verify(
-        self,
-        host_data: Dict[str, Any],
-        host_groups: List[str],
-        groups_data: Dict[str, Dict[str, Any]],
-        globals_data: Dict[str, Any],
-        strict: bool,
-    ) -> Optional[bool]:
-        levels: List[Dict[str, Any]] = [host_data]
-        for group in host_groups:
-            group_data = groups_data.get(group, {})
-            if isinstance(group_data, dict):
-                levels.append(group_data)
-        levels.append(globals_data)
-        return self._resolve_tls_from_levels(levels=levels, strict=strict)
+    def _resolve_tls_verify(self, merged: Dict[str, Any]) -> Optional[bool]:
+        """Resolve SSL certificate validation from merged host variables.
 
-    def _resolve_tls_from_levels(self, levels: List[Dict[str, Any]], strict: bool) -> Optional[bool]:
-        for level in levels:
-            if not isinstance(level, dict):
-                continue
+        ``ansible_httpapi_validate_certs`` is the canonical key.
+        ``ansible_httpapi_use_ssl: false`` is invalid (HTTP eAPI not supported)
+        and triggers a warning; the connection proceeds over HTTPS regardless.
+        """
+        use_ssl = merged.get("ansible_httpapi_use_ssl")
+        if use_ssl is not None:
+            coerced = self._coerce_bool(use_ssl, "ansible_httpapi_use_ssl")
+            if coerced is False:
+                self.logger.warning(
+                    "ansible_httpapi_use_ssl=false is not supported; "
+                    "avd-cli deploy eos always uses HTTPS (eAPI over SSL)"
+                )
 
-            if "tls_verify" in level:
-                return self._coerce_bool(level["tls_verify"], "tls_verify", strict)
-            if "ansible_httpapi_validate_certs" in level:
-                key = "ansible_httpapi_validate_certs"
-                return self._coerce_bool(level[key], key, strict)
+        validate_certs = merged.get("ansible_httpapi_validate_certs")
+        if validate_certs is not None:
+            return self._coerce_bool(validate_certs, "ansible_httpapi_validate_certs")
+
         return None
 
-    def _resolve_address(self, data: Dict[str, Any]) -> Optional[str]:
-        address = data.get("address")
-        if address is None:
-            address = data.get("ansible_host")
+    def _resolve_address(self, merged: Dict[str, Any]) -> Optional[str]:
+        """Return the device IP / FQDN from ``ansible_host``."""
+        address = merged.get("ansible_host")
         if address is None:
             return None
         return str(address)
 
-    def _credentials_from_mapping(self, data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
-        credentials = data.get("credentials")
-        username = None
-        password = None
+    # ------------------------------------------------------------------
+    # Utility helpers
+    # ------------------------------------------------------------------
 
-        if isinstance(credentials, dict):
-            username = credentials.get("username")
-            password = credentials.get("password")
-
-        if username is None:
-            username = data.get("ansible_user")
-        if password is None:
-            password = data.get("ansible_password")
-
-        if username is not None:
-            username = str(username)
-        if password is not None:
-            password = str(password)
-        return username, password
-
-    def _coerce_bool(self, value: Any, field_name: str, strict: bool) -> Optional[bool]:
+    def _coerce_bool(self, value: Any, field_name: str) -> Optional[bool]:
+        """Coerce a YAML value to bool; return None when unrecognised."""
         if value is None:
             return None
         if isinstance(value, bool):
@@ -383,20 +323,7 @@ class ConnectionInventoryLoader:
                 return True
             if lowered in {"false", "no", "0", "off"}:
                 return False
-        if strict:
-            raise InvalidInventoryError(f"Field '{field_name}' must be a boolean")
-        return None
-
-    def _assert_string_or_none(self, value: Any, field_name: str) -> None:
-        if value is None:
-            return
-        if not isinstance(value, str):
-            raise InvalidInventoryError(f"Field '{field_name}' must be a string")
-
-    def _first_defined(self, values: List[Any]) -> Optional[Any]:
-        for value in values:
-            if value is not None:
-                return value
+        self.logger.warning("Field '%s' has unexpected value %r — ignored", field_name, value)
         return None
 
     def _resolve_inventory_file(self, inventory_path: Path, required: bool) -> Optional[Path]:
@@ -411,18 +338,13 @@ class ConnectionInventoryLoader:
         if not inventory_path.is_dir():
             raise InvalidInventoryError(f"Inventory path is not a directory: {inventory_path}")
 
-        inventory_file = inventory_path / "inventory.yml"
-        if inventory_file.exists():
-            return inventory_file
-
-        inventory_file = inventory_path / "inventory.yaml"
-        if inventory_file.exists():
-            return inventory_file
+        for candidate in ("inventory.yml", "inventory.yaml"):
+            inventory_file = inventory_path / candidate
+            if inventory_file.exists():
+                return inventory_file
 
         if required:
-            raise InvalidInventoryError(
-                f"No inventory.yml or inventory.yaml found in {inventory_path}"
-            )
+            raise InvalidInventoryError(f"No inventory.yml or inventory.yaml found in {inventory_path}")
         return None
 
     def _load_yaml_file(self, file_path: Path) -> Dict[str, Any]:

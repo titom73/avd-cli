@@ -36,30 +36,25 @@ class ResolvedHostConnection:
 
 @dataclass
 class ConnectionInventory:
-    """Connection inventory normalized from either supported input schema."""
+    """Connection inventory resolved from an Ansible-standard inventory."""
 
-    schema: str
     hosts: List[ResolvedHostConnection] = field(default_factory=list)
-    globals_data: Dict[str, Any] = field(default_factory=dict)
-    groups_data: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def as_info_dict(self) -> Dict[str, Any]:
         """Build a safe dictionary payload for info command output."""
-        hosts = []
+        host_list = []
         for host in sorted(self.hosts, key=lambda item: item.hostname):
-            hosts.append(
+            host_list.append(
                 {
                     "hostname": host.hostname,
                     "address": host.address,
                     "groups": host.groups,
-                    "kind": host.kind,
                     "tls_verify": host.tls_verify,
                     "credentials": host.credentials.masked() if host.credentials else None,
                 }
             )
 
         return {
-            "schema": self.schema,
             "total_hosts": len(self.hosts),
-            "hosts": hosts,
+            "hosts": host_list,
         }

@@ -7,7 +7,6 @@ import click
 from rich.table import Table
 
 from avd_cli.cli.shared import console
-from avd_cli.logics.connection_inventory_loader import ConnectionInventoryLoader
 from avd_cli.logics.loader import InventoryLoader
 
 
@@ -59,40 +58,6 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:
 
 
 def _print_table(inventory_path: Path) -> None:
-    connection_loader = ConnectionInventoryLoader()
-    if connection_loader.is_flat_schema(inventory_path):
-        connection_inventory = connection_loader.load(inventory_path, strict=True)
-
-        summary_table = Table(title="Inventory Summary")
-        summary_table.add_column("Metric", style="cyan")
-        summary_table.add_column("Value", style="green")
-        summary_table.add_row("Schema", "flat (globals/groups/hosts)")
-        summary_table.add_row("Total Hosts", str(len(connection_inventory.hosts)))
-        console.print(summary_table)
-
-        host_table = Table(title="Connection Hosts")
-        host_table.add_column("Hostname", style="cyan")
-        host_table.add_column("Address", style="green")
-        host_table.add_column("Kind", style="yellow")
-        host_table.add_column("Groups", style="magenta")
-        host_table.add_column("TLS Verify", style="blue")
-        host_table.add_column("Username", style="white")
-        host_table.add_column("Password", style="red")
-        for host in sorted(connection_inventory.hosts, key=lambda item: item.hostname):
-            masked = host.credentials.masked() if host.credentials else {"username": "", "password": ""}
-            host_table.add_row(
-                host.hostname,
-                host.address or "",
-                host.kind or "",
-                ", ".join(host.groups),
-                str(host.tls_verify),
-                masked["username"],
-                masked["password"],
-            )
-        console.print("\n")
-        console.print(host_table)
-        return
-
     loader = InventoryLoader()
     inventory = loader.load(inventory_path)
     total_devices = len(inventory.get_all_devices())
@@ -134,11 +99,6 @@ def _print_table(inventory_path: Path) -> None:
 
 
 def _gather_inventory_data(inventory_path: Path) -> Dict[str, Any]:
-    connection_loader = ConnectionInventoryLoader()
-    if connection_loader.is_flat_schema(inventory_path):
-        connection_inventory = connection_loader.load(inventory_path, strict=True)
-        return connection_inventory.as_info_dict()
-
     loader = InventoryLoader()
     inventory = loader.load(inventory_path)
     device_data = []

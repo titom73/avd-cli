@@ -16,7 +16,6 @@ from rich.console import Console
 
 from avd_cli import __version__
 from avd_cli.constants import APP_NAME
-from avd_cli.logics.connection_inventory_loader import ConnectionInventoryLoader
 from avd_cli.utils.version import get_pyavd_version
 from avd_cli.cli.commands.deploy import deploy
 from avd_cli.cli.commands.generate import generate
@@ -263,17 +262,6 @@ def validate(ctx: click.Context, inventory_path: Path) -> None:
         console.print(f"[blue]ℹ[/blue] Validating inventory at: {inventory_path}")
 
     try:
-        connection_loader = ConnectionInventoryLoader()
-        if connection_loader.is_flat_schema(inventory_path):
-            console.print("[cyan]→[/cyan] Loading flat inventory (globals/groups/hosts)...")
-            connection_inventory = connection_loader.load(inventory_path, strict=True)
-            console.print("\n[green]✓[/green] Validation successful!")
-            console.print(
-                f"[green]→[/green] Found {len(connection_inventory.hosts)} host(s) "
-                "with resolved kind/credentials/tls settings"
-            )
-            return
-
         from avd_cli.logics.loader import InventoryLoader
 
         # Load inventory
@@ -367,50 +355,6 @@ def info(ctx: click.Context, inventory_path: Path, format: str) -> None:  # noqa
         from rich.table import Table
 
         from avd_cli.logics.loader import InventoryLoader
-
-        connection_loader = ConnectionInventoryLoader()
-        if connection_loader.is_flat_schema(inventory_path):
-            console.print("[cyan]→[/cyan] Loading flat inventory...")
-            connection_inventory = connection_loader.load(inventory_path, strict=True)
-
-            if format == "table":
-                table = Table(title="Inventory Summary")
-                table.add_column("Metric", style="cyan")
-                table.add_column("Value", style="green")
-                table.add_row("Schema", "flat (globals/groups/hosts)")
-                table.add_row("Total Hosts", str(len(connection_inventory.hosts)))
-                console.print(table)
-
-                if connection_inventory.hosts:
-                    console.print("\n")
-                    host_table = Table(title="Connection Hosts")
-                    host_table.add_column("Hostname", style="cyan")
-                    host_table.add_column("Address", style="green")
-                    host_table.add_column("Kind", style="yellow")
-                    host_table.add_column("Groups", style="magenta")
-                    host_table.add_column("TLS Verify", style="blue")
-                    host_table.add_column("Username", style="white")
-                    host_table.add_column("Password", style="red")
-
-                    for host in sorted(connection_inventory.hosts, key=lambda item: item.hostname):
-                        masked = host.credentials.masked() if host.credentials else {"username": "", "password": ""}
-                        host_table.add_row(
-                            host.hostname,
-                            host.address or "",
-                            host.kind or "",
-                            ", ".join(host.groups),
-                            str(host.tls_verify),
-                            masked["username"],
-                            masked["password"],
-                        )
-                    console.print(host_table)
-            elif format == "json":
-                console.print_json(json.dumps(connection_inventory.as_info_dict(), indent=2))
-            elif format == "yaml":
-                import yaml as yaml_lib
-
-                console.print(yaml_lib.dump(connection_inventory.as_info_dict(), default_flow_style=False))
-            return
 
         # Load inventory
         console.print("[cyan]→[/cyan] Loading inventory...")

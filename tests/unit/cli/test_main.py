@@ -1089,6 +1089,59 @@ class TestValidateCommand:
         assert "Validation failed" in result.output
         assert "no spine devices" in result.output
 
+    def test_validate_flat_schema_success(self, tmp_path: Path) -> None:
+        """Flat schema should validate with resolved kind/address/credentials."""
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: admin
+    password: admin
+
+groups:
+  leaf_eos:
+    kind: arista_eos
+
+hosts:
+  leaf1:
+    address: 192.0.2.20
+    groups: [leaf_eos]
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(cli, ["validate", "-i", str(inventory_path)])
+        assert result.exit_code == 0
+        assert "Validation successful" in result.output
+
+    def test_validate_flat_schema_unknown_group_fails(self, tmp_path: Path) -> None:
+        """Flat schema with unknown host group must fail."""
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "inventory.yml").write_text(
+            """---
+globals:
+  kind: arista_eos
+  credentials:
+    username: admin
+    password: admin
+groups: {}
+hosts:
+  leaf1:
+    address: 192.0.2.20
+    groups: [missing]
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(cli, ["validate", "-i", str(inventory_path)])
+        assert result.exit_code == 1
+        assert "unknown groups" in result.output
+
 
 class TestInfoCommand:
     """Test info command."""
@@ -1145,6 +1198,35 @@ class TestInfoCommand:
         assert "Inventory Summary" in result.output
         assert "DC1" in result.output
         assert "2" in result.output  # Device count
+
+    def test_info_flat_schema_json_masks_password(self, tmp_path: Path) -> None:
+        """Flat schema info must never display cleartext passwords."""
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: admin
+    password: supersecret
+
+groups:
+  leaf_eos:
+    kind: arista_eos
+hosts:
+  leaf1:
+    ansible_host: 192.0.2.21
+    groups: [leaf_eos]
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(cli, ["info", "-i", str(inventory_path), "-f", "json"])
+        assert result.exit_code == 0
+        assert '"schema": "flat"' in result.output
+        assert '"password": "***********"' in result.output
+        assert "supersecret" not in result.output
 
 
 class TestEnvironmentVariables:

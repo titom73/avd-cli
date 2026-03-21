@@ -234,3 +234,30 @@ class TestInfoCommand:
             assert data["total_devices"] == 0
             assert data["total_fabrics"] == 1
             assert len(data["fabrics"][0]["devices"]) == 0
+
+    def test_gather_inventory_data_flat_schema_masks_credentials(self, tmp_path):
+        """Flat schema info payload should redact credentials."""
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: admin
+    password: supersecret
+groups:
+  leaf_eos:
+    kind: arista_eos
+hosts:
+  leaf1:
+    address: 192.0.2.30
+    groups: [leaf_eos]
+""",
+            encoding="utf-8",
+        )
+
+        data = _gather_inventory_data(inventory_path)
+        assert data["schema"] == "flat"
+        assert data["total_hosts"] == 1
+        assert data["hosts"][0]["credentials"]["username"] == "admin"
+        assert data["hosts"][0]["credentials"]["password"] == "***********"

@@ -20,6 +20,7 @@ from avd_cli.logics.deployer import (
     parse_diff_stats,
 )
 from avd_cli.utils.eapi_client import DeploymentMode
+from avd_cli.utils.device_filter import DeviceFilter
 
 
 class TestParseDiffStats:
@@ -445,6 +446,165 @@ class TestDeployer:
         # Targets are created but config_file is None
         assert len(targets) == 4
         assert all(t.config_file is None or not t.config_file.exists() for t in targets)
+
+    def test_build_targets_flat_schema_first_group_credentials(
+        self, tmp_path: Path
+    ) -> None:
+        """Flat schema: first host group wins for credentials, with per-host tls override."""
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: global
+    password: global
+  tls_verify: true
+
+groups:
+  leaf_eos:
+    kind: arista_eos
+    tls_verify: false
+    credentials:
+      username: leaf_user
+      password: leaf_pass
+  demo:
+    credentials:
+      username: demo_user
+      password: demo_pass
+
+hosts:
+  leaf1:
+    address: 192.0.2.10
+    groups:
+      - leaf_eos
+      - demo
+""",
+            encoding="utf-8",
+        )
+
+        configs_dir = inventory_dir / "intended" / "configs"
+        configs_dir.mkdir(parents=True)
+        (configs_dir / "leaf1.cfg").write_text("hostname leaf1\n", encoding="utf-8")
+
+        deployer = Deployer(inventory_path=inventory_dir, configs_path=configs_dir)
+        targets = deployer._build_targets()
+
+        assert len(targets) == 1
+        target = targets[0]
+        assert target.hostname == "leaf1"
+        assert target.credentials.ansible_user == "leaf_user"
+        assert target.credentials.ansible_password == "leaf_pass"
+        assert target.tls_verify is False
+        assert target.groups == ["leaf_eos", "demo"]
+
+    def test_build_targets_flat_schema_filter_demo_group_keeps_leaf_credentials(
+        self, tmp_path: Path
+    ) -> None:
+        """Host matched by demo group should still inherit credentials from first group."""
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: global
+    password: global
+
+groups:
+  leaf_eos:
+    kind: arista_eos
+    credentials:
+      username: leaf_user
+      password: leaf_pass
+  demo: {}
+
+hosts:
+  leaf1:
+    address: 192.0.2.10
+    groups:
+      - leaf_eos
+      - demo
+""",
+            encoding="utf-8",
+        )
+
+        configs_dir = inventory_dir / "intended" / "configs"
+        configs_dir.mkdir(parents=True)
+        (configs_dir / "leaf1.cfg").write_text("hostname leaf1\n", encoding="utf-8")
+
+        deployer = Deployer(
+            inventory_path=inventory_dir,
+            configs_path=configs_dir,
+            device_filter=DeviceFilter.from_patterns(["demo"]),
+        )
+        targets = deployer._build_targets()
+        assert len(targets) == 1
+        assert targets[0].credentials.ansible_user == "leaf_user"
+        assert targets[0].credentials.ansible_password == "leaf_pass"
+
+    def test_build_targets_flat_schema_skips_non_eos_kind(
+        self, tmp_path: Path
+    ) -> None:
+        """deploy eos should skip hosts with non-arista_eos kind."""
+        inventory_dir = tmp_path / "inventory"
+        inventory_dir.mkdir()
+        (inventory_dir / "inventory.yml").write_text(
+            """---
+globals:
+  credentials:
+    username: admin
+    password: admin
+
+groups:
+  eos_group:
+    kind: arista_eos
+  srl_group:
+    kind: nokia_srl
+
+hosts:
+  eos1:
+    address: 192.0.2.11
+    groups: [eos_group]
+  srl1:
+    address: 192.0.2.12
+    groups: [srl_group]
+""",
+            encoding="utf-8",
+        )
+
+        configs_dir = inventory_dir / "intended" / "configs"
+        configs_dir.mkdir(parents=True)
+        (configs_dir / "eos1.cfg").write_text("hostname eos1\n", encoding="utf-8")
+        (configs_dir / "srl1.cfg").write_text("hostname srl1\n", encoding="utf-8")
+
+        deployer = Deployer(inventory_path=inventory_dir, configs_path=configs_dir)
+        targets = deployer._build_targets()
+
+        assert len(targets) == 1
+        assert targets[0].hostname == "eos1"
+
+    def test_resolve_verify_ssl_prefers_cli_override(self, sample_inventory: Path) -> None:
+        """CLI override should win over per-target tls_verify."""
+        deployer = Deployer(inventory_path=sample_inventory, verify_ssl=False)
+        target = DeploymentTarget(
+            hostname="leaf1",
+            ip_address="192.0.2.50",
+            credentials=DeviceCredentials(ansible_user="u", ansible_password="p"),
+            tls_verify=True,
+        )
+        assert deployer._resolve_verify_ssl_for_target(target) is False
+
+    def test_resolve_verify_ssl_uses_target_when_no_override(self, sample_inventory: Path) -> None:
+        """When CLI override is unset, target tls_verify should be used."""
+        deployer = Deployer(inventory_path=sample_inventory, verify_ssl=None)
+        target = DeploymentTarget(
+            hostname="leaf1",
+            ip_address="192.0.2.50",
+            credentials=DeviceCredentials(ansible_user="u", ansible_password="p"),
+            tls_verify=True,
+        )
+        assert deployer._resolve_verify_ssl_for_target(target) is True
 
     @pytest.mark.asyncio
     async def test_deploy_to_device_success(

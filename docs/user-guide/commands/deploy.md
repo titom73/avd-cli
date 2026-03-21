@@ -31,11 +31,18 @@ See [Environment Variables](../environment-variables.md) for configuration via e
 
 - `ansible_user` - Username for eAPI authentication
 - `ansible_password` - Password for eAPI authentication
+- Or flat credentials: `credentials.username` / `credentials.password`
 
 **Variable precedence:**
 
 1. Host-level variables (highest priority)
 2. Group-level variables
+
+For flat `globals/groups/hosts` schema (supported by `deploy eos`):
+
+1. Host-level values
+2. Groups listed under `hosts.<name>.groups` in order (first group wins on conflicts)
+3. `globals` values
 
 ---
 
@@ -115,7 +122,8 @@ spine-1:
 
 ### 🔒 SSL Verification
 
-Enable SSL certificate verification for secure production deployments:
+Enable SSL certificate verification for secure production deployments.
+If omitted, `deploy eos` now inherits `tls_verify` from inventory (host > groups > globals):
 
 === "Lab Environment"
     ```bash
@@ -209,6 +217,27 @@ all:
         spine-1:
           ansible_host: 192.168.0.10
 ```
+
+Flat schema example:
+
+```yaml
+globals:
+  credentials:
+    username: admin
+    password: admin123
+  tls_verify: false
+
+groups:
+  spines:
+    kind: arista_eos
+
+hosts:
+  spine-1:
+    address: 192.168.0.10
+    groups: [spines]
+```
+
+Hosts with `kind` different from `arista_eos` are skipped with a warning by `deploy eos`.
 
 ---
 

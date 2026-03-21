@@ -33,6 +33,51 @@ inventory/
 
 The main `inventory.yml` file defines the hierarchy of devices and groups:
 
+### Flat Connection Schema (deploy/info/validate)
+
+In addition to the Ansible-style structure, `deploy eos`, `info`, and `validate`
+also support a flat schema:
+
+```yaml
+---
+globals:
+  credentials:
+    username: arista
+    password: arista
+  tls_verify: false
+
+groups:
+  leaf_eos:
+    kind: arista_eos
+    credentials:
+      username: arista
+      password: arista
+  demo: {}
+
+hosts:
+  leaf1:
+    address: 192.168.72.13   # alias accepted: ansible_host
+    groups:
+      - leaf_eos
+      - demo
+```
+
+Resolution rules for flat schema:
+
+1. `credentials` (field by field): host > groups (in host order, first group wins) > globals
+2. `kind`: host > groups (first group wins) > globals
+3. `tls_verify`: host > groups (first group wins) > globals
+
+Validation rules:
+
+- Referenced groups must exist
+- `kind` must resolve for every host
+- Credentials must resolve (`username` and `password`)
+- `address` (or `ansible_host`) must be present
+
+!!! warning "Do not mix schemas in one file"
+    A single inventory file cannot mix flat keys (`globals/groups/hosts`) with Ansible top-level keys (`all`, custom root groups, etc.).
+
 ### EOS Design Workflow Example
 
 ```yaml

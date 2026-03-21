@@ -26,10 +26,12 @@ from avd_cli.exceptions import (
     CredentialError,
     DeploymentError,
 )
+from avd_cli.logics.connection_inventory_loader import ConnectionInventoryLoader
 from avd_cli.utils.eapi_client import DeploymentMode, EapiClient, EapiConfig
 
 # Conditional import for DeviceFilter (used in type hints)
 if TYPE_CHECKING:
+    from avd_cli.models.connection_inventory import ResolvedHostConnection
     from avd_cli.utils.device_filter import DeviceFilter
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,7 @@ class DeploymentTarget:
     credentials: DeviceCredentials
     config_file: Optional[Path] = None
     groups: List[str] = field(default_factory=list)
+    tls_verify: Optional[bool] = None
 
 
 @dataclass
@@ -141,7 +144,7 @@ class Deployer:
         device_filter: Optional["DeviceFilter"] = None,
         max_concurrent: int = 10,
         timeout: int = 30,
-        verify_ssl: bool = False,
+        verify_ssl: Optional[bool] = None,
         console: Optional[Console] = None,
     ) -> None:
         """Initialize deployer.
@@ -166,8 +169,8 @@ class Deployer:
             Maximum concurrent deployments
         timeout : int
             Connection timeout in seconds
-        verify_ssl : bool
-            If True, verify SSL certificates
+        verify_ssl : Optional[bool]
+            If set, forces SSL verification on/off. If None, inherit per-host setting.
         console : Optional[Console]
             Rich console for output. If None, creates a new one.
         """
@@ -181,7 +184,9 @@ class Deployer:
         self.device_filter = device_filter
         self.max_concurrent = max_concurrent
         self.timeout = timeout
-        self.verify_ssl = verify_ssl
+        self.verify_ssl_override = verify_ssl
+        # Keep backward-compatible public attribute used by tests.
+        self.verify_ssl = verify_ssl if verify_ssl is not None else False
         self.console = console or Console()
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
@@ -371,7 +376,7 @@ class Deployer:
                     child_data, child_name, current_vars, targets
                 )
 
-    def _build_targets(self) -> List[DeploymentTarget]:  # noqa: C901
+    def _build_targets(self) -> List[DeploymentTarget]:
         """Build list of deployment targets from inventory.
 
         Returns
@@ -384,30 +389,83 @@ class Deployer:
         DeploymentError
             If inventory structure is invalid
         """
-        inventory = self._load_inventory()
+        connection_loader = ConnectionInventoryLoader()
+        try:
+            connection_inventory = connection_loader.load(self.inventory_path)
+        except Exception as e:
+            raise DeploymentError(str(e)) from e
+
         targets: List[DeploymentTarget] = []
 
-        # Parse inventory structure (Ansible YAML format)
-        # Support both 'all' group and direct top-level groups
-        all_group = inventory.get("all", {})
-        children = all_group.get("children", {})
+        for host in connection_inventory.hosts:
+            if not self._host_passes_filter(host):
+                continue
 
-        # If no 'all' group, use top-level groups directly
-        if not children:
-            children = inventory
-
-        # Process all groups recursively
-        for group_name, group_data in children.items():
-            # Extract hosts recursively from this group
-            # The filtering by limit_to_groups will happen inside the recursive function
-            self._extract_hosts_recursive(group_data, group_name, {}, targets)
+            target = self._build_deployment_target(host)
+            if target is not None:
+                targets.append(target)
 
         if not targets:
-            raise DeploymentError(
-                "No deployment targets found. Check inventory and group filters."
-            )
+            raise DeploymentError("No deployment targets found. Check inventory and group filters.")
 
         return targets
+
+    def _host_passes_filter(self, host: "ResolvedHostConnection") -> bool:
+        """Return True if the host should be included given current filters."""
+        if self.device_filter:
+            if not self.device_filter.matches_device(host.hostname, host.groups):
+                self.logger.debug("Skipping %s: doesn't match filter", host.hostname)
+                return False
+        elif self.limit_to_groups:
+            if not any(group in self.limit_to_groups for group in host.groups):
+                self.logger.debug("Skipping %s: groups %s not in limit_to_groups", host.hostname, host.groups)
+                return False
+        return True
+
+    def _build_deployment_target(
+        self, host: "ResolvedHostConnection"
+    ) -> Optional[DeploymentTarget]:
+        """Convert a resolved host into a DeploymentTarget. Returns None if host should be skipped."""
+        if host.kind and host.kind != "arista_eos":
+            self.logger.warning("Skipping %s: kind '%s' is not supported by 'deploy eos'", host.hostname, host.kind)
+            return None
+
+        if not host.address:
+            self.logger.warning("Skipping %s: missing ansible_host/address in inventory", host.hostname)
+            return None
+
+        if host.credentials is None:
+            self.logger.error(
+                "Skipping %s: Missing required credentials. "
+                "Ensure ansible_user/ansible_password or credentials.username/password are set.",
+                host.hostname,
+            )
+            return None
+
+        config_file_path = self.configs_path / f"{host.hostname}.cfg"
+        config_file: Optional[Path] = config_file_path if config_file_path.exists() else None
+        if config_file is None:
+            self.logger.warning("Configuration file not found for %s: %s", host.hostname, config_file_path)
+
+        return DeploymentTarget(
+            hostname=host.hostname,
+            ip_address=host.address,
+            credentials=DeviceCredentials(
+                ansible_user=host.credentials.username,
+                ansible_password=host.credentials.password,
+            ),
+            config_file=config_file,
+            groups=host.groups,
+            tls_verify=host.tls_verify,
+        )
+
+    def _resolve_verify_ssl_for_target(self, target: DeploymentTarget) -> bool:
+        """Resolve effective SSL verification using CLI override first."""
+        if self.verify_ssl_override is not None:
+            return self.verify_ssl_override
+        if target.tls_verify is not None:
+            return target.tls_verify
+        return False
 
     async def _deploy_to_device(
         self, target: DeploymentTarget, progress: Progress, task_id: TaskID
@@ -459,7 +517,7 @@ class Deployer:
                     username=target.credentials.ansible_user,
                     password=target.credentials.ansible_password,
                     timeout=self.timeout,
-                    verify_ssl=self.verify_ssl,
+                    verify_ssl=self._resolve_verify_ssl_for_target(target),
                 )
 
                 async with EapiClient(eapi_config) as client:

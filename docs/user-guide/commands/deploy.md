@@ -29,13 +29,20 @@ See [Environment Variables](../environment-variables.md) for configuration via e
 
 **Required variables in your inventory:**
 
-- `ansible_user` - Username for eAPI authentication
-- `ansible_password` - Password for eAPI authentication
+| Variable | Required | Notes |
+|---|---|---|
+| `ansible_host` | **Yes** | IP/FQDN to connect to |
+| `ansible_user` | **Yes** | eAPI username |
+| `ansible_password` | **Yes** | eAPI password |
+| `ansible_network_os` | No | `arista.eos.eos` (default). Non-EOS hosts are skipped |
+| `ansible_httpapi_validate_certs` | No | SSL cert verification, default `false`. Overridden by `--verify-ssl` flag |
+| `ansible_httpapi_use_ssl` | No | Must be `true` — HTTPS always used |
 
-**Variable precedence:**
+**Variable precedence (highest → lowest):**
 
 1. Host-level variables (highest priority)
 2. Group-level variables
+3. `all.vars` (lowest priority)
 
 ---
 
@@ -115,11 +122,15 @@ spine-1:
 
 ### 🔒 SSL Verification
 
-Enable SSL certificate verification for secure production deployments:
+AVD CLI always uses HTTPS (eAPI over SSL) to communicate with devices.
+The `--verify-ssl` flag (or `ansible_httpapi_validate_certs: true` in inventory)
+controls whether the SSL certificate chain is validated.
+
+- `--verify-ssl` takes precedence over `ansible_httpapi_validate_certs` in inventory.
 
 === "Lab Environment"
     ```bash
-    # Default - SSL verification disabled
+    # Default — SSL certificate validation disabled
     avd-cli deploy eos -i ./inventory
     ```
 
@@ -127,7 +138,7 @@ Enable SSL certificate verification for secure production deployments:
 
 === "Production"
     ```bash
-    # Enable SSL verification
+    # Enable SSL certificate validation
     avd-cli deploy eos -i ./inventory --verify-ssl
     ```
 
@@ -196,19 +207,37 @@ avd-cli deploy eos -i ./inventory --no-session
 
 ## Credentials
 
-Credentials are extracted from Ansible inventory variables:
+Credentials are read from standard Ansible inventory variables.
+Define them at `all.vars` for global defaults, or override per group/host:
 
 ```yaml title="inventory.yml"
 all:
+  vars:
+    ansible_user: admin
+    ansible_password: admin123
+    ansible_network_os: arista.eos.eos
+    ansible_httpapi_use_ssl: true
+    ansible_httpapi_validate_certs: false
   children:
     spines:
-      vars:
-        ansible_user: admin
-        ansible_password: admin123
       hosts:
         spine-1:
           ansible_host: 192.168.0.10
+        spine-2:
+          ansible_host: 192.168.0.11
+    leafs:
+      vars:
+        ansible_user: leaf_admin          # Override username for all leafs
+      hosts:
+        leaf-1:
+          ansible_host: 192.168.0.20
+          ansible_password: leaf_secret   # Override password for this host only
 ```
+
+!!! note "Non-EOS hosts are skipped"
+    Hosts with `ansible_network_os` set to anything other than `arista.eos.eos`
+    (e.g., `cisco.ios.ios`) are automatically skipped by `deploy eos` with a warning.
+    Hosts without `ansible_network_os` default to `arista.eos.eos`.
 
 ---
 

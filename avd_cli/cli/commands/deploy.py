@@ -117,12 +117,14 @@ def deploy(ctx: click.Context) -> None:
     help="Connection timeout in seconds (default: 30)",
 )
 @click.option(
-    "--verify-ssl",
-    is_flag=True,
-    default=False,
+    "--verify-ssl/--no-verify-ssl",
+    default=None,
     envvar="AVD_CLI_VERIFY_SSL",
     show_envvar=True,
-    help="Verify SSL certificates (default: disabled for lab/dev environments)",
+    help=(
+        "Override SSL verification behavior. "
+        "When omitted, uses per-host/group/global inventory tls_verify settings."
+    ),
 )
 @click.pass_context
 def deploy_eos(
@@ -135,7 +137,7 @@ def deploy_eos(
     limit_to_groups_patterns: tuple[str, ...],
     max_concurrent: int,
     timeout: int,
-    verify_ssl: bool,
+    verify_ssl: Optional[bool],
 ) -> None:
     """Deploy configurations to Arista EOS devices via eAPI.
 
@@ -150,8 +152,10 @@ def deploy_eos(
     nothing is removed). True "replace" mode (removing old config) requires
     file-based workflows which are not supported via eAPI.
 
-    By default, SSL certificate verification is disabled to support lab and
-    development environments. Use --verify-ssl for production deployments.
+    SSL verification precedence:
+    1) CLI flag (--verify-ssl / --no-verify-ssl)
+    2) Resolved inventory value (host > groups > globals)
+    3) Fallback: disabled
 
     Examples
     --------
@@ -203,7 +207,10 @@ def deploy_eos(
         console.print("[blue]\u2139[/blue] Deployment mode: config sessions (with validation)")
         console.print(f"[blue]\u2139[/blue] Dry run: {dry_run}")
         console.print(f"[blue]\u2139[/blue] Show diff: {show_diff}")
-        console.print(f"[blue]\u2139[/blue] SSL verification: {verify_ssl}")
+        if verify_ssl is None:
+            console.print("[blue]\u2139[/blue] SSL verification: inherited from inventory")
+        else:
+            console.print(f"[blue]\u2139[/blue] SSL verification override: {verify_ssl}")
         if all_patterns:
             console.print(f"[blue]\u2139[/blue] Filter patterns: {', '.join(all_patterns)}")
 

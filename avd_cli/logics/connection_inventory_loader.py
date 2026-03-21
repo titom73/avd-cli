@@ -89,77 +89,66 @@ class ConnectionInventoryLoader:
         if not isinstance(hosts_data, dict):
             raise InvalidInventoryError("Invalid flat schema: 'hosts' must be a mapping")
 
-        resolved_hosts: List[ResolvedHostConnection] = []
-        for hostname, host_data in hosts_data.items():
-            if not isinstance(host_data, dict):
-                raise InvalidInventoryError(f"Host '{hostname}' must be a mapping")
-
-            host_groups = host_data.get("groups", [])
-            if host_groups is None:
-                host_groups = []
-            if not isinstance(host_groups, list) or any(not isinstance(group, str) for group in host_groups):
-                raise InvalidInventoryError(
-                    f"Host '{hostname}' has invalid 'groups'. Expected a list of group names."
-                )
-
-            missing_groups = [group for group in host_groups if group not in groups_data]
-            if missing_groups:
-                raise InvalidInventoryError(
-                    f"Host '{hostname}' references unknown groups: {', '.join(missing_groups)}"
-                )
-
-            address = self._resolve_address(host_data)
-            kind = self._resolve_kind(
-                host_data=host_data,
-                host_groups=host_groups,
-                groups_data=groups_data,
-                globals_data=globals_data,
-            )
-            tls_verify = self._resolve_tls_verify(
-                host_data=host_data,
-                host_groups=host_groups,
-                groups_data=groups_data,
-                globals_data=globals_data,
-                strict=strict,
-            )
-            credentials = self._resolve_credentials(
-                host_data=host_data,
-                host_groups=host_groups,
-                groups_data=groups_data,
-                globals_data=globals_data,
-                strict=strict,
-            )
-
-            if strict and not address:
-                raise InvalidInventoryError(
-                    f"Host '{hostname}' is missing address (use 'address' or 'ansible_host')"
-                )
-            if strict and not kind:
-                raise InvalidInventoryError(
-                    f"Host '{hostname}' is missing kind (host > groups > globals resolution)"
-                )
-            if strict and credentials is None:
-                raise InvalidInventoryError(
-                    f"Host '{hostname}' is missing complete credentials "
-                    "(username/password via credentials.* or ansible_user/ansible_password)"
-                )
-
-            resolved_hosts.append(
-                ResolvedHostConnection(
-                    hostname=hostname,
-                    address=address,
-                    groups=host_groups,
-                    kind=kind,
-                    credentials=credentials,
-                    tls_verify=tls_verify,
-                )
-            )
+        resolved_hosts = [
+            self._resolve_flat_host(hostname, host_data, groups_data, globals_data, strict)
+            for hostname, host_data in hosts_data.items()
+        ]
 
         return ConnectionInventory(
             schema="flat",
             hosts=resolved_hosts,
             globals_data=globals_data,
             groups_data=groups_data,
+        )
+
+    def _resolve_flat_host(
+        self,
+        hostname: str,
+        host_data: Any,
+        groups_data: Dict[str, Any],
+        globals_data: Dict[str, Any],
+        strict: bool,
+    ) -> ResolvedHostConnection:
+        """Resolve a single host entry from flat schema data."""
+        if not isinstance(host_data, dict):
+            raise InvalidInventoryError(f"Host '{hostname}' must be a mapping")
+
+        host_groups = host_data.get("groups") or []
+        if not isinstance(host_groups, list) or any(not isinstance(g, str) for g in host_groups):
+            raise InvalidInventoryError(f"Host '{hostname}' has invalid 'groups'. Expected a list of group names.")
+
+        missing_groups = [g for g in host_groups if g not in groups_data]
+        if missing_groups:
+            raise InvalidInventoryError(
+                f"Host '{hostname}' references unknown groups: {', '.join(missing_groups)}"
+            )
+
+        address = self._resolve_address(host_data)
+        kind = self._resolve_kind(
+            host_data=host_data, host_groups=host_groups, groups_data=groups_data, globals_data=globals_data
+        )
+        tls_verify = self._resolve_tls_verify(
+            host_data=host_data, host_groups=host_groups, groups_data=groups_data,
+            globals_data=globals_data, strict=strict,
+        )
+        credentials = self._resolve_credentials(
+            host_data=host_data, host_groups=host_groups, groups_data=groups_data,
+            globals_data=globals_data, strict=strict,
+        )
+
+        if strict and not address:
+            raise InvalidInventoryError(f"Host '{hostname}' is missing address (use 'address' or 'ansible_host')")
+        if strict and not kind:
+            raise InvalidInventoryError(f"Host '{hostname}' is missing kind (host > groups > globals resolution)")
+        if strict and credentials is None:
+            raise InvalidInventoryError(
+                f"Host '{hostname}' is missing complete credentials "
+                "(username/password via credentials.* or ansible_user/ansible_password)"
+            )
+
+        return ResolvedHostConnection(
+            hostname=hostname, address=address, groups=host_groups,
+            kind=kind, credentials=credentials, tls_verify=tls_verify,
         )
 
     def _parse_ansible_inventory(self, data: Dict[str, Any]) -> ConnectionInventory:
@@ -201,45 +190,51 @@ class ConnectionInventoryLoader:
         hosts = group_data.get("hosts", {})
         if isinstance(hosts, dict):
             for hostname, host_data in hosts.items():
-                host_mapping = host_data if isinstance(host_data, dict) else {}
-                address = self._resolve_address(host_mapping)
-                if not address:
-                    self.logger.warning("Skipping %s: missing ansible_host/address", hostname)
-                    continue
+                host = self._resolve_ansible_host(hostname, host_data, group_name, current_vars)
+                if host is not None:
+                    result.append(host)
 
-                username, password = self._credentials_from_mapping(host_mapping)
-                if not username or not password:
-                    group_username, group_password = self._credentials_from_mapping(current_vars)
-                    username = username or group_username
-                    password = password or group_password
+        self._recurse_ansible_children(group_data, current_vars, result)
 
-                credentials: Optional[ResolvedCredentials] = None
-                if username and password:
-                    credentials = ResolvedCredentials(username=username, password=password)
+    def _resolve_ansible_host(
+        self,
+        hostname: str,
+        host_data: Any,
+        group_name: str,
+        current_vars: Dict[str, Any],
+    ) -> Optional[ResolvedHostConnection]:
+        """Resolve a single ansible-style host entry. Returns None if it should be skipped."""
+        host_mapping = host_data if isinstance(host_data, dict) else {}
+        address = self._resolve_address(host_mapping)
+        if not address:
+            self.logger.warning("Skipping %s: missing ansible_host/address", hostname)
+            return None
 
-                kind = self._first_defined(
-                    [
-                        host_mapping.get("kind"),
-                        current_vars.get("kind"),
-                    ]
-                ) or "arista_eos"
+        username, password = self._credentials_from_mapping(host_mapping)
+        if not username or not password:
+            group_username, group_password = self._credentials_from_mapping(current_vars)
+            username = username or group_username
+            password = password or group_password
 
-                tls_verify = self._resolve_tls_from_levels(
-                    levels=[host_mapping, current_vars],
-                    strict=False,
-                )
+        credentials: Optional[ResolvedCredentials] = None
+        if username and password:
+            credentials = ResolvedCredentials(username=username, password=password)
 
-                result.append(
-                    ResolvedHostConnection(
-                        hostname=hostname,
-                        address=address,
-                        groups=[group_name],
-                        kind=str(kind),
-                        credentials=credentials,
-                        tls_verify=tls_verify,
-                    )
-                )
+        kind = self._first_defined([host_mapping.get("kind"), current_vars.get("kind")]) or "arista_eos"
+        tls_verify = self._resolve_tls_from_levels(levels=[host_mapping, current_vars], strict=False)
 
+        return ResolvedHostConnection(
+            hostname=hostname, address=address, groups=[group_name],
+            kind=str(kind), credentials=credentials, tls_verify=tls_verify,
+        )
+
+    def _recurse_ansible_children(
+        self,
+        group_data: Dict[str, Any],
+        current_vars: Dict[str, Any],
+        result: List[ResolvedHostConnection],
+    ) -> None:
+        """Recurse into explicit 'children' and implicit nested group keys."""
         children = group_data.get("children", {})
         if isinstance(children, dict):
             for child_name, child_data in children.items():
@@ -255,10 +250,7 @@ class ConnectionInventoryLoader:
             if key in self.RESERVED_ANSIBLE_KEYS or not isinstance(value, dict):
                 continue
             self._extract_ansible_hosts_recursive(
-                group_data=value,
-                group_name=key,
-                parent_vars=current_vars,
-                result=result,
+                group_data=value, group_name=key, parent_vars=current_vars, result=result
             )
 
     def _resolve_kind(
@@ -348,7 +340,8 @@ class ConnectionInventoryLoader:
             if "tls_verify" in level:
                 return self._coerce_bool(level["tls_verify"], "tls_verify", strict)
             if "ansible_httpapi_validate_certs" in level:
-                return self._coerce_bool(level["ansible_httpapi_validate_certs"], "ansible_httpapi_validate_certs", strict)
+                key = "ansible_httpapi_validate_certs"
+                return self._coerce_bool(level[key], key, strict)
         return None
 
     def _resolve_address(self, data: Dict[str, Any]) -> Optional[str]:

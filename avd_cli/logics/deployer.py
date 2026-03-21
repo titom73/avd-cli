@@ -31,6 +31,7 @@ from avd_cli.utils.eapi_client import DeploymentMode, EapiClient, EapiConfig
 
 # Conditional import for DeviceFilter (used in type hints)
 if TYPE_CHECKING:
+    from avd_cli.models.connection_inventory import ResolvedHostConnection
     from avd_cli.utils.device_filter import DeviceFilter
 
 logger = logging.getLogger(__name__)
@@ -397,80 +398,78 @@ class Deployer:
         targets: List[DeploymentTarget] = []
 
         for host in connection_inventory.hosts:
-            if self.device_filter:
-                if not self.device_filter.matches_device(host.hostname, host.groups):
-                    self.logger.debug("Skipping %s: doesn't match filter", host.hostname)
-                    continue
-            elif self.limit_to_groups:
-                if not any(group in self.limit_to_groups for group in host.groups):
-                    self.logger.debug("Skipping %s: groups %s not in limit_to_groups", host.hostname, host.groups)
-                    continue
+            if not self._host_passes_filter(host):
+                continue
 
             if connection_inventory.schema == "flat":
-                if not host.kind:
-                    raise DeploymentError(
-                        f"Host '{host.hostname}' has no resolved kind (required for flat schema)"
-                    )
-                if not host.address:
-                    raise DeploymentError(
-                        f"Host '{host.hostname}' has no resolved address (address/ansible_host required)"
-                    )
-                if host.credentials is None:
-                    raise DeploymentError(
-                        f"Host '{host.hostname}' has incomplete credentials (username/password required)"
-                    )
+                self._assert_flat_host_complete(host)
 
-            # deploy eos: only arista_eos targets are eligible.
-            if host.kind and host.kind != "arista_eos":
-                self.logger.warning(
-                    "Skipping %s: kind '%s' is not supported by 'deploy eos'",
-                    host.hostname,
-                    host.kind,
-                )
-                continue
-
-            if not host.address:
-                self.logger.warning("Skipping %s: missing ansible_host/address in inventory", host.hostname)
-                continue
-
-            if host.credentials is None:
-                self.logger.error(
-                    "Skipping %s: Missing required credentials. "
-                    "Ensure ansible_user/ansible_password or credentials.username/password are set.",
-                    host.hostname,
-                )
-                continue
-
-            config_file_path = self.configs_path / f"{host.hostname}.cfg"
-            config_file: Optional[Path]
-            if not config_file_path.exists():
-                self.logger.warning(
-                    "Configuration file not found for %s: %s", host.hostname, config_file_path
-                )
-                config_file = None
-            else:
-                config_file = config_file_path
-
-            targets.append(
-                DeploymentTarget(
-                    hostname=host.hostname,
-                    ip_address=host.address,
-                    credentials=DeviceCredentials(
-                        ansible_user=host.credentials.username,
-                        ansible_password=host.credentials.password,
-                    ),
-                    config_file=config_file,
-                    groups=host.groups,
-                    tls_verify=host.tls_verify,
-                )
-            )
+            target = self._build_deployment_target(host)
+            if target is not None:
+                targets.append(target)
 
         if not targets:
-            raise DeploymentError(
-                "No deployment targets found. Check inventory and group filters."
-            )
+            raise DeploymentError("No deployment targets found. Check inventory and group filters.")
 
         return targets
+
+    def _host_passes_filter(self, host: "ResolvedHostConnection") -> bool:
+        """Return True if the host should be included given current filters."""
+        if self.device_filter:
+            if not self.device_filter.matches_device(host.hostname, host.groups):
+                self.logger.debug("Skipping %s: doesn't match filter", host.hostname)
+                return False
+        elif self.limit_to_groups:
+            if not any(group in self.limit_to_groups for group in host.groups):
+                self.logger.debug("Skipping %s: groups %s not in limit_to_groups", host.hostname, host.groups)
+                return False
+        return True
+
+    def _assert_flat_host_complete(self, host: "ResolvedHostConnection") -> None:
+        """Raise DeploymentError if a flat-schema host is missing required fields."""
+        if not host.kind:
+            raise DeploymentError(f"Host '{host.hostname}' has no resolved kind (required for flat schema)")
+        if not host.address:
+            raise DeploymentError(f"Host '{host.hostname}' has no resolved address (address/ansible_host required)")
+        if host.credentials is None:
+            raise DeploymentError(f"Host '{host.hostname}' has incomplete credentials (username/password required)")
+
+    def _build_deployment_target(
+        self, host: "ResolvedHostConnection"
+    ) -> Optional[DeploymentTarget]:
+        """Convert a resolved host into a DeploymentTarget. Returns None if host should be skipped."""
+        if host.kind and host.kind != "arista_eos":
+            self.logger.warning("Skipping %s: kind '%s' is not supported by 'deploy eos'", host.hostname, host.kind)
+            return None
+
+        if not host.address:
+            self.logger.warning("Skipping %s: missing ansible_host/address in inventory", host.hostname)
+            return None
+
+        if host.credentials is None:
+            self.logger.error(
+                "Skipping %s: Missing required credentials. "
+                "Ensure ansible_user/ansible_password or credentials.username/password are set.",
+                host.hostname,
+            )
+            return None
+
+        config_file_path = self.configs_path / f"{host.hostname}.cfg"
+        config_file: Optional[Path] = config_file_path if config_file_path.exists() else None
+        if config_file is None:
+            self.logger.warning("Configuration file not found for %s: %s", host.hostname, config_file_path)
+
+        return DeploymentTarget(
+            hostname=host.hostname,
+            ip_address=host.address,
+            credentials=DeviceCredentials(
+                ansible_user=host.credentials.username,
+                ansible_password=host.credentials.password,
+            ),
+            config_file=config_file,
+            groups=host.groups,
+            tls_verify=host.tls_verify,
+        )
 
     def _resolve_verify_ssl_for_target(self, target: DeploymentTarget) -> bool:
         """Resolve effective SSL verification using CLI override first."""

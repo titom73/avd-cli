@@ -38,6 +38,7 @@ jobs:
             make
             chore
             release
+            build
           # Configure which scopes are allowed.
           scopes: |
             avd-cli

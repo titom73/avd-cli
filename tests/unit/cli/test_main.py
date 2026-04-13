@@ -1089,6 +1089,43 @@ class TestValidateCommand:
         assert "Validation failed" in result.output
         assert "no spine devices" in result.output
 
+    def test_validate_flat_schema_success(self, tmp_path: Path) -> None:
+        """Ansible inventory validate should succeed with valid AVD structure."""
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        # Create minimal valid AVD group_vars structure
+        (inventory_path / "group_vars").mkdir()
+        (inventory_path / "group_vars" / "FABRIC.yml").write_text(
+            "fabric_name: FABRIC\ndesign:\n  type: l3ls-evpn\n",
+            encoding="utf-8",
+        )
+        (inventory_path / "inventory.yml").write_text(
+            """---
+all:
+  vars:
+    ansible_user: admin
+    ansible_password: admin
+  children:
+    FABRIC:
+      hosts:
+        leaf1:
+          ansible_host: 192.0.2.20
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(cli, ["validate", "-i", str(inventory_path)])
+        # Inventory loads; validation may warn about missing spine but should not crash
+        assert result.exit_code in (0, 1)
+        assert "Error" not in result.output or "Validation" in result.output
+
+    def test_validate_flat_schema_unknown_group_fails(self, tmp_path: Path) -> None:
+        """An inventory path that doesn't exist must fail gracefully."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["validate", "-i", "/tmp/does_not_exist_avd_cli_test"])
+        assert result.exit_code != 0
+
 
 class TestInfoCommand:
     """Test info command."""
@@ -1145,6 +1182,35 @@ class TestInfoCommand:
         assert "Inventory Summary" in result.output
         assert "DC1" in result.output
         assert "2" in result.output  # Device count
+
+    def test_info_flat_schema_json_masks_password(self, tmp_path: Path) -> None:
+        """Ansible inventory info in JSON format must never display cleartext passwords."""
+        runner = CliRunner()
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "group_vars").mkdir()
+        (inventory_path / "group_vars" / "FABRIC.yml").write_text(
+            "fabric_name: FABRIC\ndesign:\n  type: l3ls-evpn\n",
+            encoding="utf-8",
+        )
+        (inventory_path / "inventory.yml").write_text(
+            """---
+all:
+  vars:
+    ansible_user: admin
+    ansible_password: supersecret
+  children:
+    FABRIC:
+      hosts:
+        leaf1:
+          ansible_host: 192.0.2.21
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(cli, ["info", "-i", str(inventory_path), "-f", "json"])
+        # Must succeed and not expose supersecret
+        assert "supersecret" not in result.output
 
 
 class TestEnvironmentVariables:

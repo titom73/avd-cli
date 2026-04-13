@@ -234,3 +234,31 @@ class TestInfoCommand:
             assert data["total_devices"] == 0
             assert data["total_fabrics"] == 1
             assert len(data["fabrics"][0]["devices"]) == 0
+
+    def test_gather_inventory_data_flat_schema_masks_credentials(self, tmp_path):
+        """_gather_inventory_data works with a minimal AVD inventory structure."""
+        inventory_path = tmp_path / "inventory"
+        inventory_path.mkdir()
+        (inventory_path / "group_vars").mkdir()
+        (inventory_path / "group_vars" / "FABRIC.yml").write_text(
+            "fabric_name: FABRIC\ndesign:\n  type: l3ls-evpn\n",
+            encoding="utf-8",
+        )
+        (inventory_path / "inventory.yml").write_text(
+            """---
+all:
+  vars:
+    ansible_user: admin
+    ansible_password: supersecret
+  children:
+    FABRIC:
+      hosts:
+        leaf1:
+          ansible_host: 192.0.2.30
+""",
+            encoding="utf-8",
+        )
+
+        data = _gather_inventory_data(inventory_path)
+        # Password should not appear in structured output
+        assert "supersecret" not in str(data)

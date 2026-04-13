@@ -92,3 +92,4 @@ examples/*
 
 .envrc
 .claude/
+spec/

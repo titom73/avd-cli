@@ -82,7 +82,7 @@ jobs:
         fetch-depth: 0 # Fetch all history for changelog generation
 
     - name: Create Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ needs.verify-version.outputs.tag }}
         name: Release ${{ needs.verify-version.outputs.tag }}
